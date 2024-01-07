@@ -1,0 +1,249 @@
+LACONIC
+
+	Language characteristics
+
+		General syntax
+
+			The laconic language is Polish expression interpreter :
+
+				*+4 2 3
+
+			evaluates to 18.
+
+			A laconic expression consist of atoms that can either be
+			- operators
+			- numbers
+			- string bracket contents
+			- comment bracket contents
+
+			All atoms are case-sensitive.
+
+			If there are more atoms than expected by the preceding operators,
+			the preceding results are discarded and the value of the remaining expression is returned.
+
+			E.g.:
+
+				*+4 2 3 25
+
+			will return 25, just like
+
+				*+4 2 3 + 19 6
+
+		Operators
+
+			All operators consist of a single character that precedes its operands.
+
+			See below for a detail explanation of each operator.
+
+			There's never a need to separate an operator from preceding or following atoms using a whitespace,
+			but it's permitted for readability.
+
+			Note: the characters " and ' are nowhere used in Laconic, as they interfere with Linux command line syntax.
+
+		Numbers
+
+			Numbers consist of characters 0 up to 9, and may contain exactly one period as fractal separator. (Unary minus, ~, is an operator.)
+			If the number is between 1 and -1 exclusive, the period may be the first character of the number.
+			For readability, underscores _ may be inserted anywhere in a number :
+			(In fact, prior to the interpretion of a formula, all underscores are discarded from it.)
+
+			Eg.:
+				.000_001 = 0.000001
+				1_000_000 = 1000000
+
+			A number is allowed to end with a period :
+
+				40. = 40
+
+			And a sole period is interpreted as zero :
+
+				. = 0
+
+			Note that a second period in a number is considered to be the start of the repeating part of a number:
+
+				12.3.8 is interpreted as 12.3888...
+
+				so
+
+				12.3.9 yields 12.4
+
+				(See 
+					Su, Francis E., et al. “Why Does 0.999… = 1?.” Math Fun Facts
+					https://math.hmc.edu/funfacts/why-does-0-999-1/
+				)
+
+			A third period in a number is interpreted as the start of a new number between 1 and ~1 exclusively:
+
+				+1.0.0.2
+
+				is interpreted as
+
+				+1 .2
+				
+				and yields
+
+				1.2
+
+		String brackets content
+
+			Strings are enclosed between [s and ]
+
+			Eg.:
+
+				[sKunji Namparshespa] yields the string "Kunji Namparshespa".
+
+			For numerical operations, the Laconic interpreter obtains the numeric value of a string
+			by simply treating it as a Laconic expression itself.
+			Thereby, characters that are no operators are ignored and treated as separators.
+
+		Comment brackets content
+
+			Comments are enclosed between [c and ]
+
+			Eg.:
+
+				$20 100[c Let's populate variable 20 with 100.]v20[c This entire expression should yield 100.]
+
+
+		Whitespace
+
+			Whitespace (any number of blanks, tabs, CR, LF) is treated as atom separator.
+
+			As operators consist of only one character, they don't need to be separated by whitespace from anything else; two consecutive numbers, however, do.
+
+	Operators
+
+		Basic arithmetic
+
+			~ Unary minus
+
+				+1~4 yields ~3
+				-1~4 yields 5
+
+			+ Addition of next two operands
+
+				+5 6 yields 11
+
+			- Subtraction
+
+				-6 5 yields 1
+
+			* Multiplication
+
+				* 38 ~5 yields ~190
+
+			^ Power (exponent)
+
+				^ 2 .5 yields 1.4142...
+
+			% Modulo (Remainder)
+
+				%7 3 yields 1
+				%7.1 3.1 yields .9
+
+		Variables
+
+			$ Variable assignment
+
+				Variables are designated by any number, including negative and non-integer ones.
+
+				$0+2 8 assigns 10 to variable number 0.
+
+				$+3 1+2 8 assigns 10 to variable number (3 + 1), so variable number 4.
+
+			v variable value
+
+				$2 30 +v2 4 yields 34
+
+			: change next operator to assignment operator
+
+				changes the operation of the next operator into an assignment operation
+				that uses the first operand as a variable number,
+				uses this variable as the first operand,
+				assigns the resulting value to this variable
+				and returns the assigned value :
+
+				:+0 5 means $0 +v0 5 (Assign to variable(0) the value of variable(0) plus 5)
+				:~2   means $2 ~v2   (Convert the value of variable 2 to its opposite)
+
+				Note: the ':' operator should be followed by another operator.
+				If it isn't, is simply passes through the following number operand.
+
+		Comparison
+
+			= equality
+
+				Yields 1 if both operands are equal, else 0.
+
+				$0 5 =v0 5 yields 1
+
+		Flow
+
+			; two statement combinator
+
+				Yields the value of the second statement.
+				This operator is useful to supply a series of statements to operators that expect only one executable statement,
+				like the ? or W(hile) operator.
+
+				;4 30 yields 30
+				;$2 10 v2 yields 10
+				;;$0 4:+0 5 51 return 51 after having affected variable number 0
+
+			? "If a, then b, else c"
+
+				Yields operand 2 if operand 1 is not zero, else operand 3.
+
+				?4 1 2 yields 1
+				$50 0 ?v50 1 2 yields 2
+
+			W While
+
+				While operand 1 is non-zero, the statement in operand 2 is executed.
+				If more than one statement is needed in operand 2,
+				use the ; combinator operator.
+				The W operator returns the value of its last executed statement.
+
+				$0 10$1 0Wv0;:+1v0:-0 1v0
+					yields the summation of 10 (10 + 9 + ... + 1)
+
+				For readability, this can also be written as
+
+				$0 10
+				$1 0
+				W
+					v0
+					;
+						:+1 v0
+						:-0 1
+				v0
+
+				Note: without the combinator operator (;),
+				variable 0 wouldn't be decreased in every iteration,
+				and a never-ending loop would crash the Laconic interpreter on a numeric overflow:
+
+				$0 10
+				$1 0
+				W
+					v0
+					:+1 v0
+				:-0 1
+				v0
+
+		Other
+
+			( Operand number override
+
+				Overrides the number of operands for the preceding operator.
+				Instead of taking its default number of operands (e.g., 2 for addition),
+				the operator will take all juxtaposed operands after it until the ')' operator is found.
+
+				E.g.:
+
+					* + 2 3 4	yields 20.
+					*(+ 2 3 4) yields 9 (as the * operator didn't find a second operand, that defaults to 1).
+
+				Note that this override operator only affects the single operator preceding immediately (bar whitespace or comments).
+				If the atom before the '(' operator is a number, string or comment, the '(' operator won't have any effect.
+
+			) End of operand number override - see '('. 
+
