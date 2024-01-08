@@ -3,6 +3,9 @@
 // TODO: implement Debug for Expression, using get_representation.
 // TODO: if struct Interpreter ends up having no internal state (no properties), simply delete it
 // and make its associated methods crate-level functions.
+// TODO: implement different variable arrays - see the 'u' operator.
+//      Default array: 0.
+//      This means that the key for HashMap Shuttle.nums has to be a (i64, i64) tuple.
 
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -52,8 +55,14 @@ impl Expression {
             '/' => &opr_funcs::divide,
             '%' => &opr_funcs::modulo,
             ';' => &opr_funcs::combine,
+            'W' => &opr_funcs::combine, // sic !
             '$' => &opr_funcs::assign_number_register,
             'v' => &opr_funcs::get_number_register,
+            '=' => &opr_funcs::equals,
+            '<' => &opr_funcs::less,
+            '>' => &opr_funcs::greater,
+            '!' => &opr_funcs::not,
+            'Z' => &opr_funcs::setting,
             _ => &opr_funcs::nop,
         };
 
@@ -103,8 +112,37 @@ impl Expression {
     }
 
     pub fn operate(&mut self, shuttle: &mut Shuttle) {
+        /*
         for op in &mut self.operands {
             op.operate(shuttle);
+        }
+        */
+
+        /*
+        for op_ix in 0..self.operands.len() {
+            self.operands[op_ix].operate(shuttle);
+        }
+        */
+
+        let is_while = self.opr_mark == 'W';
+        let mut iteration_result = true;
+
+        'outer: loop {
+            for op_ix in 0..self.operands.len() {
+                self.operands[op_ix].operate(shuttle);
+
+                if (op_ix == 0) && is_while {
+                    iteration_result = !are_near(0f64, self.operands[op_ix].get_value(0f64), shuttle.orb);
+                }
+
+                if !iteration_result {
+                    break 'outer;
+                }
+            }
+
+            if !is_while {
+                break;
+            }
         }
 
         let mut operands_for_func: Vec<Expression> = self.operands
@@ -397,10 +435,10 @@ impl Interpreter {
                 Atom::Operator(c) => {
                     if !override_start_found {
                         needed_ops = match *c {
-                            chr if "~v:"      .contains(chr) => 1,
-                            chr if "+-*/^%$W;".contains(chr) => 2,
-                            chr if "?"        .contains(chr) => 3,
-                            _                                => 0,
+                            chr if "~v:!"         .contains(chr) => 1,
+                            chr if "+-*/^%$W;=<>Z".contains(chr) => 2,
+                            chr if "?"           .contains(chr) => 3,
+                            _                                  => 0,
                         };
                     }
 
@@ -468,7 +506,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^%$v:?W;()".contains(op)
+        "~+-*/^%$v:?W;()=<>!Z".contains(op)
     }
 }
 
@@ -481,7 +519,7 @@ fn are_very_near(num1: f64, num2: f64) -> bool {
 }
 
 pub(crate) mod opr_funcs {
-    use super::{Expression, Shuttle};
+    use super::{Expression, Shuttle, are_near};
     
     pub fn nop(_result_value: &mut Option<f64>, _operands: &Vec<Expression>, shuttle: &mut Shuttle) {
         // Don't do anything.
@@ -606,6 +644,117 @@ pub(crate) mod opr_funcs {
         } as f64;
 
         *result_value = Some(found);
+    }
+    
+    pub fn equals(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+        let mut are_equal = true;
+        let mut count = 0usize;
+        let mut first = 0f64;
+
+        for op in operands {
+            match count {
+                0 => first = op.get_value(0f64),
+                _ => are_equal = are_near(first, op.get_value(0f64), shuttle.orb),
+            }
+
+            count += 1;
+        }
+
+        *result_value = Some(if are_equal {
+            1f64
+        } else {
+            0f64
+        });
+    }
+    
+    pub fn less(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+        let mut outcome = true;
+        let mut count = 0usize;
+        let mut first = 0f64;
+        let mut second = 0f64;
+
+        for op in operands {
+            match count {
+                0 => first = op.get_value(0f64),
+                _ => {
+                    second = op.get_value(0f64);
+                    outcome = outcome && (first < second);
+                    first = second;
+                },
+            }
+
+            count += 1;
+        }
+
+        *result_value = Some(if outcome {
+            1f64
+        } else {
+            0f64
+        });
+    }
+    
+    pub fn greater(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+        let mut outcome = true;
+        let mut count = 0usize;
+        let mut first = 0f64;
+        let mut second = 0f64;
+
+        for op in operands {
+            match count {
+                0 => first = op.get_value(0f64),
+                _ => {
+                    second = op.get_value(0f64);
+                    outcome = outcome && (first > second);
+                    first = second;
+                },
+            }
+
+            count += 1;
+        }
+
+        *result_value = Some(if outcome {
+            1f64
+        } else {
+            0f64
+        });
+    }
+
+    pub fn not(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+        let mut outcome = true;
+
+        for op in operands {
+            outcome = outcome & are_near(0f64, op.get_value(0f64), shuttle.orb);
+        }
+
+        *result_value = Some(if outcome {
+            1f64
+        } else {
+            0f64
+        });
+    }
+    
+    pub fn setting(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+        let mut count = 0usize;
+        let mut setting_nr = -1i64;
+        let mut setting_value = 0f64;
+
+        for op in operands {
+            match count {
+                0 => setting_nr = op.get_value(-1f64) as i64,
+                1 => setting_value = op.get_value(0f64),
+                _ => (),
+            }
+
+            count += 1;
+        }
+
+        match setting_nr {
+            0i64 => shuttle.orb = setting_value,
+            1i64 => shuttle.max_iterations = setting_value,
+            _ => (),
+        }
+
+        *result_value = Some(setting_value);
     }
 }
 
@@ -874,6 +1023,30 @@ mod tests {
                 Some(n) => assert_eq!(500.1f64, *n),
             }
         }
+
+        #[test]
+        fn expr_set_orb() {
+            let mut exp = Expression::new('Z');
+            exp.push_operand(Expression::new_number(0f64));
+            exp.push_operand(Expression::new_number(0.001f64));
+            let mut shuttle = Shuttle::new();
+
+            exp.operate(&mut shuttle);
+
+            assert_eq!(0.001f64, shuttle.orb);
+        }
+
+        #[test]
+        fn expr_set_max_iterations() {
+            let mut exp = Expression::new('Z');
+            exp.push_operand(Expression::new_number(1f64));
+            exp.push_operand(Expression::new_number(500f64));
+            let mut shuttle = Shuttle::new();
+
+            exp.operate(&mut shuttle);
+
+            assert_eq!(500f64, shuttle.max_iterations);
+        }
     }
 
     mod ops {
@@ -1124,6 +1297,101 @@ mod tests {
         #[test]
         fn x_unaryminus_assign2() {
             assert_eq!(Ok(-88f64), Interpreter::execute("$18 88 ~18: v18".to_string()));
+        }
+
+        #[test]
+        fn x_equality_2_exact() {
+            assert_eq!(Ok(1f64), Interpreter::execute("=21.3 21.3".to_string()));
+        }
+
+        #[test]
+        fn x_equality_2_in_orb() {
+            assert_eq!(Ok(1f64), Interpreter::execute("Z0 .1 =21.3 21.35".to_string()));
+        }
+
+        #[test]
+        fn x_equality_2_outside_orb() {
+            assert_eq!(Ok(0f64), Interpreter::execute("Z0 .01 =21.3 21.35".to_string()));
+        }
+
+        #[test]
+        fn x_less_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("< 5.000001 5.000002".to_string()));
+        }
+
+        #[test]
+        fn x_less_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("< 5.000002 5.000002".to_string()));
+        }
+
+        #[test]
+        fn x_less_3_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("<(5.000001 5.000002 6)".to_string()));
+        }
+
+        #[test]
+        fn x_less_3_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("<(5.000001 5.000002 3)".to_string()));
+        }
+
+        #[test]
+        fn x_greater_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("> 5.000002 5.000001".to_string()));
+        }
+
+        #[test]
+        fn x_greater_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("> 5.000001 5.000002".to_string()));
+        }
+
+        #[test]
+        fn x_greater_3_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute(">(5.000003 5.000002 6)".to_string()));
+        }
+
+        #[test]
+        fn x_greater_3_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute(">(5.000002 5.000001 3)".to_string()));
+        }
+
+        #[test]
+        fn x_not_1() {
+            assert_eq!(Ok(0f64), Interpreter::execute("!1".to_string()));
+        }
+
+        #[test]
+        fn x_not_0() {
+            assert_eq!(Ok(1f64), Interpreter::execute("!0".to_string()));
+        }
+
+        #[test]
+        fn x_not_other() {
+            assert_eq!(Ok(0f64), Interpreter::execute("!~145".to_string()));
+        }
+
+        #[test]
+        fn x_not_3_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("!(0 0 0)".to_string()));
+        }
+
+        #[test]
+        fn x_not_3_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("!(~4 8 +90 1)".to_string()));
+        }
+
+        #[test]
+        fn x_while_executed() {
+            assert_eq!(Ok(10f64), Interpreter::execute("$0 1 $1 0 W!>v0 4 ;+:1 v0 +:0 1 v1".to_string()));
+        }
+
+        #[test]
+        fn x_while_executed_op_nr_overridden() {
+            assert_eq!(Ok(10f64), Interpreter::execute("$0 1 $1 0 W(!>v0 4 +:1 v0 +:0 1) v1".to_string()));
+        }
+
+        #[test]
+        fn x_while_never_executed() {
+            assert_eq!(Ok(0f64), Interpreter::execute("$0 1 $1 0 W!>v0 ~1 ;+:1 v0 +:0 1 v1".to_string()));
         }
     }
 }
