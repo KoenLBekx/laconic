@@ -1,17 +1,18 @@
 // TODO: resolve TODO's in code.
-// TODO: pass an Rc<RefCell<BTree>> holding the registers ("variables") to each expression and opr_func function.
 // TODO: implement all intended operators.
 // TODO: implement Debug for Expression, using get_representation.
 // TODO: if struct Interpreter ends up having no internal state (no properties), simply delete it
 // and make its associated methods crate-level functions.
 
+use std::collections::HashMap;
 use std::str::FromStr;
 
 // Static lifetime: justified, because the functions referenced
 // are compiled into the application and live as long as it runs.
 // The first parameter should refer to an Expression's value property,
-// the second one to a Expression's operands property.
-type OperatorFunc = &'static dyn Fn(&mut Option<f64>, &mut Vec<Expression>);
+// the second one to a Expression's operands property (operands are Expression objects),
+// the third one to the Shuttle containing other state.
+type OperatorFunc = &'static dyn Fn(&mut Option<f64>, &Vec<Expression>, &mut Shuttle);
 
 #[derive(Debug, PartialEq)]
 enum Atom {
@@ -37,6 +38,7 @@ struct Expression
     value: Option<f64>,
     opr_mark: char,
     is_last_of_override: bool,
+    is_assignment_op: bool,
 }
 
 impl Expression {
@@ -50,6 +52,8 @@ impl Expression {
             '/' => &opr_funcs::divide,
             '%' => &opr_funcs::modulo,
             ';' => &opr_funcs::combine,
+            '$' => &opr_funcs::assign_number_register,
+            'v' => &opr_funcs::get_number_register,
             _ => &opr_funcs::nop,
         };
 
@@ -59,6 +63,7 @@ impl Expression {
             value: None,
             opr_mark,
             is_last_of_override: false,
+            is_assignment_op: false,
         }
     }
 
@@ -69,7 +74,12 @@ impl Expression {
             value: Some(num),
             opr_mark: '0',
             is_last_of_override: false,
+            is_assignment_op: false,
         }
+    }
+
+    fn flatten_to_value(&self) -> Self {
+        Self::new_number(self.get_value(0f64))
     }
 
     pub fn push_operand(&mut self, op: Expression) {
@@ -92,16 +102,58 @@ impl Expression {
         }
     }
 
-    pub fn operate(&mut self) {
+    pub fn operate(&mut self, shuttle: &mut Shuttle) {
         for op in &mut self.operands {
-            op.operate();
+            op.operate(shuttle);
         }
 
-        (self.operator)(&mut self.value, &mut self.operands);
+        let mut operands_for_func: Vec<Expression> = self.operands
+            .iter().map(|o| o.flatten_to_value()).collect();
+
+        let mut index = 0i64;
+
+        if self.is_assignment_op {
+            // Use the first operand as a reference to a numeric variable,
+            // and use that variable's value as the first operand.
+
+            index = if !self.operands.is_empty() {
+                self.operands[0].get_value(0f64)
+            } else {
+                0f64
+            } as i64;
+
+            let value_for_func = match shuttle.nums.get(&index) {
+                None => 0f64,
+                Some(n) => *n,
+            } as f64;
+
+            let first_op = Expression::new_number(value_for_func);
+
+            if operands_for_func.is_empty() {
+                operands_for_func.push(first_op);
+            } else {
+                operands_for_func[0] = first_op;
+            }
+        }
+
+        (self.operator)(&mut self.value, &operands_for_func, shuttle);
+
+        if self.is_assignment_op {
+            // Assign the resulting value to the variable
+            // referenced by the first operand.
+            shuttle.nums.insert(index, self.get_value(0f64));
+        }
     }
 
     pub fn get_representation(&self) -> String {
-        let mut exp_rep = self.opr_mark.to_string();
+        let mut exp_rep = match self.opr_mark {
+            '0' => "num".to_string(),
+            oth => oth.to_string(),
+        };
+
+        if self.is_assignment_op {
+            exp_rep.push_str(":");
+        }
 
         let mut ops = String::new();
         for op in &self.operands {
@@ -124,6 +176,30 @@ impl Expression {
     }
 }
 
+// Shuttle objects are used to be passed to every operator function
+// to provide state other than the operands.
+struct Shuttle {
+    nums: HashMap<i64, f64>,
+    strings: HashMap<i64, String>,
+    routines: HashMap<i64, Expression>,
+    max_digits: f64,
+    max_iterations: f64,
+    orb: f64,
+}
+
+impl Shuttle {
+    fn new() -> Self {
+        Shuttle {
+            nums: HashMap::<i64, f64>::new(),
+            strings: HashMap::<i64, String>::new(),
+            routines: HashMap::<i64, Expression>::new(),
+            max_digits: 0f64,
+            max_iterations: 0f64,
+            orb: 0.00000001f64,
+        }
+    }
+}
+
 pub struct Interpreter {
 }
 
@@ -140,12 +216,13 @@ impl Interpreter {
         }
 
         let atoms = atoms.unwrap();
-        let mut tree = Self::make_tree(atoms);
+        let mut tree: Expression = Self::make_tree(atoms);
 
         // Debug
-        println!("\nTree before operate() :\n{}", tree.get_representation());
+        // println!("\nTree before operate() :\n{}", tree.get_representation());
 
-        tree.operate();
+        let mut shuttle = Shuttle::new();
+        tree.operate(&mut shuttle);
 
         // Debug
         println!("\nTree after operate() :\n{}", tree.get_representation());
@@ -301,6 +378,9 @@ impl Interpreter {
         let mut override_end_found = false;
         let mut found_last_op = false;
         let mut needed_ops = 0usize;
+        let mut make_assignment_operator = false;
+
+        // Preprocess atoms to replace the ':' operator with extra atoms.
 
         for exp in atoms.iter().rev() {
             match exp {
@@ -327,8 +407,11 @@ impl Interpreter {
                     match *c {
                         '(' => override_start_found = true,
                         ')' => override_end_found = true,
+                        ':' => make_assignment_operator = true,
                         op_for_stack => {
                             let mut new_exp = Expression::new(op_for_stack);
+                            new_exp.is_assignment_op = make_assignment_operator;
+                            make_assignment_operator = false;
 
                             if override_start_found {
                                 override_start_found = false;
@@ -398,14 +481,14 @@ fn are_very_near(num1: f64, num2: f64) -> bool {
 }
 
 pub(crate) mod opr_funcs {
-    use super::Expression;
+    use super::{Expression, Shuttle};
     
-    pub fn nop(_result_value: &mut Option<f64>, _operands: &mut Vec<Expression>) {
+    pub fn nop(_result_value: &mut Option<f64>, _operands: &Vec<Expression>, shuttle: &mut Shuttle) {
         // Don't do anything.
         // Meant for Expressions that contain a fixed numerical value from creation.
     }
     
-    pub fn add(result_value: &mut Option<f64>, operands: &mut Vec<Expression>) {
+    pub fn add(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
 
         for op in operands {
@@ -415,7 +498,7 @@ pub(crate) mod opr_funcs {
         *result_value = Some(outcome);
     }
     
-    pub fn multiply(result_value: &mut Option<f64>, operands: &mut Vec<Expression>) {
+    pub fn multiply(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
         let mut count = 0usize;
 
@@ -431,7 +514,7 @@ pub(crate) mod opr_funcs {
         *result_value = Some(outcome);
     }
     
-    pub fn minus(result_value: &mut Option<f64>, operands: &mut Vec<Expression>) {
+    pub fn minus(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
         let mut count = 0usize;
 
@@ -447,7 +530,7 @@ pub(crate) mod opr_funcs {
         *result_value = Some(outcome);
     }
     
-    pub fn divide(result_value: &mut Option<f64>, operands: &mut Vec<Expression>) {
+    pub fn divide(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
         let mut count = 0usize;
 
@@ -463,7 +546,7 @@ pub(crate) mod opr_funcs {
         *result_value = Some(outcome);
     }
     
-    pub fn modulo(result_value: &mut Option<f64>, operands: &mut Vec<Expression>) {
+    pub fn modulo(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
         let mut count = 0usize;
 
@@ -479,18 +562,50 @@ pub(crate) mod opr_funcs {
         *result_value = Some(outcome);
     }
 
-    pub fn combine(result_value: &mut Option<f64>, operands: &mut Vec<Expression>) {
+    pub fn combine(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
         *result_value = match operands.last() {
             Some(e) => Some(e.get_value(0f64)),
             None => Some(0f64),
         };
     }
 
-    pub fn unaryminus(result_value: &mut Option<f64>, operands: &mut Vec<Expression>) {
+    pub fn unaryminus(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
         *result_value = match operands.first() {
             None => Some(0f64),
             Some(e) => Some(- e.get_value(0f64)),
         };
+    }
+
+    pub fn assign_number_register(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+        let index = if !operands.is_empty() {
+            operands[0].get_value(0f64)
+        } else {
+            0f64
+        } as i64;
+
+        let reg_val = if operands.len() >= 2 {
+            operands[1].get_value(0f64)
+        } else {
+            0f64
+        };
+
+        shuttle.nums.insert(index, reg_val);
+        *result_value = Some(reg_val);
+    }
+
+    pub fn get_number_register(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+        let index = if !operands.is_empty() {
+            operands[0].get_value(0f64)
+        } else {
+            0f64
+        } as i64;
+
+        let found = match shuttle.nums.get(&index) {
+            None => 0f64,
+            Some(n) => *n,
+        } as f64;
+
+        *result_value = Some(found);
     }
 }
 
@@ -669,7 +784,9 @@ mod tests {
             let mut exp = Expression::new('+');
             exp.push_operand(Expression::new_number(4000.3f64));
             exp.push_operand(Expression::new_number( 500.1f64));
-            exp.operate();
+
+            let mut shuttle = Shuttle::new();
+            exp.operate(&mut shuttle);
 
             // Fails due to precision error: right value is 4500.400000000001.
             // assert_eq!(4500.4f64, exp.get_value(0f64));
@@ -692,21 +809,84 @@ mod tests {
             exp.push_operand(op1);
             exp.push_operand(op2);
 
-            exp.operate();
+            let mut shuttle = Shuttle::new();
+            exp.operate(&mut shuttle);
 
             assert_eq!(574.03f64, exp.get_value(0f64));
+        }
+
+        #[test]
+        fn expr_assign_num_reg_dot3() {
+            let mut exp = Expression::new('$');
+            exp.push_operand(Expression::new_number(4000.3f64));
+            exp.push_operand(Expression::new_number( 500.1f64));
+
+            let mut shuttle = Shuttle::new();
+            exp.operate(&mut shuttle);
+
+            match shuttle.nums.get(&4000i64) {
+                None => panic!("The numerical register assigned to has not been found back."),
+                Some(n) => assert_eq!(500.1f64, *n),
+            }
+        }
+
+        #[test]
+        fn expr_assign_num_reg_dot7() {
+            let mut exp = Expression::new('$');
+            exp.push_operand(Expression::new_number(4000.7f64));
+            exp.push_operand(Expression::new_number( 500.1f64));
+
+            let mut shuttle = Shuttle::new();
+            exp.operate(&mut shuttle);
+
+            match shuttle.nums.get(&4000i64) {
+                None => panic!("The numerical register assigned to has not been found back."),
+                Some(n) => assert_eq!(500.1f64, *n),
+            }
+        }
+
+        #[test]
+        fn expr_assign_num_reg_neg_dot3() {
+            let mut exp = Expression::new('$');
+            exp.push_operand(Expression::new_number(-4000.3f64));
+            exp.push_operand(Expression::new_number( 500.1f64));
+
+            let mut shuttle = Shuttle::new();
+            exp.operate(&mut shuttle);
+
+            match shuttle.nums.get(&-4000i64) {
+                None => panic!("The numerical register assigned to has not been found back."),
+                Some(n) => assert_eq!(500.1f64, *n),
+            }
+        }
+
+        #[test]
+        fn expr_assign_num_reg_neg_dot7() {
+            let mut exp = Expression::new('$');
+            exp.push_operand(Expression::new_number(-4000.7f64));
+            exp.push_operand(Expression::new_number( 500.1f64));
+
+            let mut shuttle = Shuttle::new();
+            exp.operate(&mut shuttle);
+
+            match shuttle.nums.get(&-4000i64) {
+                None => panic!("The numerical register assigned to has not been found back."),
+                Some(n) => assert_eq!(500.1f64, *n),
+            }
         }
     }
 
     mod ops {
-        use crate::Expression;
+        use crate::{Expression, Shuttle};
         use crate::opr_funcs::*;
 
         #[test]
         fn nop_doesnt_change_value() {
             let mut the_value = Some(500f64);
             let mut ops = Vec::<Expression>::new();
-            nop(&mut the_value, &mut ops);
+            let mut shuttle = Shuttle::new();
+
+            nop(&mut the_value, &mut ops, &mut shuttle);
             assert!(the_value.is_some());
             assert_eq!(500f64, the_value.unwrap());
             assert!(ops.is_empty());
@@ -716,8 +896,9 @@ mod tests {
         fn op_add() {
             let mut the_value = None::<f64>;
             let mut ops = vec![Expression::new_number(12f64), Expression::new_number(68f64)];
+            let mut shuttle = Shuttle::new();
 
-            add(&mut the_value, &mut ops);
+            add(&mut the_value, &mut ops, &mut shuttle);
 
             // Check the value.
             assert!(the_value.is_some());
@@ -868,6 +1049,11 @@ mod tests {
         }
 
         #[test]
+        fn x_divide_by_zero() {
+            assert_eq!(Ok(f64::INFINITY), Interpreter::execute("/8 0".to_string()));
+        }
+
+        #[test]
         fn x_modulo_3_op_integer() {
             assert_eq!(Ok(1f64), Interpreter::execute("%(70 20 3)".to_string()));
         }
@@ -905,6 +1091,39 @@ mod tests {
         #[test]
         fn x_unaryminus_0_op() {
             assert_eq!(Ok(2f64), Interpreter::execute("+ 2 ~".to_string()));
+        }
+
+        #[test]
+        fn x_assign_num_return_value() {
+            assert_eq!(Ok(111f64), Interpreter::execute("$4 111".to_string()));
+        }
+
+        #[test]
+        fn x_get_num_reg() {
+            assert_eq!(Ok(90f64), Interpreter::execute("$/21 2 90 $(4) v/21 2".to_string()));
+        }
+
+        #[test]
+        fn x_add_assign() {
+            assert_eq!(Ok(90f64), Interpreter::execute("$18 88 +:-21 3 2 v18".to_string()));
+        }
+
+        #[test]
+        fn x_flexible_assignator_position() {
+            assert_eq!(
+                Interpreter::execute("$18 88 +:18 2 v18".to_string()),
+                Interpreter::execute("$18 88 +18 2: v18".to_string())
+            );
+        }
+
+        #[test]
+        fn x_unaryminus_assign() {
+            assert_eq!(Ok(-88f64), Interpreter::execute("$18 88 ~:18 v18".to_string()));
+        }
+
+        #[test]
+        fn x_unaryminus_assign2() {
+            assert_eq!(Ok(-88f64), Interpreter::execute("$18 88 ~18: v18".to_string()));
         }
     }
 }

@@ -146,6 +146,11 @@ LACONIC
 			$ Variable assignment
 
 				Variables are designated by any number, including negative and non-integer ones.
+				However, this assignment operator truncates the fractal part of non integer numbers:
+
+				$4.2 10 assigns 10 to variable number 4.
+				$4.9 10 assigns 10 to variable number 4 also.
+				$~4.9 10 assigns 10 to variable number -4.
 
 				$0+2 8 assigns 10 to variable number 0.
 
@@ -155,19 +160,28 @@ LACONIC
 
 				$2 30 +v2 4 yields 34
 
-			: change next operator to assignment operator
+			: change previous operator to an assignment operator
 
-				changes the operation of the next operator into an assignment operation
-				that uses the first operand as a variable number,
-				uses this variable as the first operand,
-				assigns the resulting value to this variable
-				and returns the assigned value :
+				changes the operation of the previous operator into an assignment operation that
+				- uses the first operand as a variable number,
+				- uses this variable's value as the first operand,
+				- computes the value resulting from processing its operands,
+				- assigns the resulting value to the same variable
+				- and returns the assigned value :
 
-				:+0 5 means $0 +v0 5 (Assign to variable(0) the value of variable(0) plus 5)
-				:~2   means $2 ~v2   (Convert the value of variable 2 to its opposite)
+				+:0 5 means $0 +v0 5 (Assign to variable(0) the value of variable(0) plus 5)
+				~:2   means $2 ~v2   (Convert the value of variable 2 to its opposite)
 
-				Note: the ':' operator should be followed by another operator.
-				If it isn't, is simply passes through the following number operand.
+				Note: the ':' operator affects the first preceding operator, if any.
+				For readability, it's best to put ':' immediately after the operator it is meant to affect.
+
+				So both expressions will yield 14 :
+				$3 7 +:3 2 v3
+				$3 7 +3 2: v3
+
+				And both expressions below will negate the value of variable 20:
+				~:20
+				~20:
 
 		Comparison
 
@@ -246,4 +260,34 @@ LACONIC
 				If the atom before the '(' operator is a number, string or comment, the '(' operator won't have any effect.
 
 			) End of operand number override - see '('. 
+
+		Z Set options
+
+			Z optionNr value
+
+			(Normally, these options precede all other statements.)
+			If the first operand refers to an unknown option,
+			the operator and its operands are ignored.
+
+			Z 0 n : maximum number of digits in a number (including decimal dot).
+						 Default : no maximum. If n is negative, this default is restored.
+						 If this maximum is violated by the formula, Eval throws an error.
+
+			Z 1 n : maximum number of loops executed by F- or W-operator.
+						 Default : no maximum; if n is negative, this default is restored.
+						 If this maximum is violated by the formula, Eval throws an error.
+						 (implemented)
+
+			Z 2 n : Scale for BigDecimal quotients of division operator
+						 (Not used for now)
+						 If n is positive or zero, this is the scale of division quotients.
+						 Default : 10; if n is ~1, this default is restored.
+						 If n is ~2, the sum of sum of the scale
+						 of the two division operands is taken as the new scale.
+						 If n is ~3, the product of the scale
+						 of the two division operands is taken as the new scale.
+
+			Z 3 n : Precision "orb" for =-operator.
+						 Default : 0; if n is negative, this default is restored.
+			
 
