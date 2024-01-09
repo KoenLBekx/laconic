@@ -171,15 +171,8 @@ Operators
 			~:2   means $2 ~v2   (Convert the value of variable 2 to its opposite)
 
 			Note: the ':' operator affects the first preceding operator, if any.
-			For readability, it's best to put ':' immediately after the operator it is meant to affect.
-
-			So both expressions will yield 14 :
-			$3 7 +:3 2 v3
-			$3 7 +3 2: v3
-
-			And both expressions below will negate the value of variable 20:
-			~:20
-			~20:
+			The ':' operator has to be put immediately after the operator it is meant to affect,
+			otherwise the results are unpredictable.
 
 		u use variables array having given number
 

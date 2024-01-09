@@ -15,7 +15,7 @@ use std::str::FromStr;
 // The first parameter should refer to an Expression's value property,
 // the second one to a Expression's operands property (operands are Expression objects),
 // the third one to the Shuttle containing other state.
-type OperatorFunc = &'static dyn Fn(&mut Option<f64>, &Vec<Expression>, &mut Shuttle);
+type OperatorFunc = &'static dyn Fn(&mut Option<f64>, &mut [Expression], &mut Shuttle);
 
 #[derive(Debug, PartialEq)]
 enum Atom {
@@ -55,9 +55,10 @@ impl Expression {
             '/' => &opr_funcs::divide,
             '%' => &opr_funcs::modulo,
             ';' => &opr_funcs::combine,
-            'W' => &opr_funcs::combine, // sic !
+            'W' => &opr_funcs::exec_while,
             '$' => &opr_funcs::assign_number_register,
             'v' => &opr_funcs::get_number_register,
+            ':' => &opr_funcs::assignment_maker,
             '=' => &opr_funcs::equals,
             '<' => &opr_funcs::less,
             '>' => &opr_funcs::greater,
@@ -87,16 +88,8 @@ impl Expression {
         }
     }
 
-    fn flatten_to_value(&self) -> Self {
-        Self::new_number(self.get_value(0f64))
-    }
-
     pub fn push_operand(&mut self, op: Expression) {
         self.operands.push(op);
-    }
-
-    pub fn has_value(&self) -> bool {
-        self.value.is_some()
     }
 
     pub fn get_value(&self, default: f64) -> f64 {
@@ -105,81 +98,30 @@ impl Expression {
         // If None, returns the provided default value.
 
         if self.value.is_some() {
-            self.value.clone().unwrap()
+            // As f64 implements the Copy trait,
+            // the Option's value isn't consumed here.
+            // See unit test unwrap_some_copy_implementor.
+            self.value.unwrap()
         } else {
             default
         }
     }
 
     pub fn operate(&mut self, shuttle: &mut Shuttle) {
-        /*
-        for op in &mut self.operands {
-            op.operate(shuttle);
-        }
-        */
+        let is_loop = "WF".contains(self.opr_mark);
 
-        /*
-        for op_ix in 0..self.operands.len() {
-            self.operands[op_ix].operate(shuttle);
-        }
-        */
-
-        let is_while = self.opr_mark == 'W';
-        let mut iteration_result = true;
-
-        'outer: loop {
-            for op_ix in 0..self.operands.len() {
-                self.operands[op_ix].operate(shuttle);
-
-                if (op_ix == 0) && is_while {
-                    iteration_result = !are_near(0f64, self.operands[op_ix].get_value(0f64), shuttle.orb);
-                }
-
-                if !iteration_result {
-                    break 'outer;
-                }
-            }
-
-            if !is_while {
-                break;
+        if !is_loop {
+            for op in &mut self.operands {
+                op.operate(shuttle);
             }
         }
 
-        let mut operands_for_func: Vec<Expression> = self.operands
-            .iter().map(|o| o.flatten_to_value()).collect();
-
-        let mut index = 0i64;
-
-        if self.is_assignment_op {
-            // Use the first operand as a reference to a numeric variable,
-            // and use that variable's value as the first operand.
-
-            index = if !self.operands.is_empty() {
-                self.operands[0].get_value(0f64)
-            } else {
-                0f64
-            } as i64;
-
-            let value_for_func = match shuttle.nums.get(&index) {
-                None => 0f64,
-                Some(n) => *n,
-            } as f64;
-
-            let first_op = Expression::new_number(value_for_func);
-
-            if operands_for_func.is_empty() {
-                operands_for_func.push(first_op);
-            } else {
-                operands_for_func[0] = first_op;
-            }
-        }
-
-        (self.operator)(&mut self.value, &operands_for_func, shuttle);
+        (self.operator)(&mut self.value, &mut self.operands, shuttle);
 
         if self.is_assignment_op {
             // Assign the resulting value to the variable
-            // referenced by the first operand.
-            shuttle.nums.insert(index, self.get_value(0f64));
+            // referenced by the first operand and stored by it in the shuttle.
+            shuttle.nums.insert(shuttle.assignment_index, self.get_value(0f64));
         }
     }
 
@@ -190,12 +132,12 @@ impl Expression {
         };
 
         if self.is_assignment_op {
-            exp_rep.push_str(":");
+            exp_rep.push(':');
         }
 
         let mut ops = String::new();
         for op in &self.operands {
-            ops.push_str("\n");
+            ops.push('\n');
             ops.push_str(op.get_representation().as_str());
         }
 
@@ -204,7 +146,7 @@ impl Expression {
         // from folding incorrectly.)
 
         // Vim folding fix brace: {
-        ops = ops.replace("\n", "\n\u{0_2502}\t");
+        ops = ops.replace('\n', "\n\u{0_2502}\t");
         exp_rep.push_str(ops.as_str());
         // Vim folding fix braces: {{
         exp_rep.push_str("\n\u{0_2514}\u{0_2500}>");
@@ -220,7 +162,7 @@ struct Shuttle {
     nums: HashMap<i64, f64>,
     strings: HashMap<i64, String>,
     routines: HashMap<i64, Expression>,
-    max_digits: f64,
+    assignment_index: i64,
     max_iterations: f64,
     orb: f64,
 }
@@ -231,7 +173,7 @@ impl Shuttle {
             nums: HashMap::<i64, f64>::new(),
             strings: HashMap::<i64, String>::new(),
             routines: HashMap::<i64, Expression>::new(),
-            max_digits: 0f64,
+            assignment_index: 0i64,
             max_iterations: 0f64,
             orb: 0.00000001f64,
         }
@@ -248,12 +190,7 @@ impl Interpreter {
 
     pub fn execute(program: String) -> Result<f64, ProgramError> {
         let atoms = Self::split_atoms(&program);
-        
-        if atoms.is_err() {
-            return Err(atoms.unwrap_err());
-        }
-
-        let atoms = atoms.unwrap();
+        let atoms = atoms?;
         let mut tree: Expression = Self::make_tree(atoms);
 
         // Debug
@@ -297,7 +234,7 @@ impl Interpreter {
                     current_num = 0f64;
                     periods_found = 0;
                     frac_pos = 0;
-                } else if c.is_digit(10) {
+                } else if c.is_ascii_digit() {
                     reading_number = true;
 
                     digit_value = match f64::from_str(&c.to_string()) {
@@ -362,7 +299,7 @@ impl Interpreter {
 
                         if bracket_nesting == 0 {
                             // An empty bracket content is ignored.
-                            if current_bracket_content.len() > 0 {
+                            if !current_bracket_content.is_empty() {
                                 match current_bracket_content.chars().next().unwrap() {
                                     first if "sc".contains(first) => {
                                         let rest = match current_bracket_content.get(1..) {
@@ -445,7 +382,6 @@ impl Interpreter {
                     match *c {
                         '(' => override_start_found = true,
                         ')' => override_end_found = true,
-                        ':' => make_assignment_operator = true,
                         op_for_stack => {
                             let mut new_exp = Expression::new(op_for_stack);
                             new_exp.is_assignment_op = make_assignment_operator;
@@ -454,33 +390,31 @@ impl Interpreter {
                             if override_start_found {
                                 override_start_found = false;
 
-                                loop {
-                                    match exp_stack.pop() {
-                                        Some(e) => {
-                                            if e.is_last_of_override {
-                                                found_last_op = true;
-                                            }
+                                while let Some(e) = exp_stack.pop() {
+                                    if e.is_last_of_override {
+                                        found_last_op = true;
+                                    }
 
-                                            new_exp.push_operand(e);
+                                    new_exp.push_operand(e);
 
-                                            if found_last_op {
-                                                found_last_op = false;
-                                                break;
-                                            }
-                                        },
-                                        None => break,
+                                    if found_last_op {
+                                        found_last_op = false;
+                                        break;
                                     }
                                 }
                             } else {
                                 for _i in 0..needed_ops {
-                                    match exp_stack.pop() {
-                                        Some(e) => new_exp.push_operand(e),
-                                        None => (),
+                                    if let Some(e) = exp_stack.pop() {
+                                        new_exp.push_operand(e);
                                     }
                                 }
                             }
 
                             exp_stack.push(new_exp);
+
+                            if op_for_stack == ':' {
+                                make_assignment_operator = true;
+                            }
                         },
                     }
                 },
@@ -510,10 +444,17 @@ impl Interpreter {
     }
 }
 
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn are_near(num1: f64, num2: f64, precision: f64) -> bool {
     (num1 - num2).abs() <= precision
 }
 
+#[cfg(test)]
 fn are_very_near(num1: f64, num2: f64) -> bool {
     are_near(num1, num2, 0.00000001f64)
 }
@@ -521,12 +462,12 @@ fn are_very_near(num1: f64, num2: f64) -> bool {
 pub(crate) mod opr_funcs {
     use super::{Expression, Shuttle, are_near};
     
-    pub fn nop(_result_value: &mut Option<f64>, _operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn nop(_result_value: &mut Option<f64>, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
         // Don't do anything.
         // Meant for Expressions that contain a fixed numerical value from creation.
     }
     
-    pub fn add(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn add(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
 
         for op in operands {
@@ -536,85 +477,73 @@ pub(crate) mod opr_funcs {
         *result_value = Some(outcome);
     }
     
-    pub fn multiply(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn multiply(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
-        let mut count = 0usize;
 
-        for op in operands {
+        for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => outcome += op.get_value(0f64),
                 _ => outcome *= op.get_value(1f64),
             }
-
-            count += 1;
         }
 
         *result_value = Some(outcome);
     }
     
-    pub fn minus(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn minus(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
-        let mut count = 0usize;
 
-        for op in operands {
+        for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => outcome += op.get_value(0f64),
                 _ => outcome -= op.get_value(0f64),
             }
-
-            count += 1;
         }
 
         *result_value = Some(outcome);
     }
     
-    pub fn divide(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn divide(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
-        let mut count = 0usize;
 
-        for op in operands {
+        for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => outcome += op.get_value(0f64),
                 _ => outcome /= op.get_value(1f64),
             }
-
-            count += 1;
         }
 
         *result_value = Some(outcome);
     }
     
-    pub fn modulo(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn modulo(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
-        let mut count = 0usize;
 
-        for op in operands {
+        for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => outcome += op.get_value(0f64),
                 _ => outcome %= op.get_value(1f64),
             }
-
-            count += 1;
         }
 
         *result_value = Some(outcome);
     }
 
-    pub fn combine(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn combine(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         *result_value = match operands.last() {
             Some(e) => Some(e.get_value(0f64)),
             None => Some(0f64),
         };
     }
 
-    pub fn unaryminus(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn unaryminus(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         *result_value = match operands.first() {
             None => Some(0f64),
             Some(e) => Some(- e.get_value(0f64)),
         };
     }
 
-    pub fn assign_number_register(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn assign_number_register(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let index = if !operands.is_empty() {
             operands[0].get_value(0f64)
         } else {
@@ -631,7 +560,7 @@ pub(crate) mod opr_funcs {
         *result_value = Some(reg_val);
     }
 
-    pub fn get_number_register(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn get_number_register(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let index = if !operands.is_empty() {
             operands[0].get_value(0f64)
         } else {
@@ -641,23 +570,37 @@ pub(crate) mod opr_funcs {
         let found = match shuttle.nums.get(&index) {
             None => 0f64,
             Some(n) => *n,
-        } as f64;
+        };
+
+        *result_value = Some(found);
+    }
+
+    pub fn assignment_maker(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        let index = if !operands.is_empty() {
+            operands[0].get_value(0f64)
+        } else {
+            0f64
+        } as i64;
+
+        shuttle.assignment_index = index;
+
+        let found = match shuttle.nums.get(&index) {
+            None => 0f64,
+            Some(n) => *n,
+        };
 
         *result_value = Some(found);
     }
     
-    pub fn equals(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn equals(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut are_equal = true;
-        let mut count = 0usize;
         let mut first = 0f64;
 
-        for op in operands {
+        for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => first = op.get_value(0f64),
                 _ => are_equal = are_near(first, op.get_value(0f64), shuttle.orb),
             }
-
-            count += 1;
         }
 
         *result_value = Some(if are_equal {
@@ -667,13 +610,12 @@ pub(crate) mod opr_funcs {
         });
     }
     
-    pub fn less(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn less(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = true;
-        let mut count = 0usize;
         let mut first = 0f64;
-        let mut second = 0f64;
+        let mut second: f64;
 
-        for op in operands {
+        for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => first = op.get_value(0f64),
                 _ => {
@@ -682,8 +624,6 @@ pub(crate) mod opr_funcs {
                     first = second;
                 },
             }
-
-            count += 1;
         }
 
         *result_value = Some(if outcome {
@@ -693,13 +633,12 @@ pub(crate) mod opr_funcs {
         });
     }
     
-    pub fn greater(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn greater(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = true;
-        let mut count = 0usize;
         let mut first = 0f64;
-        let mut second = 0f64;
+        let mut second: f64;
 
-        for op in operands {
+        for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => first = op.get_value(0f64),
                 _ => {
@@ -708,8 +647,6 @@ pub(crate) mod opr_funcs {
                     first = second;
                 },
             }
-
-            count += 1;
         }
 
         *result_value = Some(if outcome {
@@ -719,11 +656,11 @@ pub(crate) mod opr_funcs {
         });
     }
 
-    pub fn not(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
+    pub fn not(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = true;
 
         for op in operands {
-            outcome = outcome & are_near(0f64, op.get_value(0f64), shuttle.orb);
+            outcome &= are_near(0f64, op.get_value(0f64), shuttle.orb);
         }
 
         *result_value = Some(if outcome {
@@ -733,19 +670,16 @@ pub(crate) mod opr_funcs {
         });
     }
     
-    pub fn setting(result_value: &mut Option<f64>, operands: &Vec<Expression>, shuttle: &mut Shuttle) {
-        let mut count = 0usize;
+    pub fn setting(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut setting_nr = -1i64;
         let mut setting_value = 0f64;
 
-        for op in operands {
+        for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => setting_nr = op.get_value(-1f64) as i64,
                 1 => setting_value = op.get_value(0f64),
                 _ => (),
             }
-
-            count += 1;
         }
 
         match setting_nr {
@@ -755,6 +689,52 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = Some(setting_value);
+    }
+    
+    pub fn exec_while(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        if operands.is_empty() {
+            *result_value = Some(0f64);
+
+            return;
+        }
+
+        let mut outcome = 0f64;
+        let mut op_count: usize;
+        let op_len = operands.len();
+        let mut iter_count = 0f64;
+        let mut op: &mut Expression;
+
+        'outer: loop {
+            iter_count += 1f64;
+
+            if (shuttle.max_iterations > 0f64) && (iter_count > shuttle.max_iterations) {
+                break;
+            }
+
+            op_count = 0;
+
+            while op_count < op_len {
+                op = &mut operands[op_count];
+
+                match op_count {
+                    0 =>  {
+                        op.operate(shuttle);
+
+                        if are_near(0f64, op.get_value(0f64), shuttle.orb) {
+                                    break 'outer;
+                        }
+                    },
+                    _ => {
+                        op.operate(shuttle);
+                        outcome = op.get_value(0f64);
+                    },
+                }
+
+                op_count += 1;
+            }
+        }
+
+        *result_value = Some(outcome);
     }
 }
 
@@ -1282,21 +1262,8 @@ mod tests {
         }
 
         #[test]
-        fn x_flexible_assignator_position() {
-            assert_eq!(
-                Interpreter::execute("$18 88 +:18 2 v18".to_string()),
-                Interpreter::execute("$18 88 +18 2: v18".to_string())
-            );
-        }
-
-        #[test]
         fn x_unaryminus_assign() {
             assert_eq!(Ok(-88f64), Interpreter::execute("$18 88 ~:18 v18".to_string()));
-        }
-
-        #[test]
-        fn x_unaryminus_assign2() {
-            assert_eq!(Ok(-88f64), Interpreter::execute("$18 88 ~18: v18".to_string()));
         }
 
         #[test]
@@ -1380,6 +1347,11 @@ mod tests {
         }
 
         #[test]
+        fn x_while_simple() {
+            assert_eq!(Ok(1f64), Interpreter::execute("$1 4 W>v1 2 $1 1".to_string()));
+        }
+
+        #[test]
         fn x_while_executed() {
             assert_eq!(Ok(10f64), Interpreter::execute("$0 1 $1 0 W!>v0 4 ;+:1 v0 +:0 1 v1".to_string()));
         }
@@ -1394,4 +1366,17 @@ mod tests {
             assert_eq!(Ok(0f64), Interpreter::execute("$0 1 $1 0 W!>v0 ~1 ;+:1 v0 +:0 1 v1".to_string()));
         }
     }
+
+    /*
+    #[test]
+    fn unwrap_some_copy_implementor() {
+        let sm = Some(27f64);
+
+        let mut val = sm.unwrap();
+        assert_eq!(27f64, val);
+
+        val = sm.unwrap();
+        assert_eq!(27f64, val);
+    }
+    */
 }
