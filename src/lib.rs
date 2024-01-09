@@ -6,6 +6,8 @@
 // TODO: implement different variable arrays - see the 'u' operator.
 //      Default array: 0.
 //      This means that the key for HashMap Shuttle.nums has to be a (i64, i64) tuple.
+// TODO: have all operators have an acceptable behavior with less or more operands than standard.
+//      (Special attention for ':' !)
 
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -54,6 +56,7 @@ impl Expression {
             '*' => &opr_funcs::multiply,
             '/' => &opr_funcs::divide,
             '%' => &opr_funcs::modulo,
+            '^' => &opr_funcs::power,
             ';' => &opr_funcs::combine,
             'W' => &opr_funcs::exec_while,
             '$' => &opr_funcs::assign_number_register,
@@ -63,6 +66,10 @@ impl Expression {
             '<' => &opr_funcs::less,
             '>' => &opr_funcs::greater,
             '!' => &opr_funcs::not,
+            '&' => &opr_funcs::and,
+            '|' => &opr_funcs::or,
+            'x' => &opr_funcs::xor,
+            // '?' => &opr_funcs::exec_if,
             'Z' => &opr_funcs::setting,
             _ => &opr_funcs::nop,
         };
@@ -372,10 +379,10 @@ impl Interpreter {
                 Atom::Operator(c) => {
                     if !override_start_found {
                         needed_ops = match *c {
-                            chr if "~v:!"         .contains(chr) => 1,
-                            chr if "+-*/^%$W;=<>Z".contains(chr) => 2,
-                            chr if "?"           .contains(chr) => 3,
-                            _                                  => 0,
+                            chr if "~v:!"            .contains(chr) => 1,
+                            chr if "+-*/^%&|x$W;=<>Z".contains(chr) => 2,
+                            chr if "?"               .contains(chr) => 3,
+                            _                                       => 0,
                         };
                     }
 
@@ -440,7 +447,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^%$v:?W;()=<>!Z".contains(op)
+        "~+-*/^%$v:?W;()=<>!&|xZ".contains(op)
     }
 }
 
@@ -484,6 +491,19 @@ pub(crate) mod opr_funcs {
             match count {
                 0 => outcome += op.get_value(0f64),
                 _ => outcome *= op.get_value(1f64),
+            }
+        }
+
+        *result_value = Some(outcome);
+    }
+    
+    pub fn power(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        let mut outcome = 0f64;
+
+        for (count, op) in operands.iter().enumerate() {
+            match count {
+                0 => outcome += op.get_value(0f64),
+                _ => outcome = outcome.powf(op.get_value(1f64)),
             }
         }
 
@@ -664,6 +684,50 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = Some(if outcome {
+            1f64
+        } else {
+            0f64
+        });
+    }
+
+    pub fn and(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        let mut outcome = true;
+
+        for op in operands {
+            outcome &= !are_near(0f64, op.get_value(0f64), shuttle.orb);
+        }
+
+        *result_value = Some(if outcome {
+            1f64
+        } else {
+            0f64
+        });
+    }
+
+    pub fn or(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        let mut outcome = false;
+
+        for op in operands {
+            outcome |= !are_near(0f64, op.get_value(0f64), shuttle.orb);
+        }
+
+        *result_value = Some(if outcome {
+            1f64
+        } else {
+            0f64
+        });
+    }
+
+    pub fn xor(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        let mut trues = 0usize;
+
+        for op in operands {
+              if !are_near(0f64, op.get_value(0f64), shuttle.orb) {
+                  trues += 1;
+              }
+        }
+
+        *result_value = Some(if trues == 1 {
             1f64
         } else {
             0f64
@@ -1232,6 +1296,46 @@ mod tests {
         }
 
         #[test]
+        fn x_power_0_op() {
+            assert_eq!(Ok(0f64), Interpreter::execute("^".to_string()));
+        }
+
+        #[test]
+        fn x_power_1_op() {
+            assert_eq!(Ok(49f64), Interpreter::execute("^49".to_string()));
+        }
+
+        #[test]
+        fn x_power_2_op_int_int() {
+            assert_eq!(Ok(36f64), Interpreter::execute("^6 2".to_string()));
+        }
+
+        #[test]
+        fn x_power_2_op_int_fract() {
+            assert_eq!(Ok(7f64), Interpreter::execute("^49 .5".to_string()));
+        }
+
+        #[test]
+        fn x_power_2_op_int_fract_neg() {
+            assert_eq!(Ok(0.2f64), Interpreter::execute("^25 ~.5".to_string()));
+        }
+
+        #[test]
+        fn x_power_2_op_int_neg() {
+            assert_eq!(Ok(0.2f64), Interpreter::execute("^5 ~1".to_string()));
+        }
+
+        #[test]
+        fn x_power_2_op_fract_fract() {
+            assert_eq!(Ok(4.049691346263317f64), Interpreter::execute("^16.4 .5".to_string()));
+        }
+
+        #[test]
+        fn x_power_3() {
+            assert_eq!(Ok(49f64), Interpreter::execute("^(49 .5 2)".to_string()));
+        }
+
+        #[test]
         fn x_unaryminus_3_op() {
             assert_eq!(Ok(-5.02f64), Interpreter::execute("~(5.02 8 3)".to_string()));
         }
@@ -1279,6 +1383,11 @@ mod tests {
         #[test]
         fn x_equality_2_outside_orb() {
             assert_eq!(Ok(0f64), Interpreter::execute("Z0 .01 =21.3 21.35".to_string()));
+        }
+
+        #[test]
+        fn x_equality_many() {
+            assert_eq!(Ok(1f64), Interpreter::execute("$1 -15 3 =(12 +7 5 *3 4 /36 3 v1)".to_string()));
         }
 
         #[test]
@@ -1344,6 +1453,126 @@ mod tests {
         #[test]
         fn x_not_3_false() {
             assert_eq!(Ok(0f64), Interpreter::execute("!(~4 8 +90 1)".to_string()));
+        }
+
+        #[test]
+        fn x_and_0() {
+            assert_eq!(Ok(1f64), Interpreter::execute("&".to_string()));
+        }
+
+        #[test]
+        fn x_and_1_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("& /7 2".to_string()));
+        }
+
+        #[test]
+        fn x_and_1_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("& -5 5".to_string()));
+        }
+
+        #[test]
+        fn x_and_2_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("& 2 /7 2".to_string()));
+        }
+
+        #[test]
+        fn x_and_2_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("& 2 -5 5".to_string()));
+        }
+
+        #[test]
+        fn x_and_3_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("&(2 /7 2 %14 4)".to_string()));
+        }
+
+        #[test]
+        fn x_and_3_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("&( 2 -5 5 9)".to_string()));
+        }
+
+        #[test]
+        fn x_or_0() {
+            assert_eq!(Ok(0f64), Interpreter::execute("|".to_string()));
+        }
+
+        #[test]
+        fn x_or_1_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("| /7 2".to_string()));
+        }
+
+        #[test]
+        fn x_or_1_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("| -5 5".to_string()));
+        }
+
+        #[test]
+        fn x_or_2_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("| 0 /7 2".to_string()));
+        }
+
+        #[test]
+        fn x_or_2_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("| 0 -5 5".to_string()));
+        }
+
+        #[test]
+        fn x_or_3_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("|(0 +3 ~2  %14 4)".to_string()));
+        }
+
+        #[test]
+        fn x_or_3_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("|( 0 -5 5 %20 5)".to_string()));
+        }
+
+        #[test]
+        fn x_xor_0() {
+            assert_eq!(Ok(0f64), Interpreter::execute("x".to_string()));
+        }
+
+        #[test]
+        fn x_xor_1_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("x /7 2".to_string()));
+        }
+
+        #[test]
+        fn x_xor_1_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("x -5 5".to_string()));
+        }
+
+        #[test]
+        fn x_xor_2_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("x 0 /7 2".to_string()));
+        }
+
+        #[test]
+        fn x_xor_2_false_both_true() {
+            assert_eq!(Ok(0f64), Interpreter::execute("x 8 5".to_string()));
+        }
+
+        #[test]
+        fn x_xor_2_false_both_false() {
+            assert_eq!(Ok(0f64), Interpreter::execute("x 0 -5 5".to_string()));
+        }
+
+        #[test]
+        fn x_xor_3_true() {
+            assert_eq!(Ok(1f64), Interpreter::execute("x(0 +3 ~3  %14 4)".to_string()));
+        }
+
+        #[test]
+        fn x_xor_3_false_2_true() {
+            assert_eq!(Ok(0f64), Interpreter::execute("x(0 -5 7 %20 7)".to_string()));
+        }
+
+        #[test]
+        fn x_xor_3_false_3_true() {
+            assert_eq!(Ok(0f64), Interpreter::execute("x(1 -5 7 %20 5)".to_string()));
+        }
+
+        #[test]
+        fn x_xor_3_false_0_true() {
+            assert_eq!(Ok(0f64), Interpreter::execute("x(0 -5 5 %20 5)".to_string()));
         }
 
         #[test]
