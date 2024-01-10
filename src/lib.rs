@@ -8,6 +8,7 @@
 //      This means that the key for HashMap Shuttle.nums has to be a (i64, i64) tuple.
 // TODO: have all operators have an acceptable behavior with less or more operands than standard.
 //      (Special attention for ':' !)
+// TODO: make private whatever can remain private.
 
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -196,18 +197,26 @@ impl Interpreter {
     }
 
     pub fn execute(program: String) -> Result<f64, ProgramError> {
+        Self::execute_opts(program, true, false, false)
+    }
+
+    pub fn execute_opts(program: String, do_execute: bool, show_before: bool, show_after: bool) -> Result<f64, ProgramError> {
         let atoms = Self::split_atoms(&program);
         let atoms = atoms?;
         let mut tree: Expression = Self::make_tree(atoms);
 
-        // Debug
-        // println!("\nTree before operate() :\n{}", tree.get_representation());
+        if show_before {
+            println!("\nTree before operate() :\n{}", tree.get_representation());
+        }
 
-        let mut shuttle = Shuttle::new();
-        tree.operate(&mut shuttle);
+        if do_execute {
+            let mut shuttle = Shuttle::new();
+            tree.operate(&mut shuttle);
+        }
 
-        // Debug
-        println!("\nTree after operate() :\n{}", tree.get_representation());
+        if show_after {
+            println!("\nTree after operate() :\n{}", tree.get_representation());
+        }
 
         Ok(tree.get_value(0f64))
     }
