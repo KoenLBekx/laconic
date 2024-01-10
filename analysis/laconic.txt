@@ -375,6 +375,47 @@ Operators
 			:-0 1
 			v0
 
+		F For-loop
+
+			F startValue endValue increment statement
+
+			The F operator takes 5 arguments :
+			- the starting value of the loop counter
+			- the end value of the loop counter
+			- the number the loop counter is incremented with after every iteration
+			- the variable number that will hold the current loop counter
+			- an operator executed in each iteration.
+
+			The F operator
+			1. starts by initializing its loop counter with its 1st argument,
+			2. executes its 5th and subsequent arguments
+			3. increases its loop counter with its 3rd argument and stores it in the variable indicated in the 4th argument
+			4. checks if the loop counter is still in the range between its 1st and 2nd argument, inclusive,
+			5. if so, repeats from step 2.
+
+			If you want to execute more than one operator, either
+			- use the ; operator
+			- or use the ( ) operators.
+
+			$0 1 F3 11 2 1 *:0 v1 v0 yields the product of all odd numbers from 3 up to 11
+
+			More readably :
+			$
+				0
+				1
+			F
+				3
+				11
+				2
+				1
+				*:
+					0
+					v1
+			v0
+
+			(The same can be calculated using the 'W' loop operator :)
+			$0 3 $1 1 W!>v0 11 ;*:1 v0 +:0 2 v1
+
 	Other
 
 		( Operand number override
@@ -405,9 +446,8 @@ Operators
 					 Default : 0; if n is negative, this default is restored.
 
 		Z 1 n : maximum number of loops executed by F- or W-operator.
-					 Default : no maximum; if n is negative, this default is restored.
-					 If this maximum is violated by the formula, Eval throws an error.
-					 (implemented)
+					 If 0, no maximum is imposed, which removes the protection against infinite loops.
+					 Default : 10,000.
 
 		Z 2 n : number of digits before fractal dot in output
 

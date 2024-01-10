@@ -65,6 +65,7 @@ impl Expression {
             '^' => &opr_funcs::power,
             ';' => &opr_funcs::combine,
             'W' => &opr_funcs::exec_while,
+            'F' => &opr_funcs::exec_for,
             '$' => &opr_funcs::assign_number_register,
             'v' => &opr_funcs::get_number_register,
             ':' => &opr_funcs::assignment_maker,
@@ -121,6 +122,11 @@ impl Expression {
     }
 
     pub fn operate(&mut self, shuttle: &mut Shuttle) {
+        /*
+        #[cfg(test)]
+        println!("operate {}", self.opr_mark);
+        */
+
         let defer_opd_evaluation = "WF?".contains(self.opr_mark);
 
         if !defer_opd_evaluation {
@@ -136,6 +142,11 @@ impl Expression {
             // referenced by the first operand and stored by it in the shuttle.
             shuttle.nums.insert(shuttle.assignment_index, self.get_value(0f64));
         }
+
+        /*
+        #[cfg(test)]
+        println!("operate {} ==> {:?}", self.opr_mark, self.get_value(99999f64));
+        */
     }
 
     pub fn get_representation(&self) -> String {
@@ -187,7 +198,7 @@ impl Shuttle {
             strings: HashMap::<i64, String>::new(),
             routines: HashMap::<i64, Expression>::new(),
             assignment_index: 0i64,
-            max_iterations: 0f64,
+            max_iterations: 10_000f64,
             orb: 0.00000001f64,
         }
     }
@@ -396,6 +407,7 @@ impl Interpreter {
                             chr if "~v:!"            .contains(chr) => 1,
                             chr if "+-*/^%&|x$W;=<>Z".contains(chr) => 2,
                             chr if "?"               .contains(chr) => 3,
+                            chr if "F"               .contains(chr) => 5,
                             _                                       => 0,
                         };
                     }
@@ -461,7 +473,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^%$v:?W;()=<>!&|xZ".contains(op)
+        "~+-*/^%$v:?WF;()=<>!&|xZ".contains(op)
     }
 }
 
@@ -815,6 +827,71 @@ pub(crate) mod opr_funcs {
         *result_value = Some(outcome);
     }
     
+    pub fn exec_for(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        let mut outcome = 0f64;
+        let mut counter_val = 0f64;
+        let mut end_val = 0f64;
+        let mut increment = 1f64;
+        let mut counter_var = 0i64;
+        let mut iter_count = 0f64;
+
+        if operands.len() < 5 {
+            *result_value = Some(outcome);
+
+            return;
+        }
+
+        for (op_count, op) in operands.iter_mut().enumerate() {
+            if op_count <= 3 {
+                op.operate(shuttle);
+            }
+
+            match op_count {
+                0 => counter_val = op.get_value(0f64),
+                1 => end_val = op.get_value(0f64),
+                2 => increment = op.get_value(1f64),
+                3 => counter_var = op.get_value(0f64) as i64,
+                _ => (),
+            }
+        }
+
+        let ascending = counter_val <= end_val;
+        let op_len = operands.len();
+        let mut op_count: usize;
+        let mut op: &mut Expression;
+
+        loop {
+            iter_count += 1f64;
+
+            if (shuttle.max_iterations > 0f64) && (iter_count > shuttle.max_iterations) {
+                break;
+            }
+
+            if  (ascending && (counter_val > end_val)) ||
+                ((!ascending) && (counter_val < end_val)) {
+                    break;
+            }
+
+            shuttle.nums.insert(counter_var, counter_val);
+            op_count = 4;
+
+            while op_count < op_len {
+                op = &mut operands[op_count];
+                op.operate(shuttle);
+
+                if op_count + 1 == op_len {
+                    outcome = op.get_value(0f64);
+                }
+
+                op_count += 1;
+            }
+
+            counter_val += increment;
+        }
+
+        *result_value = Some(outcome);
+    }
+
     pub fn exec_if(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
         let mut use_second = true;
@@ -1633,6 +1710,31 @@ mod tests {
         #[test]
         fn x_while_never_executed() {
             assert_eq!(Ok(0f64), Interpreter::execute("$0 1 $1 0 W!>v0 ~1 ;+:1 v0 +:0 1 v1".to_string()));
+        }
+
+        #[test]
+        fn x_for_4_op_asc() {
+            assert_eq!(Ok(0f64), Interpreter::execute("F(3 11 2 1)".to_string()));
+        }
+
+        #[test]
+        fn x_for_5_op_asc() {
+            assert_eq!(Ok(10395f64), Interpreter::execute("$0 1 F3 11 2 1 *:0 v1 v0".to_string()));
+        }
+
+        #[test]
+        fn x_for_5_op_desc() {
+            assert_eq!(Ok(10395f64), Interpreter::execute("$0 1 F11 3 ~2 1 *:0 v1 v0".to_string()));
+        }
+
+        #[test]
+        fn x_for_6_op() {
+            assert_eq!(Ok(10395f64), Interpreter::execute("$0 1 F(11 3 ~2 1 *:0 v1 $5 v1) v0".to_string()));
+        }
+
+        #[test]
+        fn x_for_5_op_exceeds_limit() {
+            assert_eq!(Ok(15f64), Interpreter::execute("Z1 2 $0 1 F3 11 2 1 *:0 v1 v0".to_string()));
         }
 
         #[test]
