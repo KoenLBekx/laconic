@@ -9,6 +9,11 @@
 // TODO: have all operators have an acceptable behavior with less or more operands than standard.
 //      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
+// TODO: fn split_atoms should not construct f64 numbers,
+//      but create uninitialized number expressions having only a number's string representation.
+//      Upon their first call of operate(), they should calculate their number based on the
+//      current number base.
+//      (split_atoms can't be asked to handle calculated base specifications like Z 4 *n n .)
 
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -70,7 +75,7 @@ impl Expression {
             '&' => &opr_funcs::and,
             '|' => &opr_funcs::or,
             'x' => &opr_funcs::xor,
-            // '?' => &opr_funcs::exec_if,
+            '?' => &opr_funcs::exec_if,
             'Z' => &opr_funcs::setting,
             _ => &opr_funcs::nop,
         };
@@ -116,9 +121,9 @@ impl Expression {
     }
 
     pub fn operate(&mut self, shuttle: &mut Shuttle) {
-        let is_loop = "WF".contains(self.opr_mark);
+        let defer_opd_evaluation = "WF?".contains(self.opr_mark);
 
-        if !is_loop {
+        if !defer_opd_evaluation {
             for op in &mut self.operands {
                 op.operate(shuttle);
             }
@@ -804,6 +809,32 @@ pub(crate) mod opr_funcs {
                 }
 
                 op_count += 1;
+            }
+        }
+
+        *result_value = Some(outcome);
+    }
+    
+    pub fn exec_if(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        let mut outcome = 0f64;
+        let mut use_second = true;
+
+        for op_tuple in operands.iter_mut().enumerate() {
+            match op_tuple {
+                (0, op) => {
+                    op.operate(shuttle);
+                    use_second = !are_near(0f64, op.get_value(0f64), shuttle.orb);
+                },
+                (1, op) if use_second => {
+                    op.operate(shuttle);
+                    outcome = op.get_value(0f64);
+                },
+                (1, _) => (),
+                (_, op) if !use_second => {
+                    op.operate(shuttle);
+                    outcome = op.get_value(0f64);
+                }
+                _ => (),
             }
         }
 
@@ -1602,6 +1633,36 @@ mod tests {
         #[test]
         fn x_while_never_executed() {
             assert_eq!(Ok(0f64), Interpreter::execute("$0 1 $1 0 W!>v0 ~1 ;+:1 v0 +:0 1 v1".to_string()));
+        }
+
+        #[test]
+        fn x_if_0_op() {
+            assert_eq!(Ok(0f64), Interpreter::execute("?".to_string()));
+        }
+
+        #[test]
+        fn x_if_1_op() {
+            assert_eq!(Ok(0f64), Interpreter::execute("? 19".to_string()));
+        }
+
+        #[test]
+        fn x_if_second() {
+            assert_eq!(Ok(8f64), Interpreter::execute("?*70 .2 8 2".to_string()));
+        }
+
+        #[test]
+        fn x_if_third() {
+            assert_eq!(Ok(2f64), Interpreter::execute("?-70 70 8 2".to_string()));
+        }
+
+        #[test]
+        fn x_if_5_op_second() {
+            assert_eq!(Ok(4f64), Interpreter::execute("?(19 +3 1 0 7 23)".to_string()));
+        }
+
+        #[test]
+        fn x_if_5_op_last() {
+            assert_eq!(Ok(23f64), Interpreter::execute("$5 0 ?(v5 +3 1 0 7 23)".to_string()));
         }
     }
 

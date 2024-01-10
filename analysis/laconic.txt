@@ -1,5 +1,8 @@
 LACONIC
 
+		// TODO: explain standard number of operands and how to deviate from it.
+		// TODO: indicate the standard number of operands for every operator.
+
 	General syntax
 
 		The laconic language is Polish expression interpreter :
@@ -13,6 +16,7 @@ LACONIC
 		- numbers
 		- string bracket contents
 		- comment bracket contents
+		- number bracket contents
 
 		All atoms are case-sensitive.
 
@@ -111,9 +115,9 @@ LACONIC
 			base 36 :  0-9 and A-Z
 
 			If a number expressed in a base higher than 36 has digits greater than 9,
-			it has to be expressed in [n...] clauses as series of base10 numbers separated by spaces:
+			it has to be expressed as number bracket contents: [n...] clauses as series of base10 numbers separated by spaces:
 
-			Z4 50 +[n1 20] [n3] yields 73(base10)
+			Z4 50 +[n1 20] 3 yields 73(base10)
 
 			This reduces calculating with hours, minutes and seconds to calculating seconds in base 60:
 
@@ -122,6 +126,10 @@ LACONIC
 			Combinations of Z 5 n and Z 4 n commands allow conversion of numbers between bases.
 			In order to avoid mistakes in the specification of the output base,
 			it's best to issue the Z 5 n expression before the Z 4 n expression.
+
+			It's even possible to process numbers of different bases together:
+
+			*17 ;Z4 16 21 yields 561(base10).
 
 	String brackets content
 
