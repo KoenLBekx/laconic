@@ -49,6 +49,7 @@ struct Expression
     value: Option<f64>,
     opr_mark: char,
     is_last_of_override: bool,
+    has_overridden_nr_of_ops: bool,
     is_assignment_op: bool,
 }
 
@@ -87,6 +88,7 @@ impl Expression {
             value: None,
             opr_mark,
             is_last_of_override: false,
+            has_overridden_nr_of_ops: false,
             is_assignment_op: false,
         }
     }
@@ -98,6 +100,7 @@ impl Expression {
             value: Some(num),
             opr_mark: '0',
             is_last_of_override: false,
+            has_overridden_nr_of_ops: false,
             is_assignment_op: false,
         }
     }
@@ -151,12 +154,25 @@ impl Expression {
 
     pub fn get_representation(&self) -> String {
         let mut exp_rep = match self.opr_mark {
-            '0' => format!("{:?}", self.value),
+            // '0' => format!("{:?}", self.value),
+            '0' => match self.value {
+                None => "empty_num".to_string(),
+                Some(num) => num.to_string(),
+            },
             oth => oth.to_string(),
         };
 
         if self.is_assignment_op {
             exp_rep.push(':');
+        }
+
+        if self.has_overridden_nr_of_ops {
+            exp_rep.push('(');
+        }
+
+        if self.is_last_of_override {
+            exp_rep.push(')');
+
         }
 
         let mut ops = String::new();
@@ -175,8 +191,15 @@ impl Expression {
 
         if self.opr_mark != '0' {
             // Vim folding fix braces: {{
-            exp_rep.push_str("\n\u{0_2514}\u{0_2500}>");
-            exp_rep.push_str(format!("{:?}", self.value).as_str());
+            exp_rep.push_str("\n\u{0_2514}\u{0_2500}> ");
+            // exp_rep.push_str(format!("{:?}", self.value).as_str());
+
+            let val_rep = match self.value {
+                None => "no_value".to_string(),
+                Some(num) => num.to_string(),
+            };
+
+            exp_rep.push_str(val_rep.as_str());
         }
 
         exp_rep
@@ -385,8 +408,6 @@ impl Interpreter {
     fn make_tree(atoms: Vec<Atom>) -> Expression {
         let mut exp_stack = Vec::<Expression>::new();
         let mut override_start_found = false;
-        let mut override_end_found = false;
-        let mut found_last_op = false;
         let mut needed_ops = 0usize;
         let mut make_assignment_operator = false;
 
@@ -395,7 +416,7 @@ impl Interpreter {
         for exp in atoms.iter().rev() {
             match exp {
                 Atom::Number(n) => {
-                    let mut new_exp = Expression::new_number(*n);
+                    let new_exp = Expression::new_number(*n);
                     exp_stack.push(new_exp);
                 },
                 Atom::Operator(c) => {
@@ -418,10 +439,16 @@ impl Interpreter {
                             make_assignment_operator = false;
 
                             if override_start_found {
+                                new_exp.has_overridden_nr_of_ops = true;
                                 override_start_found = false;
 
                                 while let Some(e) = exp_stack.pop() {
                                     if e.opr_mark == ')' {
+                                        match new_exp.operands.last_mut() {
+                                            None =>  (),
+                                            Some(ref mut op) => op.is_last_of_override = true,
+                                        }
+
                                         break;
                                     }
 
