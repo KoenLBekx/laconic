@@ -151,7 +151,7 @@ impl Expression {
 
     pub fn get_representation(&self) -> String {
         let mut exp_rep = match self.opr_mark {
-            '0' => "num".to_string(),
+            '0' => format!("{:?}", self.value),
             oth => oth.to_string(),
         };
 
@@ -172,9 +172,12 @@ impl Expression {
         // Vim folding fix brace: {
         ops = ops.replace('\n', "\n\u{0_2502}\t");
         exp_rep.push_str(ops.as_str());
-        // Vim folding fix braces: {{
-        exp_rep.push_str("\n\u{0_2514}\u{0_2500}>");
-        exp_rep.push_str(format!("{:?}", self.value).as_str());
+
+        if self.opr_mark != '0' {
+            // Vim folding fix braces: {{
+            exp_rep.push_str("\n\u{0_2514}\u{0_2500}>");
+            exp_rep.push_str(format!("{:?}", self.value).as_str());
+        }
 
         exp_rep
     }
@@ -393,12 +396,6 @@ impl Interpreter {
             match exp {
                 Atom::Number(n) => {
                     let mut new_exp = Expression::new_number(*n);
-                    
-                    if override_end_found {
-                        new_exp.is_last_of_override = true;
-                        override_end_found = false;
-                    }
-
                     exp_stack.push(new_exp);
                 },
                 Atom::Operator(c) => {
@@ -414,7 +411,7 @@ impl Interpreter {
 
                     match *c {
                         '(' => override_start_found = true,
-                        ')' => override_end_found = true,
+                        // ')' => override_end_found = true,
                         op_for_stack => {
                             let mut new_exp = Expression::new(op_for_stack);
                             new_exp.is_assignment_op = make_assignment_operator;
@@ -424,21 +421,26 @@ impl Interpreter {
                                 override_start_found = false;
 
                                 while let Some(e) = exp_stack.pop() {
-                                    if e.is_last_of_override {
-                                        found_last_op = true;
+                                    if e.opr_mark == ')' {
+                                        break;
                                     }
 
                                     new_exp.push_operand(e);
-
-                                    if found_last_op {
-                                        found_last_op = false;
-                                        break;
-                                    }
                                 }
                             } else {
-                                for _i in 0..needed_ops {
+                                let mut i = 0;
+
+                                while i < needed_ops {
+                                    i += 1;
+
                                     if let Some(e) = exp_stack.pop() {
-                                        new_exp.push_operand(e);
+                                        if e.opr_mark == ')' {
+                                            // Ignore the ')' expression;
+                                            // just get it off the stack.
+                                            i -= 1;
+                                        } else {
+                                            new_exp.push_operand(e);
+                                        }
                                     }
                                 }
                             }
@@ -1325,6 +1327,11 @@ mod tests {
         #[test]
         fn x_override_to_1() {
             assert_eq!(Ok(51f64), Interpreter::execute("+- 50 +(2) 3".to_string()));
+        }
+        
+        #[test]
+        fn x_override_with_operator_operands() {
+            assert_eq!(Ok(13f64), Interpreter::execute("$0 10?(=%8 6 2 +:0 3 +:0 4 57)v0".to_string()));
         }
 
         #[test]
