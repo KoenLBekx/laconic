@@ -5,7 +5,7 @@ LACONIC
 
 	General syntax
 
-		The laconic language is Polish expression interpreter :
+		The laconic language is a Polish expression interpreter :
 
 			*+4 2 3
 
@@ -113,8 +113,10 @@ LACONIC
 			base 16 :  0-9 and A-F
 			base 17 :  0-9 and A-G
 			base 36 :  0-9 and A-Z
+			base 37 :  0 - 9 and 10 - 36
+			base 200 : 0 - 9 and 10 - 199
 
-			If a number expressed in a base higher than 36 has digits greater than 9,
+			If a number expressed in a base higher than 36 has digits greater than 35,
 			it has to be expressed as number bracket contents: [n...] clauses as series of base10 numbers separated by spaces:
 
 			Z4 50 +[n1 20] 3 yields 73(base10)
@@ -349,7 +351,7 @@ Operators
 			use the ; combinator operator.
 			The W operator returns the value of its last executed statement.
 
-			$0 10$1 0Wv0;:+1v0:-0 1v0
+			$0 10$1 0Wv0;+:1v0:-0 1v0
 				yields the summation of 10 (10 + 9 + ... + 1)
 
 			For readability, this can also be written as
@@ -359,8 +361,8 @@ Operators
 			W
 				v0
 				;
-					:+1 v0
-					:-0 1
+					+:1 v0
+					-:0 1
 			v0
 
 			Note: without the combinator operator (;),
@@ -371,13 +373,13 @@ Operators
 			$1 0
 			W
 				v0
-				:+1 v0
-			:-0 1
+				+:1 v0
+			-:0 1
 			v0
 
 		F For-loop
 
-			F startValue endValue increment statement
+			F startValue endValue increment counterVariable statement
 
 			The F operator takes 5 arguments :
 			- the starting value of the loop counter
