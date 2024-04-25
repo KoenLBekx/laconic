@@ -1,0 +1,48 @@
+[c The radicand]
+$0 343
+
+[c The root exponent]
+$1 3
+
+[c Root exponent - 1]
+$2 - v1 1
+
+[c Precision orb]
+$3 .000001
+
+[c Initial guess and final result]
+$4 /v0 10
+
+[c Guess result]
+$5 1
+
+[c Difference]
+$6 *v3 2
+
+[c Iteration counter - for debug use]
+$7 0
+
+W
+	|
+		> v6 v3
+		< v6 ~v3
+	;
+		(
+			+:7 1
+			$
+				5
+				/
+					v0 
+					^ v4 v2
+			$
+				6
+				- v4 v5
+			$
+				4
+				/
+					+
+						* v4 v2
+						v5
+					v1
+		)
+v4
