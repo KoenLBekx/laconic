@@ -205,6 +205,15 @@ Operators
 
 			$+3 1+2 8 assigns 10 to variable number (3 + 1), so variable number 4.
 
+			If the $ operator has more than two operands (used with parentheses),
+			then operands 3 up to the last one are assigned to consecutive variables:
+
+			$(10 20 4 5)
+				assigns
+					20 to variable 10,
+					4  to variable 11 and
+					5  to variable 12.
+
 		v variable value
 
 			$2 30 +v2 4 yields 34
@@ -335,7 +344,7 @@ Operators
 
 			;4 30 yields 30
 			;$2 10 v2 yields 10
-			;;$0 4:+0 5 51 return 51 after having affected variable number 0
+			;;$0 4+:0 5 51 return 51 after having affected variable number 0
 
 		? "If a, then b, else c"
 

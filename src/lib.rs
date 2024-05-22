@@ -618,6 +618,7 @@ pub(crate) mod opr_funcs {
         };
     }
 
+    // TODO: implement assignment of a series of variables using the (...) operators.
     pub fn assign_number_register(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let index = if !operands.is_empty() {
             operands[0].get_value(0f64)
