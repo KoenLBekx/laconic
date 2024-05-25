@@ -142,8 +142,8 @@ LACONIC
 			[sKunji Namparshespa] yields the string "Kunji Namparshespa".
 
 		For numerical operations, the Laconic interpreter obtains the numeric value of a string
-		by simply treating it as a Laconic expression itself.
-		Thereby, characters that are no operators are ignored and treated as separators.
+		from the Unicode value of its first character, or of the first compositing character if
+		the first character is a composite one.
 
 	Comment brackets content
 
@@ -235,6 +235,7 @@ Operators
 			otherwise the results are unpredictable.
 
 		u use variables array having given number
+			(to be implemented)
 
 			Variables are stored in one of several arrays.
 			Each array has a number.
@@ -461,14 +462,17 @@ Operators
 					 Default : 10,000.
 
 		Z 2 n : number of digits before fractal dot in output
+					(to be implemented)
 
 					If n=0, only the numbers needed will be output.
 
 		Z 3 n : number of digits after fractal dot in output
+					(to be implemented)
 
 					If n=0, only the numbers needed will be output.
 
 		Z 4 n : Base of input number (numbers in the script).
+					(to be implemented)
 
 					Bases from 2 up to any large number are supported.
 					If any other base is requested, base 10 is assumed.
@@ -488,4 +492,11 @@ Operators
 					Z4 2 [c Binary numbers used] Z100 1010 [c Base 10 used again]
 
 		Z 5 n : Base of output number (displayed as output).
+					(to be implemented)
+
+		w	write the value of an expression to standard output and returns that value.
+
+					Note that no newline or CR characters are inserted automatically.
+
+					$0 7 wv7
 
