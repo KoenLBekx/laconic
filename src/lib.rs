@@ -618,21 +618,21 @@ pub(crate) mod opr_funcs {
         };
     }
 
-    // TODO: implement assignment of a series of variables using the (...) operators.
     pub fn assign_number_register(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        let index = if !operands.is_empty() {
-            operands[0].get_value(0f64)
-        } else {
-            0f64
-        } as i64;
+        if operands.is_empty() {
+            *result_value = Some(0f64);
+            return;
+        }
 
-        let reg_val = if operands.len() >= 2 {
-            operands[1].get_value(0f64)
-        } else {
-            0f64
-        };
+        let mut index = operands[0].get_value(0f64) as i64;
+        let mut reg_val = 0f64;
 
-        shuttle.nums.insert(index, reg_val);
+        for opd in &operands[1..operands.len()] {
+            reg_val = opd.get_value(0f64);
+            shuttle.nums.insert(index, reg_val);
+            index += 1;
+        }
+
         *result_value = Some(reg_val);
     }
 
@@ -1505,6 +1505,11 @@ mod tests {
         #[test]
         fn x_assign_num_return_value() {
             assert_eq!(Ok(111f64), Interpreter::execute("$4 111".to_string()));
+        }
+
+        #[test]
+        fn x_assign_num_serial_assignation() {
+            assert_eq!(Ok(10f64), Interpreter::execute("$(4 1 2 3 4) F4 7 1 0 +:1 vv0 v1 ".to_string()));
         }
 
         #[test]
