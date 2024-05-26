@@ -191,7 +191,6 @@ Operators
 			%7.1 3.1 yields .9
 
 		i Integer
-			(to be implemented)
 
 			Truncates the fractal part of a number towards zero:
 
@@ -201,20 +200,17 @@ Operators
 			i~27 yields ~27
 
 		a Absolute value
-			(to be implemented)
 
 			a8 yields 8
 			a~3 yields 3
 
 		m Minimum
-			(to be implemented)
 
 			m7 4.1 yields 4.1
 			m~7 4.1 yields ~7
 			m(4 2 1 19) yields 1
 
 		M Maximum
-			(to be implemented)
 
 			M7 4.1 yields 7
 			M~7 4.1 yields 4.1
@@ -264,18 +260,37 @@ Operators
 			The ':' operator has to be put immediately after the operator it is meant to affect,
 			otherwise the results are unpredictable.
 
-		u use variables array having given number
+		u use variables array having given number for the next statement
 			(to be implemented)
 
 			Variables are stored in one of several arrays.
 			Each array has a number.
 			Using the 'u' command, you can change the array of variables to be used
+			for the next single statement.
+
+			Default is array 0.
+
+			The u operator returns the value of the next statement, just like the ; operator.
+			This allows for expressions like u2v1 : register 1 from array 2.
+
+			$5 20 v5 yields 20, because the current variables array hasn't been changed.
+			$5 20 u1 v5 yields 0, because that's the default value for an unknown variable in an array.
+
+		U use variables array having given number for the subsequent statements
+			(to be implemented)
+
+			Variables are stored in one of several arrays.
+			Each array has a number.
+			Using the 'U' command, you can change the array of variables to be used
 			for all subsequent variable-related operations.
 
 			Default is array 0.
 
+			The U operator returns the value of the next statement, just like the ; operator.
+			This allows for expressions like U2+v1 v2 : the sum of variables 1 and 2 from array 2.
+
 			$5 20 v5 yields 20, because the current variables array hasn't been changed.
-			$5 20 u1 v5 yields 0, because that's the default value for an unknown variable in an array.
+			$5 20 U1 v5 yields 0, because that's the default value for an unknown variable in an array.
 
 	Comparison
 

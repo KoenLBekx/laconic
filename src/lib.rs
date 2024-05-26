@@ -64,7 +64,11 @@ impl Expression {
             '/' => &opr_funcs::divide,
             '%' => &opr_funcs::modulo,
             '^' => &opr_funcs::power,
+            'i' => &opr_funcs::intgr,
+            'a' => &opr_funcs::abs,
             ';' => &opr_funcs::combine,
+            'm' => &opr_funcs::min,
+            'M' => &opr_funcs::max,
             'W' => &opr_funcs::exec_while,
             'F' => &opr_funcs::exec_for,
             '$' => &opr_funcs::assign_number_register,
@@ -422,11 +426,11 @@ impl Interpreter {
                 Atom::Operator(c) => {
                     if !override_start_found {
                         needed_ops = match *c {
-                            chr if "~v:!"            .contains(chr) => 1,
-                            chr if "+-*/^%&|x$W;=<>Z".contains(chr) => 2,
-                            chr if "?"               .contains(chr) => 3,
-                            chr if "F"               .contains(chr) => 5,
-                            _                                       => 0,
+                            chr if "~iav:!"            .contains(chr) => 1,
+                            chr if "+-*/^%&|x$W;mM=<>Z".contains(chr) => 2,
+                            chr if "?"                 .contains(chr) => 3,
+                            chr if "F"                 .contains(chr) => 5,
+                            _                                         => 0,
                         };
                     }
 
@@ -502,7 +506,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^%$v:?WF;()=<>!&|xZ".contains(op)
+        "~+-*/^ia%$v:?WF;mM()=<>!&|xZ".contains(op)
     }
 }
 
@@ -610,11 +614,55 @@ pub(crate) mod opr_funcs {
             None => Some(0f64),
         };
     }
+    
+    pub fn min(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        let mut outcome = f64::MAX;
+        let mut current: f64;
+
+        for op in operands {
+            current = op.get_value(f64::MAX);
+
+            if outcome > current {
+                outcome = current;
+            }
+        }
+
+        *result_value = Some(outcome);
+    }
+    
+    pub fn max(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        let mut outcome = f64::MIN;
+        let mut current: f64;
+
+        for op in operands {
+            current = op.get_value(f64::MIN);
+
+            if outcome < current {
+                outcome = current;
+            }
+        }
+
+        *result_value = Some(outcome);
+    }
 
     pub fn unaryminus(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         *result_value = match operands.first() {
             None => Some(0f64),
             Some(e) => Some(- e.get_value(0f64)),
+        };
+    }
+
+    pub fn intgr(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        *result_value = match operands.first() {
+            None => Some(0f64),
+            Some(e) => Some(e.get_value(0f64).trunc()),
+        };
+    }
+
+    pub fn abs(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        *result_value = match operands.first() {
+            None => Some(0f64),
+            Some(e) => Some(e.get_value(0f64).abs()),
         };
     }
 
@@ -1500,6 +1548,76 @@ mod tests {
         #[test]
         fn x_unaryminus_0_op() {
             assert_eq!(Ok(2f64), Interpreter::execute("+ 2 ~".to_string()));
+        }
+
+        #[test]
+        fn x_int_int() {
+            assert_eq!(Ok(5f64), Interpreter::execute("i5".to_string()));
+        }
+
+        #[test]
+        fn x_int_fract() {
+            assert_eq!(Ok(5f64), Interpreter::execute("i5.7".to_string()));
+        }
+
+        #[test]
+        fn x_int_neg_int() {
+            assert_eq!(Ok(-5f64), Interpreter::execute("i~5".to_string()));
+        }
+
+        #[test]
+        fn x_int_neg_fract() {
+            assert_eq!(Ok(-5f64), Interpreter::execute("i~5.8".to_string()));
+        }
+
+        #[test]
+        fn x_abs_pos() {
+            assert_eq!(Ok(5f64), Interpreter::execute("a5".to_string()));
+        }
+
+        #[test]
+        fn x_abs_neg() {
+            assert_eq!(Ok(5f64), Interpreter::execute("a~5".to_string()));
+        }
+
+        #[test]
+        fn x_min_two_first() {
+            assert_eq!(Ok(128f64), Interpreter::execute("m128 277".to_string()));
+        }
+
+        #[test]
+        fn x_min_two_second() {
+            assert_eq!(Ok(277f64), Interpreter::execute("m328 277".to_string()));
+        }
+
+        #[test]
+        fn x_min_two_equal() {
+            assert_eq!(Ok(128f64), Interpreter::execute("m128 128".to_string()));
+        }
+
+        #[test]
+        fn x_min_more() {
+            assert_eq!(Ok(-31f64), Interpreter::execute("m(128 277 ~31 5)".to_string()));
+        }
+
+        #[test]
+        fn x_max_two_first() {
+            assert_eq!(Ok(128f64), Interpreter::execute("M128 27".to_string()));
+        }
+
+        #[test]
+        fn x_max_two_second() {
+            assert_eq!(Ok(277f64), Interpreter::execute("M28 277".to_string()));
+        }
+
+        #[test]
+        fn x_max_two_equal() {
+            assert_eq!(Ok(128f64), Interpreter::execute("M128 128".to_string()));
+        }
+
+        #[test]
+        fn x_max_more() {
+            assert_eq!(Ok(366f64), Interpreter::execute("M(128 277 ~31 5 366)".to_string()));
         }
 
         #[test]
