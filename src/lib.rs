@@ -16,6 +16,7 @@
 //      (split_atoms can't be asked to handle calculated base specifications like Z 4 *n n .)
 
 use std::collections::HashMap;
+use std::fmt;
 use std::str::FromStr;
 
 // Static lifetime: justified, because the functions referenced
@@ -25,12 +26,23 @@ use std::str::FromStr;
 // the third one to the Shuttle containing other state.
 type OperatorFunc = &'static dyn Fn(&mut Option<f64>, &mut [Expression], &mut Shuttle);
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 enum Atom {
     Operator(char),
     Number(f64),
     String(String),
     Comment(String),
+}
+
+impl fmt::Debug for Atom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Atom::Operator(c) => write!(f, "{}", c),
+            Atom::Number(n) => write!(f, "{} ", n),
+            Atom::String(_) => write!(f, "[s...]"),
+            Atom::Comment(_) => write!(f, "[c...]"),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -50,7 +62,6 @@ struct Expression
     opr_mark: char,
     is_last_of_override: bool,
     has_overridden_nr_of_ops: bool,
-    is_assignment_op: bool,
 }
 
 impl Expression {
@@ -93,7 +104,6 @@ impl Expression {
             opr_mark,
             is_last_of_override: false,
             has_overridden_nr_of_ops: false,
-            is_assignment_op: false,
         }
     }
 
@@ -105,7 +115,6 @@ impl Expression {
             opr_mark: '0',
             is_last_of_override: false,
             has_overridden_nr_of_ops: false,
-            is_assignment_op: false,
         }
     }
 
@@ -134,6 +143,8 @@ impl Expression {
         println!("operate {}", self.opr_mark);
         */
 
+        shuttle.assignment_indexes_stack.push(Vec::<i64>::new());
+
         let defer_opd_evaluation = "WF?".contains(self.opr_mark);
 
         if !defer_opd_evaluation {
@@ -144,10 +155,18 @@ impl Expression {
 
         (self.operator)(&mut self.value, &mut self.operands, shuttle);
 
-        if self.is_assignment_op {
+        let assignment_indexes = shuttle.assignment_indexes_stack.pop()
+            .expect("fn operate should always find elements in shuttle.assignment_indexes_stack after execution of the operator.");
+
+        /*
+        #[cfg(test)]
+        println!("operate {}, assignment_indexes: {:?}", self.opr_mark, assignment_indexes);
+        */
+
+        for index in assignment_indexes {
             // Assign the resulting value to the variable
             // referenced by the first operand and stored by it in the shuttle.
-            shuttle.nums.insert(shuttle.assignment_index, self.get_value(0f64));
+            shuttle.nums.insert(index, self.get_value(0f64));
         }
 
         /*
@@ -165,10 +184,6 @@ impl Expression {
             },
             oth => oth.to_string(),
         };
-
-        if self.is_assignment_op {
-            exp_rep.push(':');
-        }
 
         if self.has_overridden_nr_of_ops {
             exp_rep.push('(');
@@ -210,13 +225,26 @@ impl Expression {
     }
 }
 
+impl fmt::Debug for Expression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let num_repr = if self.opr_mark == '0' {
+            format!("{}", self.value.clone().expect("An n-expression should always have a value."))
+        } else {
+            String::new()
+        };
+
+        let out_string = format!("{}{}", self.opr_mark, num_repr);
+        write!(f, "{}", out_string)
+    }
+}
+
 // Shuttle objects are used to be passed to every operator function
 // to provide state other than the operands.
 struct Shuttle {
     nums: HashMap<i64, f64>,
     strings: HashMap<i64, String>,
     routines: HashMap<i64, Expression>,
-    assignment_index: i64,
+    assignment_indexes_stack: Vec<Vec<i64>>,
     max_iterations: f64,
     orb: f64,
 }
@@ -227,7 +255,7 @@ impl Shuttle {
             nums: HashMap::<i64, f64>::new(),
             strings: HashMap::<i64, String>::new(),
             routines: HashMap::<i64, Expression>::new(),
-            assignment_index: 0i64,
+            assignment_indexes_stack: Vec::<Vec<i64>>::new(),
             max_iterations: 10_000f64,
             orb: 0.00000001f64,
         }
@@ -247,8 +275,7 @@ impl Interpreter {
     }
 
     pub fn execute_opts(program: String, do_execute: bool, show_before: bool, show_after: bool) -> Result<f64, ProgramError> {
-        let atoms = Self::split_atoms(&program);
-        let atoms = atoms?;
+        let atoms = Self::split_atoms(&program)?;
         let mut tree: Expression = Self::make_tree(atoms);
 
         if show_before {
@@ -413,36 +440,40 @@ impl Interpreter {
         let mut exp_stack = Vec::<Expression>::new();
         let mut override_start_found = false;
         let mut needed_ops = 0usize;
-        let mut make_assignment_operator = false;
 
         // Preprocess atoms to replace the ':' operator with extra atoms.
 
         for exp in atoms.iter().rev() {
+
+            /*
+            #[cfg(test)]
+            println!("exp_stack: {:?}", exp_stack);
+            */
+
             match exp {
                 Atom::Number(n) => {
                     let new_exp = Expression::new_number(*n);
                     exp_stack.push(new_exp);
                 },
                 Atom::Operator(c) => {
-                    if !override_start_found {
-                        needed_ops = match *c {
-                            chr if "~iav:!"            .contains(chr) => 1,
-                            chr if "+-*/^%&|x$W;mM=<>Z".contains(chr) => 2,
-                            chr if "?"                 .contains(chr) => 3,
-                            chr if "F"                 .contains(chr) => 5,
-                            _                                         => 0,
-                        };
-                    }
+                    needed_ops = match *c {
+                        chr if "~iav:!"            .contains(chr) => 1,
+                        chr if "+-*/^%&|x$W;mM=<>Z".contains(chr) => 2,
+                        chr if "?"                 .contains(chr) => 3,
+                        chr if "F"                 .contains(chr) => 5,
+                        _                                         => 0,
+                    };
 
                     match *c {
                         '(' => override_start_found = true,
                         // ')' => override_end_found = true,
                         op_for_stack => {
                             let mut new_exp = Expression::new(op_for_stack);
-                            new_exp.is_assignment_op = make_assignment_operator;
-                            make_assignment_operator = false;
 
-                            if override_start_found {
+                            // The number of arguments for the : operator can't be overridden.
+                            // The override_start marker will be applied to the previous operator
+                            // instead.
+                            if override_start_found && (op_for_stack != ':') {
                                 new_exp.has_overridden_nr_of_ops = true;
                                 override_start_found = false;
 
@@ -466,21 +497,21 @@ impl Interpreter {
 
                                     if let Some(e) = exp_stack.pop() {
                                         if e.opr_mark == ')' {
-                                            // Ignore the ')' expression;
-                                            // just get it off the stack.
-                                            i -= 1;
-                                        } else {
-                                            new_exp.push_operand(e);
+                                            // Unexpected, but we can't ignore it.
+                                            match new_exp.operands.last_mut() {
+                                                None =>  (),
+                                                Some(ref mut op) => op.is_last_of_override = true,
+                                            }
+
+                                            break;
                                         }
+
+                                        new_exp.push_operand(e);
                                     }
                                 }
                             }
 
                             exp_stack.push(new_exp);
-
-                            if op_for_stack == ':' {
-                                make_assignment_operator = true;
-                            }
                         },
                     }
                 },
@@ -706,7 +737,16 @@ pub(crate) mod opr_funcs {
             0f64
         } as i64;
 
-        shuttle.assignment_index = index;
+        let stack_len = shuttle.assignment_indexes_stack.len();
+
+        // Add the variable's index to the list of variables to be assigned to
+        // for the operator that's the parent of the : operator, if any.
+        if stack_len >= 2 {
+            shuttle
+                .assignment_indexes_stack
+                [stack_len - 2]
+                .push(index);
+        }
 
         let found = match shuttle.nums.get(&index) {
             None => 0f64,
@@ -1422,7 +1462,7 @@ mod tests {
 
         #[test]
         fn x_missing_start_of_override() {
-            assert_eq!(Ok(48f64), Interpreter::execute("+-50)2".to_string()));
+            assert_eq!(Ok(52f64), Interpreter::execute("+-50)2".to_string()));
         }
 
         #[test]
@@ -1638,6 +1678,31 @@ mod tests {
         #[test]
         fn x_add_assign() {
             assert_eq!(Ok(90f64), Interpreter::execute("$18 88 +:-21 3 2 v18".to_string()));
+        }
+
+        #[test]
+        fn x_assignment_maker_inside_override_markers_first() {
+            assert_eq!(Ok(35f64), Interpreter::execute("$1 10 $2 20 +(:1 v2 5) v1".to_string()));
+        }
+
+        #[test]
+        fn x_assignment_maker_before_override_markers_first() {
+            assert_eq!(Ok(35f64), Interpreter::execute("$1 10 $2 20 +:(1 v2 5) v1".to_string()));
+        }
+
+        #[test]
+        fn x_assignment_maker_inside_override_markers_second() {
+            assert_eq!(Ok(35f64), Interpreter::execute("$1 10 $2 20 +(v1 :2 5) v2".to_string()));
+        }
+
+        #[test]
+        fn x_assignment_maker_inside_override_markers_both() {
+            assert_eq!(Ok(70f64), Interpreter::execute("$1 10 $2 20 +(:1 :2 5) +v1 v2".to_string()));
+        }
+
+        #[test]
+        fn x_assignment_maker_before_and_inside_override_markers_both() {
+            assert_eq!(Ok(70f64), Interpreter::execute("$1 10 $2 20 +:(1 :2 5) +v1 v2".to_string()));
         }
 
         #[test]

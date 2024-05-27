@@ -240,25 +240,53 @@ Operators
 					4  to variable 11 and
 					5  to variable 12.
 
-		v variable value
+		v references a variable
 
 			$2 30 +v2 4 yields 34
 
-		: change previous operator to an assignment operator
+		: references and assigns to a variable
 
-			changes the operation of the previous operator into an assignment operation that
-			- uses the first operand as a variable number,
-			- uses this variable's value as the first operand,
-			- computes the value resulting from processing its operands,
-			- assigns the resulting value to the same variable
+			changes the operation of the parent operator into an assignment operation that
+			- uses the value of the : operand as a variable number,
+			- uses this variable's value as operand for the parent operator,
+			- assigns the resulting value of the parent operator to the referenced variable
 			- and returns the assigned value :
 
-			+:0 5 means $0 +v0 5 (Assign to variable(0) the value of variable(0) plus 5)
-			~:2   means $2 ~v2   (Convert the value of variable 2 to its opposite)
+			+:0 5
+				means $0 +v0 5 (Assign to variable(0) the value of variable(0) plus 5)
+			+0 :5
+				means $5 +0 v5 (Assign to variable(5) the value of 0 plus variable(5))
 
-			Note: the ':' operator affects the first preceding operator, if any.
-			The ':' operator has to be put immediately after the operator it is meant to affect,
-			otherwise the results are unpredictable.
+			~:2
+				means $2 ~v2   (Convert the value of variable 2 to its opposite)
+
+			It is even possible to assign the value of the parent operator to two variables referenced as operands:
+
+			$(1 10 20) +:1 :2 +v1 v2
+				will yield 60, as the sum of 10 + 20 will be assigned to both variable 1 and 2.
+
+			If using the () operators to override an operator's number of operands,
+			and referencing the first operand using the : operator,
+			one can choose to put this : operator before or after the ( operator:
+
+			Both expressions do the same :
+			+(:0 v1 v2)
+			+:(0 v1 v2)
+
+			The : operator takes always only one operand, and if followed by an () operand number overriding clause,  
+			this clause is applied to the preceding operator,
+			which may or may not be the parent operator.
+
+			This might have surprising effects :
+
+			$(1 10 20) +v2 :(1) v1
+
+				will be interpreted as
+
+			$(1 10 20) +v(2 :1) v1
+
+				where the v operator will yield variable 2's value (20), but assigns it also to variable 1 !
+				The + operator will then use v2 and v1 as its operands and yield 40.
 
 		u use variables array having given number for the next statement
 			(to be implemented)
