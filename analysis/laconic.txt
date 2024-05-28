@@ -519,6 +519,114 @@ Operators
 
 		) End of operand number override - see '('. 
 
+		o Operator designated by number, 2 operands
+
+			(lower case o)
+
+			The number of characters to represent operators is limited.
+			Moreover, for most people, the beautiful 汉Han 字Zi are difficult to enter using a keyboard. 
+			That's why there are also operators that are designated by a number; these are called "enumerated operators".
+			The o and O operators take that number as their first operand in order to perform the operation of an enumerated operator.
+
+			The difference between both operators is that
+			- the lower case o operator takes 2 operands : the enumerated operator number and one operation operand;
+			- the upper case O operator takes 3 operands : the enumerated operator number and two operation operands.
+
+			Both operators, however, can have their number of operands overridden by the ( and ) operators,
+			in which case they can be used interchangeably.
+
+			The enumerated operators are :
+
+			o  0  opd
+							Sign
+								if a > 0, yields 1
+								if a = 0, yields 0
+								if a < 0, yields -1
+
+								If there are more than 2 operands :
+									if operands 2 until last > 0, yields 1
+									if operands 2 until last < 0, yields -1
+									else, yields 0.
+
+								e.g.
+									o0 ~14 yields -1.
+									O(0 300) yields 1.
+									O0 ~3 5 yields 0.
+
+			o  1  opd
+							Ceiling
+								(to be implemented)
+
+								For positive numbers : if a > int(a) then int(a)+1 else a.
+								For negative numbers : if a < int(a) then int(a)-1 else a.
+
+								e.g.
+									o1 5.2	yields 6
+									o1 5		yields 5
+									o1 ~5.3	yields -6
+
+			o(2 dividend divisor remainder_var)
+
+							Integer division and remainder
+								(to be implemented)
+
+								Returns the integer quotient of dividend/divisor
+								and stores the remainder in the variable designated by remainder_var.
+								This allows both the quotient and the remainder to be known using one division.
+
+								e.g
+									o(2 17 3 100)	yields 5 and stores 2 in variable 100.
+
+			o  6  seq
+
+							Fibonacci number
+								(to be implemented)
+
+								(F is the 6th letter.)
+								The seq(uence number) operand is truncated to an integer and converted to its
+								absolute value before being used to get a Fibonacci number.
+								
+								e.g.
+									o6 0 yields 0
+									o6 1 yields 1
+									o6 2 yields 1
+									o6 3 yields 2
+									o6 4 yields 3
+									o6 5 yields 5
+									o6 6 yields 8
+									o6 6.1 yields 8
+									o6 ~6.1 yields 8
+
+			o(7 year month day)
+
+							Day of week
+								(to be implemented)
+
+								Returns a number from 0 to 6, where 0 is Saturday and 6 is Friday.
+
+								If the day operator is ommitted, day "0" is presumed - i.e., the last day of the previous month.
+								
+								e.g.
+									o(7 2024 5 27)	yields 3: monday.
+									O 7 2024 5			yields 3: tuesday.
+
+			o(8 year month day)
+							(to be implemented)
+
+							Sequence number of a day, assuming
+
+								- January 1, year 0001 AD was day 1;
+								- December 31, year 0001 BC was day -1.
+
+								(Laconic's calendar operators calculate within the fiction
+								of the Gregorian calendar having been used since Roman imperial era.)
+		
+		O Operator designated by number, 3 operands
+		
+			(upper case O)
+			
+			See the explanations for the lower case o operator.
+
 	Z Set options
 
 		Z optionNr value

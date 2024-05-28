@@ -94,6 +94,8 @@ impl Expression {
             'x' => &opr_funcs::xor,
             '?' => &opr_funcs::exec_if,
             'Z' => &opr_funcs::setting,
+            'o' => &opr_funcs::enumerated_opr,
+            'O' => &opr_funcs::enumerated_opr,
             _ => &opr_funcs::nop,
         };
 
@@ -439,7 +441,7 @@ impl Interpreter {
     fn make_tree(atoms: Vec<Atom>) -> Expression {
         let mut exp_stack = Vec::<Expression>::new();
         let mut override_start_found = false;
-        let mut needed_ops = 0usize;
+        let mut needed_ops: usize;
 
         // Preprocess atoms to replace the ':' operator with extra atoms.
 
@@ -457,11 +459,11 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:!"            .contains(chr) => 1,
-                        chr if "+-*/^%&|x$W;mM=<>Z".contains(chr) => 2,
-                        chr if "?"                 .contains(chr) => 3,
-                        chr if "F"                 .contains(chr) => 5,
-                        _                                         => 0,
+                        chr if "~iav:!"             .contains(chr) => 1,
+                        chr if "+-*/^%&|x$W;mM=<>Zo".contains(chr) => 2,
+                        chr if "?O"                 .contains(chr) => 3,
+                        chr if "F"                  .contains(chr) => 5,
+                        _                                          => 0,
                     };
 
                     match *c {
@@ -537,7 +539,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^ia%$v:?WF;mM()=<>!&|xZ".contains(op)
+        "~+-*/^ia%$v:?WF;mM()=<>!&|xZoO".contains(op)
     }
 }
 
@@ -897,6 +899,53 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = Some(setting_value);
+    }
+
+    pub fn enumerated_opr(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        let default_outcome = Some(0f64);
+
+        if operands.is_empty() {
+            *result_value = default_outcome;
+
+            return;
+        }
+
+        let opr_func = match operands[0].get_value(-1f64) {
+            0f64 => enum_opr_sign,
+            _ =>  {
+                *result_value = default_outcome;
+
+                return;
+            },
+        };
+
+        (opr_func)(result_value, &mut operands[1..], shuttle);
+    }
+
+    pub fn enum_opr_sign(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        let mut all_positive = true;
+        let mut all_negative = true;
+
+        let mut opd_val: f64;
+
+        for opd in operands {
+            opd_val = opd.get_value(0f64);
+
+            all_positive = all_positive && (opd_val > 0f64);
+            all_negative = all_negative && (opd_val < 0f64);
+        }
+
+        *result_value = Some(
+            if all_positive && all_negative {
+                0f64
+            } else if all_positive {
+                1f64
+            } else if all_negative {
+                -1f64
+            } else {
+                0f64
+            }
+        );
     }
     
     pub fn exec_while(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
@@ -1988,6 +2037,36 @@ mod tests {
         #[test]
         fn x_if_5_op_last() {
             assert_eq!(Ok(23f64), Interpreter::execute("$5 0 ?(v5 +3 1 0 7 23)".to_string()));
+        }
+
+        #[test]
+        fn x_enum_opr_unknown() {
+            assert_eq!(Ok(0f64), Interpreter::execute("o1.5 2".to_string()));
+        }
+
+        #[test]
+        fn x_enum_opr_sign_no_operands() {
+            assert_eq!(Ok(0f64), Interpreter::execute("o(0)".to_string()));
+        }
+
+        #[test]
+        fn x_enum_opr_sign_all_pos() {
+            assert_eq!(Ok(1f64), Interpreter::execute("o(0 45 7 99 4022)".to_string()));
+        }
+
+        #[test]
+        fn x_enum_opr_sign_all_neg() {
+            assert_eq!(Ok(-1f64), Interpreter::execute("o(0 ~45 ~7 ~99 ~4022)".to_string()));
+        }
+
+        #[test]
+        fn x_enum_opr_sign_mixed() {
+            assert_eq!(Ok(0f64), Interpreter::execute("o(0 ~45 7 ~99 4022)".to_string()));
+        }
+
+        #[test]
+        fn x_enum_opr_sign_assign() {
+            assert_eq!(Ok(-1f64), Interpreter::execute("$~22 ~4 o0 :~22 v~22".to_string()));
         }
     }
 
