@@ -2068,6 +2068,11 @@ mod tests {
         fn x_enum_opr_sign_assign() {
             assert_eq!(Ok(-1f64), Interpreter::execute("$~22 ~4 o0 :~22 v~22".to_string()));
         }
+
+        #[test]
+        fn x_enum_opr_override() {
+            assert_eq!(Ok(1f64), Interpreter::execute("O(0 55)".to_string()));
+        }
     }
 
     /*
