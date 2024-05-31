@@ -3,6 +3,17 @@ LACONIC
 		// TODO: explain standard number of operands and how to deviate from it.
 		// TODO: indicate the standard number of operands for every operator.
 
+		* Characters assigned to operators:
+			~+-*/%^$():;=<>!&|?aCceFilMmOopSTvUuWwxZ
+
+		*	Implemented operators:
+			~+-*/%^$():;=<>!&|?a   Fi MmOo   v  W xZ
+
+		* Characters not to be used as operator:
+			' "     interfere with command line syntax
+			. [ ]   have other meanings in Laconic.
+			whitespace
+
 	General syntax
 
 		The laconic language is a Polish expression interpreter :
@@ -40,7 +51,17 @@ LACONIC
 		There's never a need to separate an operator from preceding or following atoms using a whitespace,
 		but it's permitted for readability.
 
-		Note: the characters " and ' are nowhere used in Laconic, as they interfere with Linux command line syntax.
+		Note: the characters " and ' are nowhere used in Laconic, as they interfere with command line syntax.
+
+		Note: there are also enumerated operators - see the O and o operators.
+
+		Every operator has a default number of operands it expects. E.g., the + operator expects two operands :
+		+ 1 2 yields 3.
+
+		However, many operators can operate on less or more operands, too, but in order to deviate from the default number, the ( and ) operators have to be used:
+
+		+(1 2 3) yields 6.
+		+(27) yields 27.
 
 	Numbers
 
@@ -181,14 +202,26 @@ Operators
 
 			* 38 ~5 yields ~190
 
-		^ Power (exponent)
+		/ Division
 
-			^ 2 .5 yields 1.4142...
+			/ 504 7 yields 72
 
 		% Modulo (Remainder)
 
 			%7 3 yields 1
 			%7.1 3.1 yields .9
+
+		^ Power (exponent)
+
+			^ 2 .5 yields 1.4142...
+
+		l logarithm
+			(to be implemented)
+
+				l base num
+
+					l10 1000 yields 3
+					le  num	 yields the natural logarithm of numbers.
 
 		i Integer
 
@@ -215,6 +248,29 @@ Operators
 			M7 4.1 yields 7
 			M~7 4.1 yields 4.1
 			M(4 2 1 19) yields 19
+
+	Trigonometric operators
+
+		S sine
+			(to be implemented)
+
+		C	cosine
+			(to be implemented)
+
+		T	tangens
+			(to be implemented)
+
+	Constants (zero-operand operators)
+
+		e Euler's number
+			(to be implemented)
+
+		p Pi
+			(to be implemented)
+
+		c	num
+			(to be implemented)
+			enumerated constants (none defined yet)
 
 	Variables
 
@@ -501,6 +557,15 @@ Operators
 			(The same can be calculated using the 'W' loop operator :)
 			$0 3 $1 1 W!>v0 11 ;*:1 v0 +:0 2 v1
 
+	Input & Output
+
+		w	write the value of an expression to standard output and returns that value.
+			(to be implemented)
+
+					Note that no newline or CR characters are inserted automatically.
+
+					$0 7 wv7
+
 	Other
 
 		( Operand number override
@@ -674,10 +739,4 @@ Operators
 
 		Z 5 n : Base of output number (displayed as output).
 					(to be implemented)
-
-		w	write the value of an expression to standard output and returns that value.
-
-					Note that no newline or CR characters are inserted automatically.
-
-					$0 7 wv7
 
