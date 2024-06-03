@@ -1,4 +1,5 @@
 // TODO: resolve TODO's in code.
+// TODO: write unit tests on expressions having string content (ValueType::Text).
 // TODO: implement all intended operators.
 // TODO: implement Debug for Expression, using get_representation.
 // TODO: if struct Interpreter ends up having no internal state (no properties), simply delete it
@@ -24,7 +25,7 @@ use std::str::FromStr;
 // The first parameter should refer to an Expression's value property,
 // the second one to a Expression's operands property (operands are Expression objects),
 // the third one to the Shuttle containing other state.
-type OperatorFunc = &'static dyn Fn(&mut Option<f64>, &mut [Expression], &mut Shuttle);
+type OperatorFunc = &'static dyn Fn(&mut ValueType, &mut [Expression], &mut Shuttle);
 
 #[derive(PartialEq)]
 enum Atom {
@@ -54,11 +55,18 @@ pub enum ProgramError {
     UnknownBracketContentTypeMarker{position: usize, marker: char},
 }
 
+#[derive(Clone, Debug)]
+enum ValueType {
+    Empty,
+    Number(f64),
+    Text(String),
+}
+
 struct Expression
 {
     operator: OperatorFunc,
     operands: Vec<Expression>,
-    value: Option<f64>,
+    value: ValueType,
     opr_mark: char,
     is_last_of_override: bool,
     has_overridden_nr_of_ops: bool,
@@ -68,6 +76,7 @@ impl Expression {
     pub fn new(opr_mark: char) -> Self {
         let opr: OperatorFunc = match opr_mark {
             '0' => &opr_funcs::nop,
+            '"' => &opr_funcs::string_expr,
             '~' => &opr_funcs::unaryminus,
             '+' => &opr_funcs::add,
             '-' => &opr_funcs::minus,
@@ -102,7 +111,7 @@ impl Expression {
         Expression {
             operator: opr,
             operands: Vec::<Expression>::new(),
-            value: None,
+            value: ValueType::Empty,
             opr_mark,
             is_last_of_override: false,
             has_overridden_nr_of_ops: false,
@@ -113,8 +122,19 @@ impl Expression {
         Expression {
             operator: &opr_funcs::nop,
             operands: Vec::<Expression>::new(),
-            value: Some(num),
+            value: ValueType::Number(num),
             opr_mark: '0',
+            is_last_of_override: false,
+            has_overridden_nr_of_ops: false,
+        }
+    }
+
+    pub fn new_text(txt: String) -> Self {
+        Expression {
+            operator: &opr_funcs::string_expr,
+            operands: Vec::<Expression>::new(),
+            value: ValueType::Text(txt),
+            opr_mark: '"',
             is_last_of_override: false,
             has_overridden_nr_of_ops: false,
         }
@@ -124,18 +144,21 @@ impl Expression {
         self.operands.push(op);
     }
 
-    pub fn get_value(&self, default: f64) -> f64 {
-        // If Some, returns a clone of the contained value,
-        // so the Expression's value isn't consumed.
-        // If None, returns the provided default value.
+    pub fn get_value(&self) -> ValueType {
+        self.value.clone()
+    }
 
-        if self.value.is_some() {
-            // As f64 implements the Copy trait,
-            // the Option's value isn't consumed here.
-            // See unit test unwrap_some_copy_implementor.
-            self.value.unwrap()
-        } else {
-            default
+    pub fn get_num_value(&self, default: f64) -> f64 {
+        match self.value {
+            ValueType::Number(num) => num,
+            _ => default,
+        }
+    }
+
+    pub fn get_string_value(&self, default: String) -> String {
+        match self.value {
+            ValueType::Text(ref txt) => txt.clone(),
+            _ => default,
         }
     }
 
@@ -168,21 +191,26 @@ impl Expression {
         for index in assignment_indexes {
             // Assign the resulting value to the variable
             // referenced by the first operand and stored by it in the shuttle.
-            shuttle.nums.insert(index, self.get_value(0f64));
+            shuttle.nums.insert(index, self.get_value());
         }
 
         /*
         #[cfg(test)]
-        println!("operate {} ==> {:?}", self.opr_mark, self.get_value(99999f64));
+        println!("operate {} ==> {:?}", self.opr_mark, self.get_value());
         */
     }
 
     pub fn get_representation(&self) -> String {
         let mut exp_rep = match self.opr_mark {
-            // '0' => format!("{:?}", self.value),
             '0' => match self.value {
-                None => "empty_num".to_string(),
-                Some(num) => num.to_string(),
+                ValueType::Empty => "empty_num".to_string(),
+                ValueType::Number(num) => num.to_string(),
+                _ => panic!("An expression with opr_mark '0' should either have a ValueType::Number or ValueType::Empty"),
+            },
+            '"' => match self.value {
+                ValueType::Empty => "no_value".to_string(),
+                ValueType::Text(ref txt) => txt.clone(),
+                _ => panic!("An expression with opr_mark '\"' should either have a ValueType::Text or ValueType::Empty"),
             },
             oth => oth.to_string(),
         };
@@ -210,14 +238,15 @@ impl Expression {
         ops = ops.replace('\n', "\n\u{0_2502}\t");
         exp_rep.push_str(ops.as_str());
 
-        if self.opr_mark != '0' {
+        if !("0\"".contains(self.opr_mark)) {
             // Vim folding fix braces: {{
             exp_rep.push_str("\n\u{0_2514}\u{0_2500}> ");
             // exp_rep.push_str(format!("{:?}", self.value).as_str());
 
             let val_rep = match self.value {
-                None => "no_value".to_string(),
-                Some(num) => num.to_string(),
+                ValueType::Empty => "no_value".to_string(),
+                ValueType::Number(num) => num.to_string(),
+                ValueType::Text(ref txt) => txt.clone(),
             };
 
             exp_rep.push_str(val_rep.as_str());
@@ -229,13 +258,13 @@ impl Expression {
 
 impl fmt::Debug for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let num_repr = if self.opr_mark == '0' {
-            format!("{}", self.value.clone().expect("An n-expression should always have a value."))
-        } else {
-            String::new()
+        let representation = match self.opr_mark  {
+            '0' => format!("{}", self.get_num_value(0f64)),
+            '"' => self.get_string_value("(no_value)".to_string()),
+            _   => String::new(),
         };
 
-        let out_string = format!("{}{}", self.opr_mark, num_repr);
+        let out_string = format!("{}{}", self.opr_mark, representation);
         write!(f, "{}", out_string)
     }
 }
@@ -243,8 +272,7 @@ impl fmt::Debug for Expression {
 // Shuttle objects are used to be passed to every operator function
 // to provide state other than the operands.
 struct Shuttle {
-    nums: HashMap<i64, f64>,
-    strings: HashMap<i64, String>,
+    nums: HashMap<i64, ValueType>,
     routines: HashMap<i64, Expression>,
     assignment_indexes_stack: Vec<Vec<i64>>,
     max_iterations: f64,
@@ -254,8 +282,7 @@ struct Shuttle {
 impl Shuttle {
     fn new() -> Self {
         Shuttle {
-            nums: HashMap::<i64, f64>::new(),
-            strings: HashMap::<i64, String>::new(),
+            nums: HashMap::<i64, ValueType>::new(),
             routines: HashMap::<i64, Expression>::new(),
             assignment_indexes_stack: Vec::<Vec<i64>>::new(),
             max_iterations: 10_000f64,
@@ -293,7 +320,7 @@ impl Interpreter {
             println!("\nTree after operate() :\n{}", tree.get_representation());
         }
 
-        Ok(tree.get_value(0f64))
+        Ok(tree.get_num_value(0f64))
     }
 
     // Numeric overflows will cause number atoms to be
@@ -457,6 +484,10 @@ impl Interpreter {
                     let new_exp = Expression::new_number(*n);
                     exp_stack.push(new_exp);
                 },
+                Atom::String(s) => {
+                    let new_exp = Expression::new_text(s.to_string());
+                    exp_stack.push(new_exp);
+                },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
                         chr if "~iav:!"             .contains(chr) => 1,
@@ -518,7 +549,6 @@ impl Interpreter {
                     }
                 },
                 Atom::Comment(_) => (),
-                _ => (), // TODO: process strings when related operators are implemented.
             }
         }
 
@@ -559,182 +589,187 @@ fn are_very_near(num1: f64, num2: f64) -> bool {
 }
 
 pub(crate) mod opr_funcs {
-    use super::{Expression, Shuttle, are_near};
+    use super::{Expression, Shuttle, ValueType, are_near};
     
-    pub fn nop(_result_value: &mut Option<f64>, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn nop(_result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
         // Don't do anything.
         // Meant for Expressions that contain a fixed numerical value from creation.
     }
+
+    pub fn string_expr(_result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        // Don't do anything.
+        // Meant for Expressions that contain a fixed string value from creation.
+    }
     
-    pub fn add(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn add(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
 
         for op in operands {
-            outcome += op.get_value(0f64);
+            outcome += op.get_num_value(0f64);
         }
 
-        *result_value = Some(outcome);
+        *result_value = ValueType::Number(outcome);
     }
     
-    pub fn multiply(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn multiply(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => outcome += op.get_value(0f64),
-                _ => outcome *= op.get_value(1f64),
+                0 => outcome += op.get_num_value(0f64),
+                _ => outcome *= op.get_num_value(1f64),
             }
         }
 
-        *result_value = Some(outcome);
+        *result_value = ValueType::Number(outcome);
     }
     
-    pub fn power(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn power(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => outcome += op.get_value(0f64),
-                _ => outcome = outcome.powf(op.get_value(1f64)),
+                0 => outcome += op.get_num_value(0f64),
+                _ => outcome = outcome.powf(op.get_num_value(1f64)),
             }
         }
 
-        *result_value = Some(outcome);
+        *result_value = ValueType::Number(outcome);
     }
     
-    pub fn minus(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn minus(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => outcome += op.get_value(0f64),
-                _ => outcome -= op.get_value(0f64),
+                0 => outcome += op.get_num_value(0f64),
+                _ => outcome -= op.get_num_value(0f64),
             }
         }
 
-        *result_value = Some(outcome);
+        *result_value = ValueType::Number(outcome);
     }
     
-    pub fn divide(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn divide(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => outcome += op.get_value(0f64),
-                _ => outcome /= op.get_value(1f64),
+                0 => outcome += op.get_num_value(0f64),
+                _ => outcome /= op.get_num_value(1f64),
             }
         }
 
-        *result_value = Some(outcome);
+        *result_value = ValueType::Number(outcome);
     }
     
-    pub fn modulo(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn modulo(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => outcome += op.get_value(0f64),
-                _ => outcome %= op.get_value(1f64),
+                0 => outcome += op.get_num_value(0f64),
+                _ => outcome %= op.get_num_value(1f64),
             }
         }
 
-        *result_value = Some(outcome);
+        *result_value = ValueType::Number(outcome);
     }
 
-    pub fn combine(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn combine(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         *result_value = match operands.last() {
-            Some(e) => Some(e.get_value(0f64)),
-            None => Some(0f64),
+            Some(e) => e.get_value(),
+            None => ValueType::Number(0f64),
         };
     }
     
-    pub fn min(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn min(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = f64::MAX;
         let mut current: f64;
 
         for op in operands {
-            current = op.get_value(f64::MAX);
+            current = op.get_num_value(f64::MAX);
 
             if outcome > current {
                 outcome = current;
             }
         }
 
-        *result_value = Some(outcome);
+        *result_value = ValueType::Number(outcome);
     }
     
-    pub fn max(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn max(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = f64::MIN;
         let mut current: f64;
 
         for op in operands {
-            current = op.get_value(f64::MIN);
+            current = op.get_num_value(f64::MIN);
 
             if outcome < current {
                 outcome = current;
             }
         }
 
-        *result_value = Some(outcome);
+        *result_value = ValueType::Number(outcome);
     }
 
-    pub fn unaryminus(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn unaryminus(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         *result_value = match operands.first() {
-            None => Some(0f64),
-            Some(e) => Some(- e.get_value(0f64)),
+            None => ValueType::Number(0f64),
+            Some(e) => ValueType::Number(- e.get_num_value(0f64)),
         };
     }
 
-    pub fn intgr(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn intgr(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         *result_value = match operands.first() {
-            None => Some(0f64),
-            Some(e) => Some(e.get_value(0f64).trunc()),
+            None => ValueType::Number(0f64),
+            Some(e) => ValueType::Number(e.get_num_value(0f64).trunc()),
         };
     }
 
-    pub fn abs(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn abs(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         *result_value = match operands.first() {
-            None => Some(0f64),
-            Some(e) => Some(e.get_value(0f64).abs()),
+            None => ValueType::Number(0f64),
+            Some(e) => ValueType::Number(e.get_num_value(0f64).abs()),
         };
     }
 
-    pub fn assign_number_register(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn assign_number_register(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         if operands.is_empty() {
-            *result_value = Some(0f64);
+            *result_value = ValueType::Number(0f64);
             return;
         }
 
-        let mut index = operands[0].get_value(0f64) as i64;
-        let mut reg_val = 0f64;
+        let mut index = operands[0].get_num_value(0f64) as i64;
+        let mut reg_val = ValueType::Number(0f64);
 
         for opd in &operands[1..operands.len()] {
-            reg_val = opd.get_value(0f64);
-            shuttle.nums.insert(index, reg_val);
+            reg_val = opd.get_value();
+            shuttle.nums.insert(index, reg_val.clone());
             index += 1;
         }
 
-        *result_value = Some(reg_val);
+        *result_value = reg_val;
     }
 
-    pub fn get_number_register(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        let index = if !operands.is_empty() {
-            operands[0].get_value(0f64)
-        } else {
+    pub fn get_number_register(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        let index = if operands.is_empty() {
             0f64
+        } else {
+            operands[0].get_num_value(0f64)
         } as i64;
 
         let found = match shuttle.nums.get(&index) {
-            None => 0f64,
-            Some(n) => *n,
+            None => ValueType::Number(0f64),
+            Some(v) => v.clone(),
         };
 
-        *result_value = Some(found);
+        *result_value = found;
     }
 
-    pub fn assignment_maker(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn assignment_maker(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let index = if !operands.is_empty() {
-            operands[0].get_value(0f64)
+            operands[0].get_num_value(0f64)
         } else {
             0f64
         } as i64;
@@ -751,143 +786,143 @@ pub(crate) mod opr_funcs {
         }
 
         let found = match shuttle.nums.get(&index) {
-            None => 0f64,
-            Some(n) => *n,
+            None => ValueType::Number(0f64),
+            Some(v) => v.clone(),
         };
 
-        *result_value = Some(found);
+        *result_value = found;
     }
     
-    pub fn equals(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn equals(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut are_equal = true;
         let mut first = 0f64;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => first = op.get_value(0f64),
-                _ => are_equal = are_near(first, op.get_value(0f64), shuttle.orb),
+                0 => first = op.get_num_value(0f64),
+                _ => are_equal = are_near(first, op.get_num_value(0f64), shuttle.orb),
             }
         }
 
-        *result_value = Some(if are_equal {
+        *result_value = ValueType::Number(if are_equal {
             1f64
         } else {
             0f64
         });
     }
     
-    pub fn less(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn less(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = true;
         let mut first = 0f64;
         let mut second: f64;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => first = op.get_value(0f64),
+                0 => first = op.get_num_value(0f64),
                 _ => {
-                    second = op.get_value(0f64);
+                    second = op.get_num_value(0f64);
                     outcome = outcome && (first < second);
                     first = second;
                 },
             }
         }
 
-        *result_value = Some(if outcome {
+        *result_value = ValueType::Number(if outcome {
             1f64
         } else {
             0f64
         });
     }
     
-    pub fn greater(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn greater(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = true;
         let mut first = 0f64;
         let mut second: f64;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => first = op.get_value(0f64),
+                0 => first = op.get_num_value(0f64),
                 _ => {
-                    second = op.get_value(0f64);
+                    second = op.get_num_value(0f64);
                     outcome = outcome && (first > second);
                     first = second;
                 },
             }
         }
 
-        *result_value = Some(if outcome {
+        *result_value = ValueType::Number(if outcome {
             1f64
         } else {
             0f64
         });
     }
 
-    pub fn not(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn not(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = true;
 
         for op in operands {
-            outcome &= are_near(0f64, op.get_value(0f64), shuttle.orb);
+            outcome &= are_near(0f64, op.get_num_value(0f64), shuttle.orb);
         }
 
-        *result_value = Some(if outcome {
+        *result_value = ValueType::Number(if outcome {
             1f64
         } else {
             0f64
         });
     }
 
-    pub fn and(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn and(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = true;
 
         for op in operands {
-            outcome &= !are_near(0f64, op.get_value(0f64), shuttle.orb);
+            outcome &= !are_near(0f64, op.get_num_value(0f64), shuttle.orb);
         }
 
-        *result_value = Some(if outcome {
+        *result_value = ValueType::Number(if outcome {
             1f64
         } else {
             0f64
         });
     }
 
-    pub fn or(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn or(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = false;
 
         for op in operands {
-            outcome |= !are_near(0f64, op.get_value(0f64), shuttle.orb);
+            outcome |= !are_near(0f64, op.get_num_value(0f64), shuttle.orb);
         }
 
-        *result_value = Some(if outcome {
+        *result_value = ValueType::Number(if outcome {
             1f64
         } else {
             0f64
         });
     }
 
-    pub fn xor(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn xor(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut trues = 0usize;
 
         for op in operands {
-              if !are_near(0f64, op.get_value(0f64), shuttle.orb) {
+              if !are_near(0f64, op.get_num_value(0f64), shuttle.orb) {
                   trues += 1;
               }
         }
 
-        *result_value = Some(if trues == 1 {
+        *result_value = ValueType::Number(if trues == 1 {
             1f64
         } else {
             0f64
         });
     }
     
-    pub fn setting(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn setting(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut setting_nr = -1i64;
         let mut setting_value = 0f64;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => setting_nr = op.get_value(-1f64) as i64,
-                1 => setting_value = op.get_value(0f64),
+                0 => setting_nr = op.get_num_value(-1f64) as i64,
+                1 => setting_value = op.get_num_value(0f64),
                 _ => (),
             }
         }
@@ -898,11 +933,11 @@ pub(crate) mod opr_funcs {
             _ => (),
         }
 
-        *result_value = Some(setting_value);
+        *result_value = ValueType::Number(setting_value);
     }
 
-    pub fn enumerated_opr(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        let default_outcome = Some(0f64);
+    pub fn enumerated_opr(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        let default_outcome = ValueType::Number(0f64);
 
         if operands.is_empty() {
             *result_value = default_outcome;
@@ -910,7 +945,7 @@ pub(crate) mod opr_funcs {
             return;
         }
 
-        let opr_func = match operands[0].get_value(-1f64) {
+        let opr_func = match operands[0].get_num_value(-1f64) {
             0f64 => enum_opr_sign,
             _ =>  {
                 *result_value = default_outcome;
@@ -922,20 +957,20 @@ pub(crate) mod opr_funcs {
         (opr_func)(result_value, &mut operands[1..], shuttle);
     }
 
-    pub fn enum_opr_sign(result_value: &mut Option<f64>, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn enum_opr_sign(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut all_positive = true;
         let mut all_negative = true;
 
         let mut opd_val: f64;
 
         for opd in operands {
-            opd_val = opd.get_value(0f64);
+            opd_val = opd.get_num_value(0f64);
 
             all_positive = all_positive && (opd_val > 0f64);
             all_negative = all_negative && (opd_val < 0f64);
         }
 
-        *result_value = Some(
+        *result_value = ValueType::Number(
             if all_positive && all_negative {
                 0f64
             } else if all_positive {
@@ -948,9 +983,9 @@ pub(crate) mod opr_funcs {
         );
     }
     
-    pub fn exec_while(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn exec_while(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         if operands.is_empty() {
-            *result_value = Some(0f64);
+            *result_value = ValueType::Number(0f64);
 
             return;
         }
@@ -977,13 +1012,13 @@ pub(crate) mod opr_funcs {
                     0 =>  {
                         op.operate(shuttle);
 
-                        if are_near(0f64, op.get_value(0f64), shuttle.orb) {
+                        if are_near(0f64, op.get_num_value(0f64), shuttle.orb) {
                                     break 'outer;
                         }
                     },
                     _ => {
                         op.operate(shuttle);
-                        outcome = op.get_value(0f64);
+                        outcome = op.get_num_value(0f64);
                     },
                 }
 
@@ -991,10 +1026,10 @@ pub(crate) mod opr_funcs {
             }
         }
 
-        *result_value = Some(outcome);
+        *result_value = ValueType::Number(outcome);
     }
     
-    pub fn exec_for(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn exec_for(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
         let mut counter_val = 0f64;
         let mut end_val = 0f64;
@@ -1003,7 +1038,7 @@ pub(crate) mod opr_funcs {
         let mut iter_count = 0f64;
 
         if operands.len() < 5 {
-            *result_value = Some(outcome);
+            *result_value = ValueType::Number(outcome);
 
             return;
         }
@@ -1014,10 +1049,10 @@ pub(crate) mod opr_funcs {
             }
 
             match op_count {
-                0 => counter_val = op.get_value(0f64),
-                1 => end_val = op.get_value(0f64),
-                2 => increment = op.get_value(1f64),
-                3 => counter_var = op.get_value(0f64) as i64,
+                0 => counter_val = op.get_num_value(0f64),
+                1 => end_val = op.get_num_value(0f64),
+                2 => increment = op.get_num_value(1f64),
+                3 => counter_var = op.get_num_value(0f64) as i64,
                 _ => (),
             }
         }
@@ -1039,7 +1074,7 @@ pub(crate) mod opr_funcs {
                     break;
             }
 
-            shuttle.nums.insert(counter_var, counter_val);
+            shuttle.nums.insert(counter_var, ValueType::Number(counter_val));
             op_count = 4;
 
             while op_count < op_len {
@@ -1047,7 +1082,7 @@ pub(crate) mod opr_funcs {
                 op.operate(shuttle);
 
                 if op_count + 1 == op_len {
-                    outcome = op.get_value(0f64);
+                    outcome = op.get_num_value(0f64);
                 }
 
                 op_count += 1;
@@ -1056,10 +1091,10 @@ pub(crate) mod opr_funcs {
             counter_val += increment;
         }
 
-        *result_value = Some(outcome);
+        *result_value = ValueType::Number(outcome);
     }
 
-    pub fn exec_if(result_value: &mut Option<f64>, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn exec_if(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = 0f64;
         let mut use_second = true;
 
@@ -1067,22 +1102,22 @@ pub(crate) mod opr_funcs {
             match op_tuple {
                 (0, op) => {
                     op.operate(shuttle);
-                    use_second = !are_near(0f64, op.get_value(0f64), shuttle.orb);
+                    use_second = !are_near(0f64, op.get_num_value(0f64), shuttle.orb);
                 },
                 (1, op) if use_second => {
                     op.operate(shuttle);
-                    outcome = op.get_value(0f64);
+                    outcome = op.get_num_value(0f64);
                 },
                 (1, _) => (),
                 (_, op) if !use_second => {
                     op.operate(shuttle);
-                    outcome = op.get_value(0f64);
+                    outcome = op.get_num_value(0f64);
                 }
                 _ => (),
             }
         }
 
-        *result_value = Some(outcome);
+        *result_value = ValueType::Number(outcome);
     }
 }
 
@@ -1250,10 +1285,10 @@ mod tests {
         #[test]
         fn expr_new_number_get_value() {
             let exp = Expression::new_number(47.11f64);
-            assert_eq!(47.11f64, exp.get_value(0f64));
+            assert_eq!(47.11f64, exp.get_num_value(0f64));
 
             // Check if we can get the value a second time.
-            assert_eq!(47.11f64, exp.get_value(0f64));
+            assert_eq!(47.11f64, exp.get_num_value(0f64));
         }
 
         #[test]
@@ -1266,9 +1301,9 @@ mod tests {
             exp.operate(&mut shuttle);
 
             // Fails due to precision error: right value is 4500.400000000001.
-            // assert_eq!(4500.4f64, exp.get_value(0f64));
+            // assert_eq!(4500.4f64, exp.get_num_value(0f64));
 
-            assert!(are_very_near(4500.4f64, exp.get_value(0f64)));
+            assert!(are_very_near(4500.4f64, exp.get_num_value(0f64)));
         }
 
         #[test]
@@ -1289,7 +1324,7 @@ mod tests {
             let mut shuttle = Shuttle::new();
             exp.operate(&mut shuttle);
 
-            assert_eq!(574.03f64, exp.get_value(0f64));
+            assert_eq!(574.03f64, exp.get_num_value(0f64));
         }
 
         #[test]
@@ -1303,7 +1338,12 @@ mod tests {
 
             match shuttle.nums.get(&4000i64) {
                 None => panic!("The numerical register assigned to has not been found back."),
-                Some(n) => assert_eq!(500.1f64, *n),
+                Some(n) => {
+                    match n {
+                        ValueType::Number(num) => assert_eq!(500.1f64, *num),
+                        _ => panic!("The value found in shuttle.nums should be ValueType::Number."),
+                    }
+                },
             }
         }
 
@@ -1318,7 +1358,12 @@ mod tests {
 
             match shuttle.nums.get(&4000i64) {
                 None => panic!("The numerical register assigned to has not been found back."),
-                Some(n) => assert_eq!(500.1f64, *n),
+                Some(n) => {
+                    match n {
+                        ValueType::Number(num) => assert_eq!(500.1f64, *num),
+                        _ => panic!("The value found in shuttle.nums should be ValueType::Number."),
+                    }
+                },
             }
         }
 
@@ -1326,14 +1371,19 @@ mod tests {
         fn expr_assign_num_reg_neg_dot3() {
             let mut exp = Expression::new('$');
             exp.push_operand(Expression::new_number(-4000.3f64));
-            exp.push_operand(Expression::new_number( 500.1f64));
+            exp.push_operand(Expression::new_number(500.1f64));
 
             let mut shuttle = Shuttle::new();
             exp.operate(&mut shuttle);
 
             match shuttle.nums.get(&-4000i64) {
                 None => panic!("The numerical register assigned to has not been found back."),
-                Some(n) => assert_eq!(500.1f64, *n),
+                Some(n) => {
+                    match n {
+                        ValueType::Number(num) => assert_eq!(500.1f64, *num),
+                        _ => panic!("The value found in shuttle.nums should be ValueType::Number."),
+                    }
+                },
             }
         }
 
@@ -1348,7 +1398,12 @@ mod tests {
 
             match shuttle.nums.get(&-4000i64) {
                 None => panic!("The numerical register assigned to has not been found back."),
-                Some(n) => assert_eq!(500.1f64, *n),
+                Some(n) => {
+                    match n {
+                        ValueType::Number(num) => assert_eq!(500.1f64, *num),
+                        _ => panic!("The value found in shuttle.nums should be ValueType::Number."),
+                    }
+                },
             }
         }
 
@@ -1378,36 +1433,42 @@ mod tests {
     }
 
     mod ops {
-        use crate::{Expression, Shuttle};
+        use crate::{Expression, Shuttle, ValueType};
         use crate::opr_funcs::*;
 
         #[test]
         fn nop_doesnt_change_value() {
-            let mut the_value = Some(500f64);
+            let mut the_value = ValueType::Number(500f64);
             let mut ops = Vec::<Expression>::new();
             let mut shuttle = Shuttle::new();
 
             nop(&mut the_value, &mut ops, &mut shuttle);
-            assert!(the_value.is_some());
-            assert_eq!(500f64, the_value.unwrap());
+
             assert!(ops.is_empty());
+
+            match the_value {
+                ValueType::Number(n) => assert_eq!(500f64, n),
+                _ => panic!("A ValueType::Number was expected, other variant was found."),
+            }
         }
 
         #[test]
         fn op_add() {
-            let mut the_value = None::<f64>;
+            let mut the_value = ValueType::Empty;
             let mut ops = vec![Expression::new_number(12f64), Expression::new_number(68f64)];
             let mut shuttle = Shuttle::new();
 
             add(&mut the_value, &mut ops, &mut shuttle);
 
             // Check the value.
-            assert!(the_value.is_some());
-            assert_eq!(80f64, the_value.unwrap());
+            match the_value {
+                ValueType::Number(n) => assert_eq!(80f64, n),
+                _ => panic!("A ValueType::Number was expected, other variant was found."),
+            }
 
             // Verify that the operands didn't change.
-            assert_eq!(Some(12f64), ops[0].value);
-            assert_eq!(Some(68f64), ops[1].value);
+            assert_eq!(12f64, ops[0].get_num_value(0f64));
+            assert_eq!(68f64, ops[1].get_num_value(0f64));
         }
     }
 

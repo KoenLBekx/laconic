@@ -4,10 +4,10 @@ LACONIC
 		// TODO: indicate the standard number of operands for every operator.
 
 		* Characters assigned to operators:
-			~+-*/%^$():;=<>!&|?aCceFilMmOopSTvUuWwxZ
+			~+-*/%^$():;=<>!&|?abBCceFilMmOopSTvUuWwxZ
 
 		*	Implemented operators:
-			~+-*/%^$():;=<>!&|?a   Fi MmOo   v  W xZ
+			~+-*/%^$():;=<>!&|?a     Fi MmOo   v  W xZ
 
 		* Characters not to be used as operator:
 			' "     interfere with command line syntax
@@ -22,7 +22,7 @@ LACONIC
 
 		evaluates to 18.
 
-		A laconic expression consist of atoms that can either be
+		A laconic expression consists of atoms that can either be
 		- operators
 		- numbers
 		- string bracket contents
@@ -113,15 +113,17 @@ LACONIC
 			numbers using a base larger than 10 and having digits above 9
 			should be enclosed in a [n...] clause. E.g.:
 
-			Z4 16 [n1F] yields 31(base10)
+			b 16 [n1F] yields 31(base10)
 
 			but
 
-			Z4 16 10 yields 16(base10)
+			b 16 10 yields 16(base10)
 
 		Number bases
 
-			The default number base is base10.
+			The default number base is 10.
+
+			However, using the b and B operators, one can switch to other bases for input and output.
 
 			Digits for bases greater than 10 consist of 0 to 9 and the appropriate number of upper case letters needed:
 
@@ -137,22 +139,37 @@ LACONIC
 			base 37 :  0 - 9 and 10 - 36
 			base 200 : 0 - 9 and 10 - 199
 
+			Numbers in bases higher than 10 having digits above 9 should be enclosed in number bracket contents : [n...].
+
+			e.g.:
+				b16 [n1A] yields 26.
+				b16 1A		will consider the A character to be an operator.
+				b16 11    yields 17.
+
 			If a number expressed in a base higher than 36 has digits greater than 35,
 			it has to be expressed as number bracket contents: [n...] clauses as series of base10 numbers separated by spaces:
 
-			Z4 50 +[n1 20] 3 yields 73(base10)
+			b50 +[n1 20] 3 yields 73(base10)
 
 			This reduces calculating with hours, minutes and seconds to calculating seconds in base 60:
 
-			Z5 60 Z4 60 /[n5 20 8] 4 yields 80(base10) : a fourth of 5 hours, 20 minutes and 8 seconds is 4802 seconds or 1 hour, 20 minutes and 2 seconds.
+			B60 b60 /[n5 20 8] 4 yields 80(base10) : a fourth of 5 hours, 20 minutes and 8 seconds is 4802 seconds or 1 hour, 20 minutes and 2 seconds.
 			
-			Combinations of Z 5 n and Z 4 n commands allow conversion of numbers between bases.
+			Combinations of Bn and bn commands allow conversion of numbers between bases.
 			In order to avoid mistakes in the specification of the output base,
-			it's best to issue the Z 5 n expression before the Z 4 n expression.
+			it's best to issue the Bn expression before the bn expression.
 
 			It's even possible to process numbers of different bases together:
 
-			*17 ;Z4 16 21 yields 561(base10).
+			*17 ;b16 21 yields 561(base10).
+
+			If a number has a digit which is too high for its base, that digit is reduced to the highest one:
+
+				e.g.:
+					b 2 104
+						yields the same as
+					b 2 101
+						to wit 5(base10).
 
 	String brackets content
 
@@ -162,18 +179,41 @@ LACONIC
 
 			[sKunji Namparshespa] yields the string "Kunji Namparshespa".
 
-		For numerical operations, the Laconic interpreter obtains the numeric value of a string
-		from the Unicode value of its first character, or of the first compositing character if
-		the first character is a composite one.
+		If any of their operands is a string, some numerical operators will perform string-related operations :
+
+			+	Concatenation, converting any numeric operand to a string;
+
+				Thus
+					$20 353 + [sTotal: ] v20
+				yields
+					"Total: 353"
+
+			- number string : removal of [number] first characters from the string;
+			- string number : truncation of the string to first [number] characters.
+
+				Thus
+					-- 3 [sLa Roche-en-Ardenne] 5
+				yields
+					"Roche"
+
+			* string number : repeats the string int(number) times.
+
+				Thus
+					* [sblah ] 3
+				yields
+					"blah blah blah "
+
+		Other numerical operators, or other combinations of number and string operands, will ignore the string operands.
 
 	Comment brackets content
 
-		Comments are enclosed between [c and ]
+		Comments are enclosed between [c and ].
+
+		They are completely ignored by Laconic.
 
 		Eg.:
 
 			$20 100[c Let's populate variable 20 with 100.]v20[c This entire expression should yield 100.]
-
 
 	Whitespace
 
@@ -584,6 +624,34 @@ Operators
 
 		) End of operand number override - see '('. 
 
+		b n : Base of input number (numbers in the script).
+					(to be implemented)
+
+					Bases from 2 up to any large number are supported.
+					If any other base is requested (base < 2), base 10 is assumed.
+
+					Note:
+						Base 1 is useless, as no number greater than 0 can be expressed.
+
+					Non-integer base numbers are truncated to an integer base.
+
+					Caution : when this command is repeated after a first b n command,
+					the value of the second parameter might be different than what you expect.
+
+					E.g.:
+					b8 [c Octal numbers used] b10 [c Octal 10 = 8 in base10 ! => still octal numbers used].
+
+					In order to switch to decimal numbers after octal ones, one would need to specify :
+
+					b8 [c Octal numbers used] b12 [c Base 10 used again]
+
+					The b operator returns the value of its base.
+
+		B n : Base of output number (displayed as output).
+					(to be implemented)
+
+					The B operator returns the value of its base.
+
 		o Operator designated by number, 2 operands
 
 			(lower case o)
@@ -716,27 +784,3 @@ Operators
 					(to be implemented)
 
 					If n=0, only the numbers needed will be output.
-
-		Z 4 n : Base of input number (numbers in the script).
-					(to be implemented)
-
-					Bases from 2 up to any large number are supported.
-					If any other base is requested, base 10 is assumed.
-
-					Caution : when this command is repeated after a first Z 4 n command,
-					the value of the second parameter might be different of what you expect.
-
-					E.g.:
-					Z4 8 [c Octal numbers used] Z4 10 [c Octal 10 = 8 in base10 ! => still octal numbers used].
-
-					In order to switch to decimal numbers after octal ones, one would need to specify :
-
-					Z4 8 [c Octal numbers used] Z4 12 [c Base 10 used again]
-
-					When using binary numbers, even the first operand has to be expressed differently:
-
-					Z4 2 [c Binary numbers used] Z100 1010 [c Base 10 used again]
-
-		Z 5 n : Base of output number (displayed as output).
-					(to be implemented)
-
