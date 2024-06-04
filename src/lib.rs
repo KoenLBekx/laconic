@@ -157,6 +157,7 @@ impl Expression {
     pub fn get_string_value(&self, default: String) -> String {
         match self.value {
             ValueType::Text(ref txt) => txt.clone(),
+            ValueType::Number(ref num) => format!("{}", num),
             _ => default,
         }
     }
@@ -252,6 +253,27 @@ impl Expression {
         }
 
         exp_rep
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self.value {
+            ValueType::Empty => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_numeric(&self) -> bool {
+        match self.value {
+            ValueType::Number(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_text(&self) -> bool {
+        match self.value {
+            ValueType::Text(_) => true,
+            _ => false,
+        }
     }
 }
 
@@ -607,6 +629,28 @@ fn are_very_near(num1: f64, num2: f64) -> bool {
 
 pub(crate) mod opr_funcs {
     use super::{Expression, Shuttle, ValueType, are_near};
+
+    fn has_any_string_operands(operands: &[Expression]) -> bool {
+        let mut opd_count = 0usize;
+
+        if operands.is_empty() {
+            return false;
+        }
+
+        loop{
+            if let ValueType::Text(_) = operands[opd_count].get_value() {
+                return true;
+            }
+
+            opd_count += 1;
+
+            if opd_count == operands.len() {
+                break;
+            }
+        }
+
+        false
+    }
     
     pub fn nop(_result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
         // Don't do anything.
@@ -619,13 +663,26 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn add(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
-        let mut outcome = 0f64;
+        if has_any_string_operands(operands) {
+            let mut string_outcome = String::new();
 
-        for op in operands {
-            outcome += op.get_num_value(0f64);
+            // &* : fresh borrow avoids move of the operands.
+            for op in &*operands {
+                string_outcome.push_str(op.get_string_value("".to_string()).as_str());
+            }
+
+            *result_value = ValueType::Text(string_outcome);
+
+        } else {
+            let mut num_outcome = 0f64;
+
+            // &* : fresh borrow avoids move of the operands.
+            for op in &*operands {
+                num_outcome += op.get_num_value(0f64);
+            }
+
+            *result_value = ValueType::Number(num_outcome);
         }
-
-        *result_value = ValueType::Number(outcome);
     }
     
     pub fn multiply(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
@@ -704,7 +761,7 @@ pub(crate) mod opr_funcs {
         let mut outcome = f64::MAX;
         let mut current: f64;
 
-        for op in operands {
+        for op in &*operands {
             current = op.get_num_value(f64::MAX);
 
             if outcome > current {
@@ -719,7 +776,7 @@ pub(crate) mod opr_funcs {
         let mut outcome = f64::MIN;
         let mut current: f64;
 
-        for op in operands {
+        for op in &*operands {
             current = op.get_num_value(f64::MIN);
 
             if outcome < current {
@@ -877,7 +934,7 @@ pub(crate) mod opr_funcs {
     pub fn not(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = true;
 
-        for op in operands {
+        for op in &*operands {
             outcome &= are_near(0f64, op.get_num_value(0f64), shuttle.orb);
         }
 
@@ -891,7 +948,7 @@ pub(crate) mod opr_funcs {
     pub fn and(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = true;
 
-        for op in operands {
+        for op in &*operands {
             outcome &= !are_near(0f64, op.get_num_value(0f64), shuttle.orb);
         }
 
@@ -905,7 +962,7 @@ pub(crate) mod opr_funcs {
     pub fn or(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = false;
 
-        for op in operands {
+        for op in &*operands {
             outcome |= !are_near(0f64, op.get_num_value(0f64), shuttle.orb);
         }
 
@@ -919,7 +976,7 @@ pub(crate) mod opr_funcs {
     pub fn xor(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut trues = 0usize;
 
-        for op in operands {
+        for op in &*operands {
               if !are_near(0f64, op.get_num_value(0f64), shuttle.orb) {
                   trues += 1;
               }
@@ -980,7 +1037,7 @@ pub(crate) mod opr_funcs {
 
         let mut opd_val: f64;
 
-        for opd in operands {
+        for opd in &*operands {
             opd_val = opd.get_num_value(0f64);
 
             all_positive = all_positive && (opd_val > 0f64);
@@ -1524,6 +1581,11 @@ mod tests {
         #[test]
         fn x_add_0_op() {
             assert_eq!(0f64, Interpreter::execute("+".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_add_strings() {
+            assert_eq!("23.75 km.".to_string(), Interpreter::execute("+23.75 [s km.]".to_string()).unwrap().string_representation);
         }
 
         #[test]
