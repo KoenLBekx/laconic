@@ -1,5 +1,4 @@
 // TODO: resolve TODO's in code.
-// TODO: write unit tests on expressions having string content (ValueType::Text).
 // TODO: implement all intended operators.
 // TODO: implement Debug for Expression, using get_representation.
 // TODO: if struct Interpreter ends up having no internal state (no properties), simply delete it
@@ -291,6 +290,11 @@ impl Shuttle {
     }
 }
 
+pub struct ExecutionOutcome {
+    pub numeric_value: f64,
+    pub string_representation: String,
+}
+
 pub struct Interpreter {
 }
 
@@ -299,11 +303,11 @@ impl Interpreter {
         Interpreter{}
     }
 
-    pub fn execute(program: String) -> Result<f64, ProgramError> {
+    pub fn execute(program: String) -> Result<ExecutionOutcome, ProgramError> {
         Self::execute_opts(program, true, false, false)
     }
 
-    pub fn execute_opts(program: String, do_execute: bool, show_before: bool, show_after: bool) -> Result<f64, ProgramError> {
+    pub fn execute_opts(program: String, do_execute: bool, show_before: bool, show_after: bool) -> Result<ExecutionOutcome, ProgramError> {
         let atoms = Self::split_atoms(&program)?;
         let mut tree: Expression = Self::make_tree(atoms);
 
@@ -320,7 +324,20 @@ impl Interpreter {
             println!("\nTree after operate() :\n{}", tree.get_representation());
         }
 
-        Ok(tree.get_num_value(0f64))
+        Ok(match tree.get_value() {
+            ValueType::Number(ref n) => ExecutionOutcome {
+                numeric_value: *n,
+                string_representation: format!("{}", *n),
+            },
+            ValueType::Text(ref s) => ExecutionOutcome {
+                numeric_value: 0f64,
+                string_representation: s.clone(),
+            },
+            ValueType::Empty => ExecutionOutcome {
+                numeric_value: 0f64,
+                string_representation: "(no_value)".to_string(),
+            },
+        })
     }
 
     // Numeric overflows will cause number atoms to be
@@ -1470,6 +1487,10 @@ mod tests {
             assert_eq!(12f64, ops[0].get_num_value(0f64));
             assert_eq!(68f64, ops[1].get_num_value(0f64));
         }
+
+        #[test]
+        fn op_assign_string() {
+        }
     }
 
     mod exec {
@@ -1477,662 +1498,667 @@ mod tests {
 
         #[test]
         fn x_remaining_stack_items_while_making_tree() {
-            assert_eq!(Ok(16f64), Interpreter::execute("+ 44 1 * 8 2".to_string()));
+            assert_eq!(16f64, Interpreter::execute("+ 44 1 * 8 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_nested_ops() {
-            assert_eq!(Ok(97f64), Interpreter::execute("+4+90 3".to_string()));
+            assert_eq!(97f64, Interpreter::execute("+4+90 3".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_add_3_op() {
-            assert_eq!(Ok(229f64), Interpreter::execute("+(3 111 115)".to_string()));
+            assert_eq!(229f64, Interpreter::execute("+(3 111 115)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_add_2_op() {
-            assert_eq!(Ok(226f64), Interpreter::execute("+111 115".to_string()));
+            assert_eq!(226f64, Interpreter::execute("+111 115".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_add_1_op() {
-            assert_eq!(Ok(111f64), Interpreter::execute("+111".to_string()));
+            assert_eq!(111f64, Interpreter::execute("+111".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_add_0_op() {
-            assert_eq!(Ok(0f64), Interpreter::execute("+".to_string()));
+            assert_eq!(0f64, Interpreter::execute("+".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_minus_3_op() {
-            assert_eq!(Ok(-9f64), Interpreter::execute("-(111 115 +3 2)".to_string()));
+            assert_eq!(-9f64, Interpreter::execute("-(111 115 +3 2)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_minus_2_op() {
-            assert_eq!(Ok(-4f64), Interpreter::execute("-111 115".to_string()));
+            assert_eq!(-4f64, Interpreter::execute("-111 115".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_minus_1_op() {
-            assert_eq!(Ok(111f64), Interpreter::execute("-111".to_string()));
+            assert_eq!(111f64, Interpreter::execute("-111".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_minus_0_op() {
-            assert_eq!(Ok(0f64), Interpreter::execute("-".to_string()));
+            assert_eq!(0f64, Interpreter::execute("-".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_combine_3_op() {
-            assert_eq!(Ok(54f64), Interpreter::execute(";(1 +7 3 54)".to_string()));
+            assert_eq!(54f64, Interpreter::execute(";(1 +7 3 54)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_combine_3_op_bis() {
-            assert_eq!(Ok(10f64), Interpreter::execute(";(1 54 +7 3)".to_string()));
+            assert_eq!(10f64, Interpreter::execute(";(1 54 +7 3)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_combine_2_op() {
-            assert_eq!(Ok(54f64), Interpreter::execute("; 1 54".to_string()));
+            assert_eq!(54f64, Interpreter::execute("; 1 54".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_combine_1_op() {
-            assert_eq!(Ok(54f64), Interpreter::execute(";54".to_string()));
+            assert_eq!(54f64, Interpreter::execute(";54".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_combine_0_op() {
-            assert_eq!(Ok(0f64), Interpreter::execute(";".to_string()));
+            assert_eq!(0f64, Interpreter::execute(";".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_override_to_1() {
-            assert_eq!(Ok(51f64), Interpreter::execute("+- 50 +(2) 3".to_string()));
+            assert_eq!(51f64, Interpreter::execute("+- 50 +(2) 3".to_string()).unwrap().numeric_value);
         }
         
         #[test]
         fn x_override_with_operator_operands() {
-            assert_eq!(Ok(13f64), Interpreter::execute("$0 10?(=%8 6 2 +:0 3 +:0 4 57)v0".to_string()));
+            assert_eq!(13f64, Interpreter::execute("$0 10?(=%8 6 2 +:0 3 +:0 4 57)v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_nested_override() {
-            assert_eq!(Ok(59f64), Interpreter::execute("+(- 50 +(2) 3 7 1)".to_string()));
+            assert_eq!(59f64, Interpreter::execute("+(- 50 +(2) 3 7 1)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_missing_end_of_override() {
-            assert_eq!(Ok(41f64), Interpreter::execute("+ 50 -(2 3 7 1".to_string()));
+            assert_eq!(41f64, Interpreter::execute("+ 50 -(2 3 7 1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_missing_start_of_override() {
-            assert_eq!(Ok(52f64), Interpreter::execute("+-50)2".to_string()));
+            assert_eq!(52f64, Interpreter::execute("+-50)2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_multiply_3_op() {
-            assert_eq!(Ok(210f64), Interpreter::execute("*(3 14 5)".to_string()));
+            assert_eq!(210f64, Interpreter::execute("*(3 14 5)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_multiply_2_op() {
-            assert_eq!(Ok(11100f64), Interpreter::execute("*111 100".to_string()));
+            assert_eq!(11100f64, Interpreter::execute("*111 100".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_multiply_1_op() {
-            assert_eq!(Ok(111f64), Interpreter::execute("*111".to_string()));
+            assert_eq!(111f64, Interpreter::execute("*111".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_multiply_0_op() {
-            assert_eq!(Ok(10f64), Interpreter::execute("+ 10 *".to_string()));
+            assert_eq!(10f64, Interpreter::execute("+ 10 *".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_divide_3_op() {
-            assert_eq!(Ok(0.5f64), Interpreter::execute("/(70 20 7)".to_string()));
+            assert_eq!(0.5f64, Interpreter::execute("/(70 20 7)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_divide_2_op() {
-            assert_eq!(Ok(3.5f64), Interpreter::execute("/70 20".to_string()));
+            assert_eq!(3.5f64, Interpreter::execute("/70 20".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_divide_1_op() {
-            assert_eq!(Ok(70f64), Interpreter::execute("/70".to_string()));
+            assert_eq!(70f64, Interpreter::execute("/70".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_divide_0_op() {
-            assert_eq!(Ok(5f64), Interpreter::execute("+5 /".to_string()));
+            assert_eq!(5f64, Interpreter::execute("+5 /".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_divide_by_zero() {
-            assert_eq!(Ok(f64::INFINITY), Interpreter::execute("/8 0".to_string()));
+            assert_eq!(f64::INFINITY, Interpreter::execute("/8 0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_modulo_3_op_integer() {
-            assert_eq!(Ok(1f64), Interpreter::execute("%(70 20 3)".to_string()));
+            assert_eq!(1f64, Interpreter::execute("%(70 20 3)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_modulo_2_op_integer() {
-            assert_eq!(Ok(10f64), Interpreter::execute("%70 20".to_string()));
+            assert_eq!(10f64, Interpreter::execute("%70 20".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_modulo_2_op_fractal() {
-            assert!(are_very_near(0.7f64, Interpreter::execute("%70 3.3".to_string()).unwrap()));
+            assert!(are_very_near(0.7f64, Interpreter::execute("%70 3.3".to_string()).unwrap().numeric_value));
         }
 
         #[test]
         fn x_modulo_1_op() {
-            assert_eq!(Ok(70f64), Interpreter::execute("%70".to_string()));
+            assert_eq!(70f64, Interpreter::execute("%70".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_modulo_0_op() {
-            assert_eq!(Ok(0f64), Interpreter::execute("%".to_string()));
+            assert_eq!(0f64, Interpreter::execute("%".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_0_op() {
-            assert_eq!(Ok(0f64), Interpreter::execute("^".to_string()));
+            assert_eq!(0f64, Interpreter::execute("^".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_1_op() {
-            assert_eq!(Ok(49f64), Interpreter::execute("^49".to_string()));
+            assert_eq!(49f64, Interpreter::execute("^49".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_2_op_int_int() {
-            assert_eq!(Ok(36f64), Interpreter::execute("^6 2".to_string()));
+            assert_eq!(36f64, Interpreter::execute("^6 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_2_op_int_fract() {
-            assert_eq!(Ok(7f64), Interpreter::execute("^49 .5".to_string()));
+            assert_eq!(7f64, Interpreter::execute("^49 .5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_2_op_int_fract_neg() {
-            assert_eq!(Ok(0.2f64), Interpreter::execute("^25 ~.5".to_string()));
+            assert_eq!(0.2f64, Interpreter::execute("^25 ~.5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_2_op_int_neg() {
-            assert_eq!(Ok(0.2f64), Interpreter::execute("^5 ~1".to_string()));
+            assert_eq!(0.2f64, Interpreter::execute("^5 ~1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_2_op_fract_fract() {
-            assert_eq!(Ok(4.049691346263317f64), Interpreter::execute("^16.4 .5".to_string()));
+            assert_eq!(4.049691346263317f64, Interpreter::execute("^16.4 .5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_3() {
-            assert_eq!(Ok(49f64), Interpreter::execute("^(49 .5 2)".to_string()));
+            assert_eq!(49f64, Interpreter::execute("^(49 .5 2)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_unaryminus_3_op() {
-            assert_eq!(Ok(-5.02f64), Interpreter::execute("~(5.02 8 3)".to_string()));
+            assert_eq!(-5.02f64, Interpreter::execute("~(5.02 8 3)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_unaryminus_1_op() {
-            assert_eq!(Ok(-5.02f64), Interpreter::execute("~5.02".to_string()));
+            assert_eq!(-5.02f64, Interpreter::execute("~5.02".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_unaryminus_0_op() {
-            assert_eq!(Ok(2f64), Interpreter::execute("+ 2 ~".to_string()));
+            assert_eq!(2f64, Interpreter::execute("+ 2 ~".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_int() {
-            assert_eq!(Ok(5f64), Interpreter::execute("i5".to_string()));
+            assert_eq!(5f64, Interpreter::execute("i5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_fract() {
-            assert_eq!(Ok(5f64), Interpreter::execute("i5.7".to_string()));
+            assert_eq!(5f64, Interpreter::execute("i5.7".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_neg_int() {
-            assert_eq!(Ok(-5f64), Interpreter::execute("i~5".to_string()));
+            assert_eq!(-5f64, Interpreter::execute("i~5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_neg_fract() {
-            assert_eq!(Ok(-5f64), Interpreter::execute("i~5.8".to_string()));
+            assert_eq!(-5f64, Interpreter::execute("i~5.8".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_abs_pos() {
-            assert_eq!(Ok(5f64), Interpreter::execute("a5".to_string()));
+            assert_eq!(5f64, Interpreter::execute("a5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_abs_neg() {
-            assert_eq!(Ok(5f64), Interpreter::execute("a~5".to_string()));
+            assert_eq!(5f64, Interpreter::execute("a~5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_min_two_first() {
-            assert_eq!(Ok(128f64), Interpreter::execute("m128 277".to_string()));
+            assert_eq!(128f64, Interpreter::execute("m128 277".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_min_two_second() {
-            assert_eq!(Ok(277f64), Interpreter::execute("m328 277".to_string()));
+            assert_eq!(277f64, Interpreter::execute("m328 277".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_min_two_equal() {
-            assert_eq!(Ok(128f64), Interpreter::execute("m128 128".to_string()));
+            assert_eq!(128f64, Interpreter::execute("m128 128".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_min_more() {
-            assert_eq!(Ok(-31f64), Interpreter::execute("m(128 277 ~31 5)".to_string()));
+            assert_eq!(-31f64, Interpreter::execute("m(128 277 ~31 5)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_max_two_first() {
-            assert_eq!(Ok(128f64), Interpreter::execute("M128 27".to_string()));
+            assert_eq!(128f64, Interpreter::execute("M128 27".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_max_two_second() {
-            assert_eq!(Ok(277f64), Interpreter::execute("M28 277".to_string()));
+            assert_eq!(277f64, Interpreter::execute("M28 277".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_max_two_equal() {
-            assert_eq!(Ok(128f64), Interpreter::execute("M128 128".to_string()));
+            assert_eq!(128f64, Interpreter::execute("M128 128".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_max_more() {
-            assert_eq!(Ok(366f64), Interpreter::execute("M(128 277 ~31 5 366)".to_string()));
+            assert_eq!(366f64, Interpreter::execute("M(128 277 ~31 5 366)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assign_num_return_value() {
-            assert_eq!(Ok(111f64), Interpreter::execute("$4 111".to_string()));
+            assert_eq!(111f64, Interpreter::execute("$4 111".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_assign_string() {
+            assert_eq!("汉字".to_string(), Interpreter::execute("$4 [s汉字] v4".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_assign_num_serial_assignation() {
-            assert_eq!(Ok(10f64), Interpreter::execute("$(4 1 2 3 4) F4 7 1 0 +:1 vv0 v1 ".to_string()));
+            assert_eq!(10f64, Interpreter::execute("$(4 1 2 3 4) F4 7 1 0 +:1 vv0 v1 ".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_get_num_reg() {
-            assert_eq!(Ok(90f64), Interpreter::execute("$/21 2 90 $(4) v/21 2".to_string()));
+            assert_eq!(90f64, Interpreter::execute("$/21 2 90 $(4) v/21 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_add_assign() {
-            assert_eq!(Ok(90f64), Interpreter::execute("$18 88 +:-21 3 2 v18".to_string()));
+            assert_eq!(90f64, Interpreter::execute("$18 88 +:-21 3 2 v18".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assignment_maker_inside_override_markers_first() {
-            assert_eq!(Ok(35f64), Interpreter::execute("$1 10 $2 20 +(:1 v2 5) v1".to_string()));
+            assert_eq!(35f64, Interpreter::execute("$1 10 $2 20 +(:1 v2 5) v1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assignment_maker_before_override_markers_first() {
-            assert_eq!(Ok(35f64), Interpreter::execute("$1 10 $2 20 +:(1 v2 5) v1".to_string()));
+            assert_eq!(35f64, Interpreter::execute("$1 10 $2 20 +:(1 v2 5) v1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assignment_maker_inside_override_markers_second() {
-            assert_eq!(Ok(35f64), Interpreter::execute("$1 10 $2 20 +(v1 :2 5) v2".to_string()));
+            assert_eq!(35f64, Interpreter::execute("$1 10 $2 20 +(v1 :2 5) v2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assignment_maker_inside_override_markers_both() {
-            assert_eq!(Ok(70f64), Interpreter::execute("$1 10 $2 20 +(:1 :2 5) +v1 v2".to_string()));
+            assert_eq!(70f64, Interpreter::execute("$1 10 $2 20 +(:1 :2 5) +v1 v2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assignment_maker_before_and_inside_override_markers_both() {
-            assert_eq!(Ok(70f64), Interpreter::execute("$1 10 $2 20 +:(1 :2 5) +v1 v2".to_string()));
+            assert_eq!(70f64, Interpreter::execute("$1 10 $2 20 +:(1 :2 5) +v1 v2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_unaryminus_assign() {
-            assert_eq!(Ok(-88f64), Interpreter::execute("$18 88 ~:18 v18".to_string()));
+            assert_eq!(-88f64, Interpreter::execute("$18 88 ~:18 v18".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_2_exact() {
-            assert_eq!(Ok(1f64), Interpreter::execute("=21.3 21.3".to_string()));
+            assert_eq!(1f64, Interpreter::execute("=21.3 21.3".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_2_in_orb() {
-            assert_eq!(Ok(1f64), Interpreter::execute("Z0 .1 =21.3 21.35".to_string()));
+            assert_eq!(1f64, Interpreter::execute("Z0 .1 =21.3 21.35".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_2_outside_orb() {
-            assert_eq!(Ok(0f64), Interpreter::execute("Z0 .01 =21.3 21.35".to_string()));
+            assert_eq!(0f64, Interpreter::execute("Z0 .01 =21.3 21.35".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_many() {
-            assert_eq!(Ok(1f64), Interpreter::execute("$1 -15 3 =(12 +7 5 *3 4 /36 3 v1)".to_string()));
+            assert_eq!(1f64, Interpreter::execute("$1 -15 3 =(12 +7 5 *3 4 /36 3 v1)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_less_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("< 5.000001 5.000002".to_string()));
+            assert_eq!(1f64, Interpreter::execute("< 5.000001 5.000002".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_less_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("< 5.000002 5.000002".to_string()));
+            assert_eq!(0f64, Interpreter::execute("< 5.000002 5.000002".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_less_3_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("<(5.000001 5.000002 6)".to_string()));
+            assert_eq!(1f64, Interpreter::execute("<(5.000001 5.000002 6)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_less_3_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("<(5.000001 5.000002 3)".to_string()));
+            assert_eq!(0f64, Interpreter::execute("<(5.000001 5.000002 3)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_greater_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("> 5.000002 5.000001".to_string()));
+            assert_eq!(1f64, Interpreter::execute("> 5.000002 5.000001".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_greater_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("> 5.000001 5.000002".to_string()));
+            assert_eq!(0f64, Interpreter::execute("> 5.000001 5.000002".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_greater_3_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute(">(5.000003 5.000002 6)".to_string()));
+            assert_eq!(0f64, Interpreter::execute(">(5.000003 5.000002 6)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_greater_3_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute(">(5.000002 5.000001 3)".to_string()));
+            assert_eq!(1f64, Interpreter::execute(">(5.000002 5.000001 3)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_1() {
-            assert_eq!(Ok(0f64), Interpreter::execute("!1".to_string()));
+            assert_eq!(0f64, Interpreter::execute("!1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_0() {
-            assert_eq!(Ok(1f64), Interpreter::execute("!0".to_string()));
+            assert_eq!(1f64, Interpreter::execute("!0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_other() {
-            assert_eq!(Ok(0f64), Interpreter::execute("!~145".to_string()));
+            assert_eq!(0f64, Interpreter::execute("!~145".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_3_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("!(0 0 0)".to_string()));
+            assert_eq!(1f64, Interpreter::execute("!(0 0 0)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_3_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("!(~4 8 +90 1)".to_string()));
+            assert_eq!(0f64, Interpreter::execute("!(~4 8 +90 1)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_0() {
-            assert_eq!(Ok(1f64), Interpreter::execute("&".to_string()));
+            assert_eq!(1f64, Interpreter::execute("&".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_1_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("& /7 2".to_string()));
+            assert_eq!(1f64, Interpreter::execute("& /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_1_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("& -5 5".to_string()));
+            assert_eq!(0f64, Interpreter::execute("& -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_2_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("& 2 /7 2".to_string()));
+            assert_eq!(1f64, Interpreter::execute("& 2 /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_2_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("& 2 -5 5".to_string()));
+            assert_eq!(0f64, Interpreter::execute("& 2 -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_3_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("&(2 /7 2 %14 4)".to_string()));
+            assert_eq!(1f64, Interpreter::execute("&(2 /7 2 %14 4)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_3_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("&( 2 -5 5 9)".to_string()));
+            assert_eq!(0f64, Interpreter::execute("&( 2 -5 5 9)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_0() {
-            assert_eq!(Ok(0f64), Interpreter::execute("|".to_string()));
+            assert_eq!(0f64, Interpreter::execute("|".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_1_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("| /7 2".to_string()));
+            assert_eq!(1f64, Interpreter::execute("| /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_1_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("| -5 5".to_string()));
+            assert_eq!(0f64, Interpreter::execute("| -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_2_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("| 0 /7 2".to_string()));
+            assert_eq!(1f64, Interpreter::execute("| 0 /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_2_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("| 0 -5 5".to_string()));
+            assert_eq!(0f64, Interpreter::execute("| 0 -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_3_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("|(0 +3 ~2  %14 4)".to_string()));
+            assert_eq!(1f64, Interpreter::execute("|(0 +3 ~2  %14 4)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_3_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("|( 0 -5 5 %20 5)".to_string()));
+            assert_eq!(0f64, Interpreter::execute("|( 0 -5 5 %20 5)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_0() {
-            assert_eq!(Ok(0f64), Interpreter::execute("x".to_string()));
+            assert_eq!(0f64, Interpreter::execute("x".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_1_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("x /7 2".to_string()));
+            assert_eq!(1f64, Interpreter::execute("x /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_1_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("x -5 5".to_string()));
+            assert_eq!(0f64, Interpreter::execute("x -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_2_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("x 0 /7 2".to_string()));
+            assert_eq!(1f64, Interpreter::execute("x 0 /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_2_false_both_true() {
-            assert_eq!(Ok(0f64), Interpreter::execute("x 8 5".to_string()));
+            assert_eq!(0f64, Interpreter::execute("x 8 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_2_false_both_false() {
-            assert_eq!(Ok(0f64), Interpreter::execute("x 0 -5 5".to_string()));
+            assert_eq!(0f64, Interpreter::execute("x 0 -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_3_true() {
-            assert_eq!(Ok(1f64), Interpreter::execute("x(0 +3 ~3  %14 4)".to_string()));
+            assert_eq!(1f64, Interpreter::execute("x(0 +3 ~3  %14 4)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_3_false_2_true() {
-            assert_eq!(Ok(0f64), Interpreter::execute("x(0 -5 7 %20 7)".to_string()));
+            assert_eq!(0f64, Interpreter::execute("x(0 -5 7 %20 7)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_3_false_3_true() {
-            assert_eq!(Ok(0f64), Interpreter::execute("x(1 -5 7 %20 5)".to_string()));
+            assert_eq!(0f64, Interpreter::execute("x(1 -5 7 %20 5)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_3_false_0_true() {
-            assert_eq!(Ok(0f64), Interpreter::execute("x(0 -5 5 %20 5)".to_string()));
+            assert_eq!(0f64, Interpreter::execute("x(0 -5 5 %20 5)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_while_simple() {
-            assert_eq!(Ok(1f64), Interpreter::execute("$1 4 W>v1 2 $1 1".to_string()));
+            assert_eq!(1f64, Interpreter::execute("$1 4 W>v1 2 $1 1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_while_executed() {
-            assert_eq!(Ok(10f64), Interpreter::execute("$0 1 $1 0 W!>v0 4 ;+:1 v0 +:0 1 v1".to_string()));
+            assert_eq!(10f64, Interpreter::execute("$0 1 $1 0 W!>v0 4 ;+:1 v0 +:0 1 v1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_while_executed_op_nr_overridden() {
-            assert_eq!(Ok(10f64), Interpreter::execute("$0 1 $1 0 W(!>v0 4 +:1 v0 +:0 1) v1".to_string()));
+            assert_eq!(10f64, Interpreter::execute("$0 1 $1 0 W(!>v0 4 +:1 v0 +:0 1) v1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_while_never_executed() {
-            assert_eq!(Ok(0f64), Interpreter::execute("$0 1 $1 0 W!>v0 ~1 ;+:1 v0 +:0 1 v1".to_string()));
+            assert_eq!(0f64, Interpreter::execute("$0 1 $1 0 W!>v0 ~1 ;+:1 v0 +:0 1 v1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_4_op_asc() {
-            assert_eq!(Ok(0f64), Interpreter::execute("F(3 11 2 1)".to_string()));
+            assert_eq!(0f64, Interpreter::execute("F(3 11 2 1)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_5_op_asc() {
-            assert_eq!(Ok(10395f64), Interpreter::execute("$0 1 F3 11 2 1 *:0 v1 v0".to_string()));
+            assert_eq!(10395f64, Interpreter::execute("$0 1 F3 11 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_5_op_desc() {
-            assert_eq!(Ok(10395f64), Interpreter::execute("$0 1 F11 3 ~2 1 *:0 v1 v0".to_string()));
+            assert_eq!(10395f64, Interpreter::execute("$0 1 F11 3 ~2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_6_op() {
-            assert_eq!(Ok(10395f64), Interpreter::execute("$0 1 F(11 3 ~2 1 *:0 v1 $5 v1) v0".to_string()));
+            assert_eq!(10395f64, Interpreter::execute("$0 1 F(11 3 ~2 1 *:0 v1 $5 v1) v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_5_op_exceeds_limit() {
-            assert_eq!(Ok(15f64), Interpreter::execute("Z1 2 $0 1 F3 11 2 1 *:0 v1 v0".to_string()));
+            assert_eq!(15f64, Interpreter::execute("Z1 2 $0 1 F3 11 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_if_0_op() {
-            assert_eq!(Ok(0f64), Interpreter::execute("?".to_string()));
+            assert_eq!(0f64, Interpreter::execute("?".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_if_1_op() {
-            assert_eq!(Ok(0f64), Interpreter::execute("? 19".to_string()));
+            assert_eq!(0f64, Interpreter::execute("? 19".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_if_second() {
-            assert_eq!(Ok(8f64), Interpreter::execute("?*70 .2 8 2".to_string()));
+            assert_eq!(8f64, Interpreter::execute("?*70 .2 8 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_if_third() {
-            assert_eq!(Ok(2f64), Interpreter::execute("?-70 70 8 2".to_string()));
+            assert_eq!(2f64, Interpreter::execute("?-70 70 8 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_if_5_op_second() {
-            assert_eq!(Ok(4f64), Interpreter::execute("?(19 +3 1 0 7 23)".to_string()));
+            assert_eq!(4f64, Interpreter::execute("?(19 +3 1 0 7 23)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_if_5_op_last() {
-            assert_eq!(Ok(23f64), Interpreter::execute("$5 0 ?(v5 +3 1 0 7 23)".to_string()));
+            assert_eq!(23f64, Interpreter::execute("$5 0 ?(v5 +3 1 0 7 23)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_enum_opr_unknown() {
-            assert_eq!(Ok(0f64), Interpreter::execute("o1.5 2".to_string()));
+            assert_eq!(0f64, Interpreter::execute("o1.5 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_enum_opr_sign_no_operands() {
-            assert_eq!(Ok(0f64), Interpreter::execute("o(0)".to_string()));
+            assert_eq!(0f64, Interpreter::execute("o(0)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_enum_opr_sign_all_pos() {
-            assert_eq!(Ok(1f64), Interpreter::execute("o(0 45 7 99 4022)".to_string()));
+            assert_eq!(1f64, Interpreter::execute("o(0 45 7 99 4022)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_enum_opr_sign_all_neg() {
-            assert_eq!(Ok(-1f64), Interpreter::execute("o(0 ~45 ~7 ~99 ~4022)".to_string()));
+            assert_eq!(-1f64, Interpreter::execute("o(0 ~45 ~7 ~99 ~4022)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_enum_opr_sign_mixed() {
-            assert_eq!(Ok(0f64), Interpreter::execute("o(0 ~45 7 ~99 4022)".to_string()));
+            assert_eq!(0f64, Interpreter::execute("o(0 ~45 7 ~99 4022)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_enum_opr_sign_assign() {
-            assert_eq!(Ok(-1f64), Interpreter::execute("$~22 ~4 o0 :~22 v~22".to_string()));
+            assert_eq!(-1f64, Interpreter::execute("$~22 ~4 o0 :~22 v~22".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_enum_opr_override() {
-            assert_eq!(Ok(1f64), Interpreter::execute("O(0 55)".to_string()));
+            assert_eq!(1f64, Interpreter::execute("O(0 55)".to_string()).unwrap().numeric_value);
         }
     }
 

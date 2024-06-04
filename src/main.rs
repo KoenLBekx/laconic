@@ -32,7 +32,7 @@ fn main() {
 
     if !script.is_empty() {
         match Interpreter::execute_opts(script, do_execute, show_before, show_after) {
-            Ok(outcome) => println!("{}", outcome),
+            Ok(outcome) => println!("{}", outcome.string_representation),
             Err(err) => println!("{:?}", err),
         }
     } else {
