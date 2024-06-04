@@ -1,4 +1,11 @@
 // TODO: resolve TODO's in code.
+// TODO: have the operator functions return more ProgramErrors for unexpected conditions
+//          (e.g. the v operator should return an error if the designated variable isn't found,
+//          instead of returning 0.)
+//          This will require the ValueType to have a ValueType::Error(ProgramError) variant.
+//          During evaluation of its operands, Expression.operate() should stop if any of its
+//          operands has a ValueType::Error value, and break its evaluation loop.
+//          (Also to be implemented for the W, F and ? operators.)
 // TODO: implement all intended operators.
 // TODO: implement Debug for Expression, using get_representation.
 // TODO: if struct Interpreter ends up having no internal state (no properties), simply delete it
@@ -1021,6 +1028,7 @@ pub(crate) mod opr_funcs {
 
         let opr_func = match operands[0].get_num_value(-1f64) {
             0f64 => enum_opr_sign,
+            3f64 => get_unicode_chars,
             _ =>  {
                 *result_value = default_outcome;
 
@@ -1055,6 +1063,24 @@ pub(crate) mod opr_funcs {
                 0f64
             }
         );
+    }
+
+    pub fn get_unicode_chars(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        let mut result_string = String::new();
+        let mut opd_val: f64;
+
+        for opd in &*operands {
+            opd_val = opd.get_num_value(0f64);
+
+            match char::from_u32(opd_val as u32) {
+                // opd_val is invalid unicode point
+                None => result_string.push_str(format!("¿{}?", opd_val).as_str()),
+
+                Some(ch) => result_string.push(ch),
+            }
+        }
+
+        *result_value = ValueType::Text(result_string);
     }
     
     pub fn exec_while(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
@@ -1586,6 +1612,11 @@ mod tests {
         #[test]
         fn x_add_strings() {
             assert_eq!("23.75 km.".to_string(), Interpreter::execute("+23.75 [s km.]".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_add_strings_3() {
+            assert_eq!("Alexandra David-Neel".to_string(), Interpreter::execute("$10 [sAlexandra] $11 [sDavid-Neel] +(v10 [s ] v11)".to_string()).unwrap().string_representation);
         }
 
         #[test]
@@ -2221,6 +2252,16 @@ mod tests {
         #[test]
         fn x_enum_opr_override() {
             assert_eq!(1f64, Interpreter::execute("O(0 55)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_enum_opr_unicode_chars() {
+            assert_eq!("\n".to_string(), Interpreter::execute("O3 10".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_enum_opr_unicode_chars_more() {
+            assert_eq!("Союз".to_string(), Interpreter::execute("o(3 1057 1086 1102 1079)".to_string()).unwrap().string_representation);
         }
     }
 

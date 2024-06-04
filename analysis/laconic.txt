@@ -190,6 +190,7 @@ LACONIC
 
 			- number string : removal of [number] first characters from the string;
 			- string number : truncation of the string to first [number] characters.
+				(to be implemented)
 
 				Thus
 					-- 3 [sLa Roche-en-Ardenne] 5
@@ -197,11 +198,28 @@ LACONIC
 					"Roche"
 
 			* string number : repeats the string int(number) times.
+				(to be implemented)
 
 				Thus
 					* [sblah ] 3
 				yields
 					"blah blah blah "
+
+			% string number : unicode value of nth character in string
+				(to be implemented)
+
+				Thus
+					%[sJujube] 4
+				yields
+					62
+
+			i string : length of string
+				(to be implemented)
+
+				Thus
+					i[sTheodorakis]
+				yields
+					11
 
 		Other numerical operators, or other combinations of number and string operands, will ignore the string operands.
 
@@ -709,6 +727,15 @@ Operators
 
 								e.g
 									o(2 17 3 100)	yields 5 and stores 2 in variable 100.
+
+			o 3 num
+							A string having one character having Unicode point <num>.
+
+							If more operands are provided, a string having characters from the given unicode points is returned.
+
+							e.g.
+								03 10	yields the newline character.
+								o(3 1057 1086 1102 1079) yields "Союз".
 
 			o  6  seq
 
