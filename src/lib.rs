@@ -24,6 +24,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::io::Write;
 use std::str::FromStr;
 
 // Static lifetime: justified, because the functions referenced
@@ -111,6 +112,7 @@ impl Expression {
             'Z' => &opr_funcs::setting,
             'o' => &opr_funcs::enumerated_opr,
             'O' => &opr_funcs::enumerated_opr,
+            'w' => &opr_funcs::write,
             _ => &opr_funcs::nop,
         };
 
@@ -299,22 +301,24 @@ impl fmt::Debug for Expression {
 
 // Shuttle objects are used to be passed to every operator function
 // to provide state other than the operands.
-struct Shuttle {
+struct Shuttle<'s> {
     nums: HashMap<i64, ValueType>,
     routines: HashMap<i64, Expression>,
     assignment_indexes_stack: Vec<Vec<i64>>,
     max_iterations: f64,
     orb: f64,
+    writer: &'s mut dyn Write,
 }
 
-impl Shuttle {
-    fn new() -> Self {
+impl<'s> Shuttle<'s> {
+    fn new(writer: &'s mut dyn Write) -> Self {
         Shuttle {
             nums: HashMap::<i64, ValueType>::new(),
             routines: HashMap::<i64, Expression>::new(),
             assignment_indexes_stack: Vec::<Vec<i64>>::new(),
             max_iterations: 10_000f64,
             orb: 0.00000001f64,
+            writer,
         }
     }
 }
@@ -333,10 +337,17 @@ impl Interpreter {
     }
 
     pub fn execute(program: String) -> Result<ExecutionOutcome, ProgramError> {
-        Self::execute_opts(program, true, false, false)
+        let mut writer = Vec::<u8>::new();
+        Self::execute_opts(program, true, false, false, &mut writer)
     }
 
-    pub fn execute_opts(program: String, do_execute: bool, show_before: bool, show_after: bool) -> Result<ExecutionOutcome, ProgramError> {
+    pub fn execute_opts(
+        program: String,
+        do_execute: bool,
+        show_before: bool,
+        show_after: bool,
+        writer: &mut dyn Write,
+    ) -> Result<ExecutionOutcome, ProgramError> {
         let atoms = Self::split_atoms(&program)?;
         let mut tree: Expression = Self::make_tree(atoms);
 
@@ -345,7 +356,7 @@ impl Interpreter {
         }
 
         if do_execute {
-            let mut shuttle = Shuttle::new();
+            let mut shuttle = Shuttle::new(writer);
             tree.operate(&mut shuttle);
         }
 
@@ -536,7 +547,7 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:!"             .contains(chr) => 1,
+                        chr if "~iav:!w"            .contains(chr) => 1,
                         chr if "+-*/^%&|x$W;mM=<>Zo".contains(chr) => 2,
                         chr if "?O"                 .contains(chr) => 3,
                         chr if "F"                  .contains(chr) => 5,
@@ -615,7 +626,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^ia%$v:?WF;mM()=<>!&|xZoO".contains(op)
+        "~+-*/^ia%$v:?WF;mM()=<>!&|xZoOw".contains(op)
     }
 }
 
@@ -1083,6 +1094,26 @@ pub(crate) mod opr_funcs {
         *result_value = ValueType::Text(result_string);
     }
     
+    pub fn write(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        if operands.is_empty() {
+            let _ = shuttle.writer.write(b"\n(empty output)");
+            let _ = shuttle.writer.flush();
+            
+            *result_value = ValueType::Text(String::new());
+
+            return;
+        }
+
+        for op in operands {
+            let _ = shuttle.writer.write(b"\n");
+            let _ = shuttle.writer.write(op.get_string_value("(no_value)".to_string()).as_bytes());
+        }
+
+        let _ = shuttle.writer.flush();
+        
+        *result_value = ValueType::Text(String::new());
+    }
+
     pub fn exec_while(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         if operands.is_empty() {
             *result_value = ValueType::Number(0f64);
@@ -1397,7 +1428,8 @@ mod tests {
             exp.push_operand(Expression::new_number(4000.3f64));
             exp.push_operand(Expression::new_number( 500.1f64));
 
-            let mut shuttle = Shuttle::new();
+            let mut writer = Vec::<u8>::new();
+            let mut shuttle = Shuttle::new(&mut writer);
             exp.operate(&mut shuttle);
 
             // Fails due to precision error: right value is 4500.400000000001.
@@ -1421,7 +1453,8 @@ mod tests {
             exp.push_operand(op1);
             exp.push_operand(op2);
 
-            let mut shuttle = Shuttle::new();
+            let mut writer = Vec::<u8>::new();
+            let mut shuttle = Shuttle::new(&mut writer);
             exp.operate(&mut shuttle);
 
             assert_eq!(574.03f64, exp.get_num_value(0f64));
@@ -1433,7 +1466,8 @@ mod tests {
             exp.push_operand(Expression::new_number(4000.3f64));
             exp.push_operand(Expression::new_number( 500.1f64));
 
-            let mut shuttle = Shuttle::new();
+            let mut writer = Vec::<u8>::new();
+            let mut shuttle = Shuttle::new(&mut writer);
             exp.operate(&mut shuttle);
 
             match shuttle.nums.get(&4000i64) {
@@ -1453,7 +1487,8 @@ mod tests {
             exp.push_operand(Expression::new_number(4000.7f64));
             exp.push_operand(Expression::new_number( 500.1f64));
 
-            let mut shuttle = Shuttle::new();
+            let mut writer = Vec::<u8>::new();
+            let mut shuttle = Shuttle::new(&mut writer);
             exp.operate(&mut shuttle);
 
             match shuttle.nums.get(&4000i64) {
@@ -1473,7 +1508,8 @@ mod tests {
             exp.push_operand(Expression::new_number(-4000.3f64));
             exp.push_operand(Expression::new_number(500.1f64));
 
-            let mut shuttle = Shuttle::new();
+            let mut writer = Vec::<u8>::new();
+            let mut shuttle = Shuttle::new(&mut writer);
             exp.operate(&mut shuttle);
 
             match shuttle.nums.get(&-4000i64) {
@@ -1493,7 +1529,8 @@ mod tests {
             exp.push_operand(Expression::new_number(-4000.7f64));
             exp.push_operand(Expression::new_number( 500.1f64));
 
-            let mut shuttle = Shuttle::new();
+            let mut writer = Vec::<u8>::new();
+            let mut shuttle = Shuttle::new(&mut writer);
             exp.operate(&mut shuttle);
 
             match shuttle.nums.get(&-4000i64) {
@@ -1512,7 +1549,9 @@ mod tests {
             let mut exp = Expression::new('Z');
             exp.push_operand(Expression::new_number(0f64));
             exp.push_operand(Expression::new_number(0.001f64));
-            let mut shuttle = Shuttle::new();
+
+            let mut writer = Vec::<u8>::new();
+            let mut shuttle = Shuttle::new(&mut writer);
 
             exp.operate(&mut shuttle);
 
@@ -1524,7 +1563,9 @@ mod tests {
             let mut exp = Expression::new('Z');
             exp.push_operand(Expression::new_number(1f64));
             exp.push_operand(Expression::new_number(500f64));
-            let mut shuttle = Shuttle::new();
+
+            let mut writer = Vec::<u8>::new();
+            let mut shuttle = Shuttle::new(&mut writer);
 
             exp.operate(&mut shuttle);
 
@@ -1540,7 +1581,9 @@ mod tests {
         fn nop_doesnt_change_value() {
             let mut the_value = ValueType::Number(500f64);
             let mut ops = Vec::<Expression>::new();
-            let mut shuttle = Shuttle::new();
+
+            let mut writer = Vec::<u8>::new();
+            let mut shuttle = Shuttle::new(&mut writer);
 
             nop(&mut the_value, &mut ops, &mut shuttle);
 
@@ -1556,7 +1599,9 @@ mod tests {
         fn op_add() {
             let mut the_value = ValueType::Empty;
             let mut ops = vec![Expression::new_number(12f64), Expression::new_number(68f64)];
-            let mut shuttle = Shuttle::new();
+
+            let mut writer = Vec::<u8>::new();
+            let mut shuttle = Shuttle::new(&mut writer);
 
             add(&mut the_value, &mut ops, &mut shuttle);
 
@@ -2262,6 +2307,40 @@ mod tests {
         #[test]
         fn x_enum_opr_unicode_chars_more() {
             assert_eq!("Союз".to_string(), Interpreter::execute("o(3 1057 1086 1102 1079)".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_write() {
+            let mut writer = Vec::<u8>::new();
+            Interpreter::execute_opts("w[sHello!]".to_string(), true, false, false, &mut writer);
+
+            assert_eq!(b'H', writer[1]);
+        }
+
+        #[test]
+        fn x_write_more() {
+            let mut writer = Vec::<u8>::new();
+            Interpreter::execute_opts("w([sA] [sB] [sC])".to_string(), true, false, false, &mut writer);
+
+            assert_eq!(6, writer.len());
+        }
+
+        #[test]
+        fn x_write_number() {
+            let mut writer = Vec::<u8>::new();
+            Interpreter::execute_opts("w+100 300".to_string(), true, false, false, &mut writer);
+
+            assert_eq!(4, writer.len());
+            assert_eq!(vec![10u8, b'4', b'0', b'0'], writer);
+        }
+
+        #[test]
+        fn x_write_nothing() {
+            let mut writer = Vec::<u8>::new();
+            Interpreter::execute_opts("w".to_string(), true, false, false, &mut writer);
+
+            assert_eq!(15, writer.len());
+            assert_eq!("\n(empty output)".to_string(), String::from_utf8(writer).unwrap());
         }
     }
 

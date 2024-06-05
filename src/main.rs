@@ -1,4 +1,5 @@
 use std::env::args;
+use std::io::stdout;
 use laconic::Interpreter;
 
 fn main() {
@@ -31,7 +32,9 @@ fn main() {
     }
 
     if !script.is_empty() {
-        match Interpreter::execute_opts(script, do_execute, show_before, show_after) {
+        let mut writer = stdout();
+
+        match Interpreter::execute_opts(script, do_execute, show_before, show_after, &mut writer) {
             Ok(outcome) => println!("{}", outcome.string_representation),
             Err(err) => println!("{:?}", err),
         }
