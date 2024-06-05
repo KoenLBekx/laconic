@@ -1,11 +1,11 @@
 // TODO: resolve TODO's in code.
 // TODO: have the operator functions return more ProgramErrors for unexpected conditions
-//          (e.g. the v operator should return an error if the designated variable isn't found,
-//          instead of returning 0.)
 //          This will require the ValueType to have a ValueType::Error(ProgramError) variant.
 //          During evaluation of its operands, Expression.operate() should stop if any of its
 //          operands has a ValueType::Error value, and break its evaluation loop.
 //          (Also to be implemented for the W, F and ? operators.)
+//          (The v operator should continue to return 0 for an unitialized variable, however,
+//          otherwise a new operator should be created that just tests if a variable is empty.)
 // TODO: implement all intended operators.
 // TODO: implement Debug for Expression, using get_representation.
 // TODO: if struct Interpreter ends up having no internal state (no properties), simply delete it
@@ -1096,7 +1096,7 @@ pub(crate) mod opr_funcs {
     
     pub fn write(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         if operands.is_empty() {
-            let _ = shuttle.writer.write(b"\n(empty output)");
+            let _ = shuttle.writer.write(b"(empty output)\n");
             let _ = shuttle.writer.flush();
             
             *result_value = ValueType::Text(String::new());
@@ -1105,8 +1105,8 @@ pub(crate) mod opr_funcs {
         }
 
         for op in operands {
-            let _ = shuttle.writer.write(b"\n");
             let _ = shuttle.writer.write(op.get_string_value("(no_value)".to_string()).as_bytes());
+            let _ = shuttle.writer.write(b"\n");
         }
 
         let _ = shuttle.writer.flush();
@@ -2312,15 +2312,15 @@ mod tests {
         #[test]
         fn x_write() {
             let mut writer = Vec::<u8>::new();
-            Interpreter::execute_opts("w[sHello!]".to_string(), true, false, false, &mut writer);
+            Interpreter::execute_opts("w[sHello!]".to_string(), true, false, false, &mut writer).unwrap();
 
-            assert_eq!(b'H', writer[1]);
+            assert_eq!(b'H', writer[0]);
         }
 
         #[test]
         fn x_write_more() {
             let mut writer = Vec::<u8>::new();
-            Interpreter::execute_opts("w([sA] [sB] [sC])".to_string(), true, false, false, &mut writer);
+            Interpreter::execute_opts("w([sA] [sB] [sC])".to_string(), true, false, false, &mut writer).unwrap();
 
             assert_eq!(6, writer.len());
         }
@@ -2328,19 +2328,32 @@ mod tests {
         #[test]
         fn x_write_number() {
             let mut writer = Vec::<u8>::new();
-            Interpreter::execute_opts("w+100 300".to_string(), true, false, false, &mut writer);
+            Interpreter::execute_opts("w+100 300".to_string(), true, false, false, &mut writer).unwrap();
 
             assert_eq!(4, writer.len());
-            assert_eq!(vec![10u8, b'4', b'0', b'0'], writer);
+            assert_eq!(vec![b'4', b'0', b'0', b'\n'], writer);
         }
 
         #[test]
         fn x_write_nothing() {
             let mut writer = Vec::<u8>::new();
-            Interpreter::execute_opts("w".to_string(), true, false, false, &mut writer);
+            Interpreter::execute_opts("w".to_string(), true, false, false, &mut writer).unwrap();
 
             assert_eq!(15, writer.len());
-            assert_eq!("\n(empty output)".to_string(), String::from_utf8(writer).unwrap());
+            assert_eq!("(empty output)\n".to_string(), String::from_utf8(writer).unwrap());
+        }
+
+        #[test]
+        fn x_write_to_stdout() {
+            // To be tested using the -- --nocapture argument.
+            let mut writer = std::io::stdout();
+            Interpreter::execute_opts("w[s\n========== Hello from x_write_to_stdout() ! ==========\n]".to_string(), true, false, false, &mut writer).unwrap();
+        }
+
+        #[test]
+        fn x_write_to_sink() {
+            let mut writer = std::io::sink();
+            Interpreter::execute_opts("w[sGarbage]".to_string(), true, false, false, &mut writer).unwrap();
         }
     }
 

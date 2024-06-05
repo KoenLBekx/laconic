@@ -618,7 +618,6 @@ Operators
 	Input & Output
 
 		w	write the value of an expression to standard output and returns that value.
-			(to be implemented)
 
 					Note that no newline or CR characters are inserted automatically.
 
