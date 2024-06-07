@@ -4,10 +4,10 @@ LACONIC
 		// TODO: indicate the standard number of operands for every operator.
 
 		* Characters assigned to operators:
-			~+-*/%^$():;=<>!&|?abBCceFilMmOopSTvUuWwxZ
+			~+-*/%^$():;=<>!&|?aBbCceFilMmOoprSTvUuWwxZ
 
 		*	Implemented operators:
-			~+-*/%^$():;=<>!&|?a     Fi MmOo   v  W xZ
+			~+-*/%^$():;=<>!&|?a     Fi MmOo r  v  WwxZ
 
 		* Characters not to be used as operator:
 			' "     interfere with command line syntax
@@ -622,6 +622,21 @@ Operators
 					Note that no newline or CR characters are inserted automatically.
 
 					$0 7 wv7
+
+			If more than one argument is given, they are all written to standard output.
+
+		r read a line from standard input.
+
+			This command reads a line of text from standard input and returns the result:
+
+			If the line of text is a valid representation of a number in the current input base, it's returned as a number value;
+			otherwise, as a string value.
+
+			Any operands are ignored.
+
+			E.g.:
+				$23r
+					stores the input read from standard input in variable 23.
 
 	Other
 

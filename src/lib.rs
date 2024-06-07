@@ -113,6 +113,7 @@ impl Expression {
             'o' => &opr_funcs::enumerated_opr,
             'O' => &opr_funcs::enumerated_opr,
             'w' => &opr_funcs::write,
+            'r' => &opr_funcs::read,
             _ => &opr_funcs::nop,
         };
 
@@ -308,10 +309,11 @@ struct Shuttle<'s> {
     max_iterations: f64,
     orb: f64,
     writer: &'s mut dyn Write,
+    reader: &'s mut dyn input::StdinOrMock,
 }
 
 impl<'s> Shuttle<'s> {
-    fn new(writer: &'s mut dyn Write) -> Self {
+    fn new(writer: &'s mut dyn Write, reader: &'s mut dyn input::StdinOrMock) -> Self {
         Shuttle {
             nums: HashMap::<i64, ValueType>::new(),
             routines: HashMap::<i64, Expression>::new(),
@@ -319,6 +321,7 @@ impl<'s> Shuttle<'s> {
             max_iterations: 10_000f64,
             orb: 0.00000001f64,
             writer,
+            reader,
         }
     }
 }
@@ -338,7 +341,8 @@ impl Interpreter {
 
     pub fn execute(program: String) -> Result<ExecutionOutcome, ProgramError> {
         let mut writer = Vec::<u8>::new();
-        Self::execute_opts(program, true, false, false, &mut writer)
+        let mut reader = input::MockByString::new(Vec::<String>::new());
+        Self::execute_opts(program, true, false, false, &mut writer, &mut reader)
     }
 
     pub fn execute_opts(
@@ -347,6 +351,7 @@ impl Interpreter {
         show_before: bool,
         show_after: bool,
         writer: &mut dyn Write,
+        reader: &mut dyn input::StdinOrMock,
     ) -> Result<ExecutionOutcome, ProgramError> {
         let atoms = Self::split_atoms(&program)?;
         let mut tree: Expression = Self::make_tree(atoms);
@@ -356,7 +361,7 @@ impl Interpreter {
         }
 
         if do_execute {
-            let mut shuttle = Shuttle::new(writer);
+            let mut shuttle = Shuttle::new(writer, reader);
             tree.operate(&mut shuttle);
         }
 
@@ -626,7 +631,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^ia%$v:?WF;mM()=<>!&|xZoOw".contains(op)
+        "~+-*/^ia%$v:?WF;mM()=<>!&|xZoOwr".contains(op)
     }
 }
 
@@ -645,7 +650,54 @@ fn are_very_near(num1: f64, num2: f64) -> bool {
     are_near(num1, num2, 0.00000001f64)
 }
 
+pub mod input {
+    use std::io::stdin;
+
+    pub trait StdinOrMock {
+        fn read_line(&mut self) -> Option<String>;
+    }
+
+    pub struct StdinReader {
+    }
+
+    impl StdinReader {
+        pub fn new() -> Self {
+            StdinReader{}
+        }
+    }
+
+    impl StdinOrMock for StdinReader {
+        fn read_line(&mut self) -> Option<String> {
+            let mut buffer = String::new();
+
+            match stdin().read_line(&mut buffer) {
+                Ok(s) => Some(buffer),
+                Err(_) => None,
+            }
+        }
+    }
+
+    pub struct MockByString {
+        fake_input: Vec<String>,
+    }
+
+    impl MockByString {
+        pub fn new(fake_input: Vec<String>) -> Self {
+            MockByString {
+                fake_input,
+            }
+        }
+    }
+
+    impl StdinOrMock for MockByString {
+        fn read_line(&mut self) -> Option<String> {
+            self.fake_input.pop()
+        }
+    }
+}
+
 pub(crate) mod opr_funcs {
+    use std::str::FromStr;
     use super::{Expression, Shuttle, ValueType, are_near};
 
     fn has_any_string_operands(operands: &[Expression]) -> bool {
@@ -1111,7 +1163,20 @@ pub(crate) mod opr_funcs {
 
         let _ = shuttle.writer.flush();
         
+        // TODO: provide sensible value in result_value.
         *result_value = ValueType::Text(String::new());
+    }
+
+    pub fn read(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        let input_string = match shuttle.reader.read_line() {
+            Some(s) => s.replace("\n", "").replace("\r", ""),
+            None => String::new(),
+        };
+        
+        *result_value = match f64::from_str(input_string.as_str()) {
+            Ok(num) => ValueType::Number(num),
+            Err(_) => ValueType::Text(input_string),
+        }
     }
 
     pub fn exec_while(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
@@ -1412,6 +1477,7 @@ mod tests {
 
     mod expr {
         use crate::*;
+        use crate::input::MockByString;
 
         #[test]
         fn expr_new_number_get_value() {
@@ -1429,7 +1495,8 @@ mod tests {
             exp.push_operand(Expression::new_number( 500.1f64));
 
             let mut writer = Vec::<u8>::new();
-            let mut shuttle = Shuttle::new(&mut writer);
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
             exp.operate(&mut shuttle);
 
             // Fails due to precision error: right value is 4500.400000000001.
@@ -1454,7 +1521,8 @@ mod tests {
             exp.push_operand(op2);
 
             let mut writer = Vec::<u8>::new();
-            let mut shuttle = Shuttle::new(&mut writer);
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
             exp.operate(&mut shuttle);
 
             assert_eq!(574.03f64, exp.get_num_value(0f64));
@@ -1467,7 +1535,8 @@ mod tests {
             exp.push_operand(Expression::new_number( 500.1f64));
 
             let mut writer = Vec::<u8>::new();
-            let mut shuttle = Shuttle::new(&mut writer);
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
             exp.operate(&mut shuttle);
 
             match shuttle.nums.get(&4000i64) {
@@ -1488,7 +1557,8 @@ mod tests {
             exp.push_operand(Expression::new_number( 500.1f64));
 
             let mut writer = Vec::<u8>::new();
-            let mut shuttle = Shuttle::new(&mut writer);
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
             exp.operate(&mut shuttle);
 
             match shuttle.nums.get(&4000i64) {
@@ -1509,7 +1579,8 @@ mod tests {
             exp.push_operand(Expression::new_number(500.1f64));
 
             let mut writer = Vec::<u8>::new();
-            let mut shuttle = Shuttle::new(&mut writer);
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
             exp.operate(&mut shuttle);
 
             match shuttle.nums.get(&-4000i64) {
@@ -1530,7 +1601,8 @@ mod tests {
             exp.push_operand(Expression::new_number( 500.1f64));
 
             let mut writer = Vec::<u8>::new();
-            let mut shuttle = Shuttle::new(&mut writer);
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
             exp.operate(&mut shuttle);
 
             match shuttle.nums.get(&-4000i64) {
@@ -1551,7 +1623,8 @@ mod tests {
             exp.push_operand(Expression::new_number(0.001f64));
 
             let mut writer = Vec::<u8>::new();
-            let mut shuttle = Shuttle::new(&mut writer);
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
 
             exp.operate(&mut shuttle);
 
@@ -1565,7 +1638,8 @@ mod tests {
             exp.push_operand(Expression::new_number(500f64));
 
             let mut writer = Vec::<u8>::new();
-            let mut shuttle = Shuttle::new(&mut writer);
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
 
             exp.operate(&mut shuttle);
 
@@ -1576,6 +1650,7 @@ mod tests {
     mod ops {
         use crate::{Expression, Shuttle, ValueType};
         use crate::opr_funcs::*;
+        use crate::input::MockByString;
 
         #[test]
         fn nop_doesnt_change_value() {
@@ -1583,7 +1658,8 @@ mod tests {
             let mut ops = Vec::<Expression>::new();
 
             let mut writer = Vec::<u8>::new();
-            let mut shuttle = Shuttle::new(&mut writer);
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
 
             nop(&mut the_value, &mut ops, &mut shuttle);
 
@@ -1601,7 +1677,8 @@ mod tests {
             let mut ops = vec![Expression::new_number(12f64), Expression::new_number(68f64)];
 
             let mut writer = Vec::<u8>::new();
-            let mut shuttle = Shuttle::new(&mut writer);
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
 
             add(&mut the_value, &mut ops, &mut shuttle);
 
@@ -1623,6 +1700,7 @@ mod tests {
 
     mod exec {
         use crate::{Interpreter, are_very_near};
+        use crate::input::{MockByString, StdinReader};
 
         #[test]
         fn x_remaining_stack_items_while_making_tree() {
@@ -2312,7 +2390,8 @@ mod tests {
         #[test]
         fn x_write() {
             let mut writer = Vec::<u8>::new();
-            Interpreter::execute_opts("w[sHello!]".to_string(), true, false, false, &mut writer).unwrap();
+            let mut reader = MockByString::new(Vec::<String>::new());
+            Interpreter::execute_opts("w[sHello!]".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
 
             assert_eq!(b'H', writer[0]);
         }
@@ -2320,7 +2399,8 @@ mod tests {
         #[test]
         fn x_write_more() {
             let mut writer = Vec::<u8>::new();
-            Interpreter::execute_opts("w([sA] [sB] [sC])".to_string(), true, false, false, &mut writer).unwrap();
+            let mut reader = MockByString::new(Vec::<String>::new());
+            Interpreter::execute_opts("w([sA] [sB] [sC])".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
 
             assert_eq!(6, writer.len());
         }
@@ -2328,7 +2408,8 @@ mod tests {
         #[test]
         fn x_write_number() {
             let mut writer = Vec::<u8>::new();
-            Interpreter::execute_opts("w+100 300".to_string(), true, false, false, &mut writer).unwrap();
+            let mut reader = MockByString::new(Vec::<String>::new());
+            Interpreter::execute_opts("w+100 300".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
 
             assert_eq!(4, writer.len());
             assert_eq!(vec![b'4', b'0', b'0', b'\n'], writer);
@@ -2337,7 +2418,8 @@ mod tests {
         #[test]
         fn x_write_nothing() {
             let mut writer = Vec::<u8>::new();
-            Interpreter::execute_opts("w".to_string(), true, false, false, &mut writer).unwrap();
+            let mut reader = MockByString::new(Vec::<String>::new());
+            Interpreter::execute_opts("w".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
 
             assert_eq!(15, writer.len());
             assert_eq!("(empty output)\n".to_string(), String::from_utf8(writer).unwrap());
@@ -2347,13 +2429,45 @@ mod tests {
         fn x_write_to_stdout() {
             // To be tested using the -- --nocapture argument.
             let mut writer = std::io::stdout();
-            Interpreter::execute_opts("w[s\n========== Hello from x_write_to_stdout() ! ==========\n]".to_string(), true, false, false, &mut writer).unwrap();
+            let mut reader = MockByString::new(Vec::<String>::new());
+            Interpreter::execute_opts("w[s\n========== Hello from x_write_to_stdout() ! ==========\n]".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
         }
 
         #[test]
         fn x_write_to_sink() {
             let mut writer = std::io::sink();
-            Interpreter::execute_opts("w[sGarbage]".to_string(), true, false, false, &mut writer).unwrap();
+            let mut reader = MockByString::new(Vec::<String>::new());
+            Interpreter::execute_opts("w[sGarbage]".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+        }
+
+        #[test]
+        fn x_read_number() {
+            let mut writer = std::io::sink();
+            let mut reader = MockByString::new(vec!["16.2".to_string()]);
+            assert_eq!(17f64, Interpreter::execute_opts("w[sEnter a number:]+r0.8".to_string(), true, false, false, &mut writer, &mut reader).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_read_string() {
+            let mut writer = std::io::sink();
+            let mut reader = MockByString::new(vec!["1a1".to_string()]);
+            assert_eq!("1a1200".to_string(), Interpreter::execute_opts("w[sEnter something:]+r200".to_string(), true, false, false, &mut writer, &mut reader).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_read_number_and_string() {
+            let mut writer = std::io::sink();
+            let mut reader = MockByString::new(vec!["200".to_string(), "1a1".to_string()]);
+            assert_eq!("1a1200".to_string(), Interpreter::execute_opts("+rr".to_string(), true, false, false, &mut writer, &mut reader).unwrap().string_representation);
+        }
+
+        #[test]
+        #[ignore]
+        fn x_read_from_stdin() {
+            // To be tested using the -- --ignored --nocapture arguments.
+            let mut writer = std::io::stdout();
+            let mut reader = StdinReader::new();
+            Interpreter::execute_opts("w[sEnter a number:] $0r w+[sYou entered: ]v0 w+[sDouble is:]*v0 2".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
         }
     }
 

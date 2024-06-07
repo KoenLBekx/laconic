@@ -33,8 +33,16 @@ fn main() {
 
     if !script.is_empty() {
         let mut writer = stdout();
+        let mut reader = laconic::input::StdinReader::new();
 
-        match Interpreter::execute_opts(script, do_execute, show_before, show_after, &mut writer) {
+        match Interpreter::execute_opts(
+            script,
+            do_execute,
+            show_before,
+            show_after,
+            &mut writer,
+            &mut reader
+        ) {
             Ok(outcome) => println!("{}", outcome.string_representation),
             Err(err) => println!("{:?}", err),
         }
