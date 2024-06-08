@@ -4,15 +4,27 @@ LACONIC
 		// TODO: indicate the standard number of operands for every operator.
 
 		* Characters assigned to operators:
-			~+-*/%^$():;=<>!&|?aBbCceFilMmOoprSTvUuWwxZ
+			~+-*/%^$():`;=<>!&|?°abCceFilMmOopRrSsTUuvWwxZ
 
 		*	Implemented operators:
-			~+-*/%^$():;=<>!&|?a     Fi MmOo r  v  WwxZ
+			~+-*/%^$(): ;=<>!&|?°a   eFi MmOo pRr    vWwxZ
 
 		* Characters not to be used as operator:
 			' "     interfere with command line syntax
 			. [ ]   have other meanings in Laconic.
 			whitespace
+
+		* Common characters not used yet:
+			´@#\{},§£ABDdEfGgHhIJjKkLNnPQqtVXz
+
+			Note the Unicode point of some characters not on all keyboards:
+				^ 005E Circumflex accent
+				` 0060 Grave accent or Backtick
+				~	007E Tilde
+				£ 00A3 Pound
+				§ 00A7 Section (paragraph) sign
+				° 00B0 Degrees sign
+				´ 00B4 Acute accent
 
 	General syntax
 
@@ -107,7 +119,7 @@ LACONIC
 
 			1.2
 
-			Using the Z 4 n command one can use other bases than 10 for the script's numbers.
+			Using the b n command one can use other bases than 10 for the script's numbers.
 
 			However, as non-decimal-digit characters are interpreted as commands,
 			numbers using a base larger than 10 and having digits above 9
@@ -123,7 +135,7 @@ LACONIC
 
 			The default number base is 10.
 
-			However, using the b and B operators, one can switch to other bases for input and output.
+			However, using the b and b` operators, one can switch to other bases for input and output.
 
 			Digits for bases greater than 10 consist of 0 to 9 and the appropriate number of upper case letters needed:
 
@@ -153,11 +165,11 @@ LACONIC
 
 			This reduces calculating with hours, minutes and seconds to calculating seconds in base 60:
 
-			B60 b60 /[n5 20 8] 4 yields 80(base10) : a fourth of 5 hours, 20 minutes and 8 seconds is 4802 seconds or 1 hour, 20 minutes and 2 seconds.
+			b`60 b60 /[n5 20 8] 4 yields 80(base10) : a fourth of 5 hours, 20 minutes and 8 seconds is 4802 seconds or 1 hour, 20 minutes and 2 seconds.
 			
-			Combinations of Bn and bn commands allow conversion of numbers between bases.
+			Combinations of b`n and bn commands allow conversion of numbers between bases.
 			In order to avoid mistakes in the specification of the output base,
-			it's best to issue the Bn expression before the bn expression.
+			it's best to issue the b`n expression before the bn expression.
 
 			It's even possible to process numbers of different bases together:
 
@@ -174,6 +186,11 @@ LACONIC
 	String brackets content
 
 		Strings are enclosed between [s and ]
+
+			Note : an alternative form, that cannot contain whitespace, is the s operator :
+			       whatever characters follow constitute a string,
+			       until the first whitespace character found.
+				 (To be implemented.)
 
 		Eg.:
 
@@ -309,26 +326,35 @@ Operators
 
 	Trigonometric operators
 
-		S sine
+		S sine of n radians
 			(to be implemented)
 
-		C	cosine
+		C	cosine of n radians
 			(to be implemented)
 
-		T	tangens
+		T	tangens of n radians
 			(to be implemented)
+
+		° degrees from radians
+
+			Dp yields 180
+
+		R radians from degrees
+
+			R180 yields 3.14159...
 
 	Constants (zero-operand operators)
 
 		e Euler's number
-			(to be implemented)
 
 		p Pi
-			(to be implemented)
 
 		c	num
 			(to be implemented)
-			enumerated constants (none defined yet)
+			enumerated constants
+
+			c0 Golden Cut (sectio aurea)
+				(to be implemented)
 
 	Variables
 
@@ -588,7 +614,7 @@ Operators
 			The F operator
 			1. starts by initializing its loop counter with its 1st argument,
 			2. executes its 5th and subsequent arguments
-			3. increases its loop counter with its 3rd argument and stores it in the variable indicated in the 4th argument
+			3. increases or decreases its loop counter with its 3rd argument and stores it in the variable indicated in the 4th argument
 			4. checks if the loop counter is still in the range between its 1st and 2nd argument, inclusive,
 			5. if so, repeats from step 2.
 
@@ -614,6 +640,23 @@ Operators
 
 			(The same can be calculated using the 'W' loop operator :)
 			$0 3 $1 1 W!>v0 11 ;*:1 v0 +:0 2 v1
+
+			If the start value > end value, the increment number is subtracted from the counter
+			- there's no need to give a negative increment number.
+
+			E.g.: the calculation of a factorial:
+
+				w[sEnter a number to get the factorial of:]
+				$0r
+				$1 1
+				F
+					v0    [c start value]
+					1     [c end value]
+					1     [c Positive increment; will be subtracted if variable 0 > 1]
+					2	    [c counter variable]
+					*:1v2 [c loop execution body]
+				v1
+
 
 	Input & Output
 
@@ -656,7 +699,20 @@ Operators
 
 		) End of operand number override - see '('. 
 
-		b n : Base of input number (numbers in the script).
+		` (Backtick) : modifies operation of previous operator:
+
+					S 1 yields sine of 1 radian
+					S`1 yields arcsine of 1 in radians
+
+					The same goes for the C(osine) and T(angent) operators.
+
+					i 1.5 yields 1 (truncate to same or smalller integer, towards zero)
+					i`1.5 yields 2 (fill to same or greater integer, away from zero)
+
+					b 2 sets base of subsequent input numbers
+					b`2 sets base of subsequent output numbers
+
+		b n : Base of subsequent input numbers (numbers in the script).
 					(to be implemented)
 
 					Bases from 2 up to any large number are supported.
@@ -679,10 +735,10 @@ Operators
 
 					The b operator returns the value of its base.
 
-		B n : Base of output number (displayed as output).
+		b`n : Base of subsequent output numbers (displayed as final output and by the w(rite) operator).
 					(to be implemented)
 
-					The B operator returns the value of its base.
+					The b` operator returns the value of its base.
 
 		o Operator designated by number, 2 operands
 
@@ -718,18 +774,6 @@ Operators
 									O(0 300) yields 1.
 									O0 ~3 5 yields 0.
 
-			o  1  opd
-							Ceiling
-								(to be implemented)
-
-								For positive numbers : if a > int(a) then int(a)+1 else a.
-								For negative numbers : if a < int(a) then int(a)-1 else a.
-
-								e.g.
-									o1 5.2	yields 6
-									o1 5		yields 5
-									o1 ~5.3	yields -6
-
 			o(2 dividend divisor remainder_var)
 
 							Integer division and remainder
@@ -750,6 +794,13 @@ Operators
 							e.g.
 								03 10	yields the newline character.
 								o(3 1057 1086 1102 1079) yields "Союз".
+
+			o 4 exp
+							Tests if exp is numeric
+								(to be implemented)
+
+								o4 39        yields 1
+								o4 [sWhat?]  yields 0
 
 			o  6  seq
 

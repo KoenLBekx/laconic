@@ -93,6 +93,10 @@ impl Expression {
             '^' => &opr_funcs::power,
             'i' => &opr_funcs::intgr,
             'a' => &opr_funcs::abs,
+            'R' => &opr_funcs::radians,
+            '°' => &opr_funcs::degrees,
+            'p' => &opr_funcs::pi,
+            'e' => &opr_funcs::euler_const,
             ';' => &opr_funcs::combine,
             'm' => &opr_funcs::min,
             'M' => &opr_funcs::max,
@@ -101,6 +105,7 @@ impl Expression {
             '$' => &opr_funcs::assign_number_register,
             'v' => &opr_funcs::get_number_register,
             ':' => &opr_funcs::assignment_maker,
+            '`' => &opr_funcs::alternative,
             '=' => &opr_funcs::equals,
             '<' => &opr_funcs::less,
             '>' => &opr_funcs::greater,
@@ -189,6 +194,10 @@ impl Expression {
         }
 
         (self.operator)(&mut self.value, &mut self.operands, shuttle);
+
+        if self.opr_mark != '`' {
+            shuttle.decrement_alternative_count();
+        }
 
         let assignment_indexes = shuttle.assignment_indexes_stack.pop()
             .expect("fn operate should always find elements in shuttle.assignment_indexes_stack after execution of the operator.");
@@ -306,6 +315,7 @@ struct Shuttle<'s> {
     nums: HashMap<i64, ValueType>,
     routines: HashMap<i64, Expression>,
     assignment_indexes_stack: Vec<Vec<i64>>,
+    alternative_count: u8,
     max_iterations: f64,
     orb: f64,
     writer: &'s mut dyn Write,
@@ -318,11 +328,28 @@ impl<'s> Shuttle<'s> {
             nums: HashMap::<i64, ValueType>::new(),
             routines: HashMap::<i64, Expression>::new(),
             assignment_indexes_stack: Vec::<Vec<i64>>::new(),
+            alternative_count: 0,
             max_iterations: 10_000f64,
             orb: 0.00000001f64,
             writer,
             reader,
         }
+    }
+
+    fn increment_alternative_count(&mut self) -> u8 {
+        if self.alternative_count < u8::MAX {
+            self.alternative_count += 1;
+        }
+
+        self.alternative_count
+    }
+
+    fn decrement_alternative_count(&mut self) -> u8 {
+        if self.alternative_count > 0 {
+            self.alternative_count -= 1;
+        }
+
+        self.alternative_count
     }
 }
 
@@ -552,7 +579,7 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:!w"            .contains(chr) => 1,
+                        chr if "~iav:`!wR°"         .contains(chr) => 1,
                         chr if "+-*/^%&|x$W;mM=<>Zo".contains(chr) => 2,
                         chr if "?O"                 .contains(chr) => 3,
                         chr if "F"                  .contains(chr) => 5,
@@ -631,7 +658,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^ia%$v:?WF;mM()=<>!&|xZoOwr".contains(op)
+        "~+-*/^ia%R°pe$v:`?WF;mM()=<>!&|xZoOwr".contains(op)
     }
 }
 
@@ -671,7 +698,7 @@ pub mod input {
             let mut buffer = String::new();
 
             match stdin().read_line(&mut buffer) {
-                Ok(s) => Some(buffer),
+                Ok(_) => Some(buffer),
                 Err(_) => None,
             }
         }
@@ -864,11 +891,20 @@ pub(crate) mod opr_funcs {
         };
     }
 
-    pub fn intgr(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
-        *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
-            Some(e) => ValueType::Number(e.get_num_value(0f64).trunc()),
-        };
+    pub fn intgr(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        *result_value = ValueType::Number(
+            match operands.first() {
+                None => 0f64,
+                Some(e) => {
+                    let num = e.get_num_value(0f64);
+
+                    match shuttle.alternative_count {
+                        1 => if num.is_sign_positive() { num.ceil() } else { num.floor() },
+                        _ => num.trunc(),
+                    }
+                },
+            }
+        );
     }
 
     pub fn abs(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
@@ -876,6 +912,28 @@ pub(crate) mod opr_funcs {
             None => ValueType::Number(0f64),
             Some(e) => ValueType::Number(e.get_num_value(0f64).abs()),
         };
+    }
+
+    pub fn radians(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        *result_value = match operands.first() {
+            None => ValueType::Number(0f64),
+            Some(e) => ValueType::Number(e.get_num_value(0f64).to_radians()),
+        };
+    }
+
+    pub fn degrees(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        *result_value = match operands.first() {
+            None => ValueType::Number(0f64),
+            Some(e) => ValueType::Number(e.get_num_value(0f64).to_degrees()),
+        };
+    }
+
+    pub fn pi(result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        *result_value = ValueType::Number(std::f64::consts::PI);
+    }
+
+    pub fn euler_const(result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        *result_value = ValueType::Number(std::f64::consts::E);
     }
 
     pub fn assign_number_register(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
@@ -935,6 +993,17 @@ pub(crate) mod opr_funcs {
         };
 
         *result_value = found;
+    }
+
+    pub fn alternative(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        let outcome = if !operands.is_empty() {
+            operands[0].get_value()
+        } else {
+            ValueType::Number(0f64)
+        };
+
+        *result_value = outcome;
+        shuttle.increment_alternative_count();
     }
     
     pub fn equals(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
@@ -1167,7 +1236,7 @@ pub(crate) mod opr_funcs {
         *result_value = ValueType::Text(String::new());
     }
 
-    pub fn read(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn read(result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) {
         let input_string = match shuttle.reader.read_line() {
             Some(s) => s.replace("\n", "").replace("\r", ""),
             None => String::new(),
@@ -1284,7 +1353,11 @@ pub(crate) mod opr_funcs {
                 op_count += 1;
             }
 
-            counter_val += increment;
+            if ascending {
+                counter_val += increment;
+            } else {
+                counter_val -= increment;
+            }
         }
 
         *result_value = ValueType::Number(outcome);
@@ -1958,6 +2031,36 @@ mod tests {
         }
 
         #[test]
+        fn x_int_alt_int() {
+            assert_eq!(5f64, Interpreter::execute("i`5".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_int_alt_fract() {
+            assert_eq!(6f64, Interpreter::execute("i`5.7".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_int_alt_neg_int() {
+            assert_eq!(-5f64, Interpreter::execute("i`~5".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_int_alt_neg_fract() {
+            assert_eq!(-6f64, Interpreter::execute("i`~5.3".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_int_alt_alt_fract() {
+            assert_eq!(5f64, Interpreter::execute("i``5.7".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_int_alt_main() {
+            assert_eq!(11f64, Interpreter::execute("+i`5.7 i5.7".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_abs_pos() {
             assert_eq!(5f64, Interpreter::execute("a5".to_string()).unwrap().numeric_value);
         }
@@ -2299,17 +2402,22 @@ mod tests {
 
         #[test]
         fn x_for_5_op_desc() {
-            assert_eq!(10395f64, Interpreter::execute("$0 1 F11 3 ~2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
+            assert_eq!(10395f64, Interpreter::execute("$0 1 F11 3 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_6_op() {
-            assert_eq!(10395f64, Interpreter::execute("$0 1 F(11 3 ~2 1 *:0 v1 $5 v1) v0".to_string()).unwrap().numeric_value);
+            assert_eq!(10395f64, Interpreter::execute("$0 1 F(11 3 2 1 *:0 v1 $5 v1) v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_5_op_exceeds_limit() {
             assert_eq!(15f64, Interpreter::execute("Z1 2 $0 1 F3 11 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_for_descending() {
+            assert_eq!(24f64, Interpreter::execute("$0 1 F4 1 1 1 *:0v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -2468,6 +2576,26 @@ mod tests {
             let mut writer = std::io::stdout();
             let mut reader = StdinReader::new();
             Interpreter::execute_opts("w[sEnter a number:] $0r w+[sYou entered: ]v0 w+[sDouble is:]*v0 2".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+        }
+
+        #[test]
+        fn x_radians() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .000005 = R180 p".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_degrees() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .000005 = 180 °p".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_pi() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .000005 =p 3.14159".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_euler_const() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .000005 =e 2.71828".to_string()).unwrap().numeric_value);
         }
     }
 
