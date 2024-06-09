@@ -7,7 +7,7 @@ LACONIC
 			~+-*/%^$():`;=<>!&|?°AabCceFilMmOoprSsTUuvWwxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?° a C eFi MmOoprS T  vWwxZ
+			~+-*/%^$():`;=<>!&|?° a C eFilMmOoprS T  vWwxZ
 
 		* Characters not to be used as operator:
 			' "     interfere with command line syntax
@@ -293,11 +293,10 @@ Operators
 			^ 2 .5 yields 1.4142...
 
 		l logarithm
-			(to be implemented)
 
 				l base num
 
-					l10 1000 yields 3
+					l10 1000 yields 3 (actually, it yields 2.999....)
 					le  num	 yields the natural logarithm of numbers.
 
 		i Integer
@@ -381,11 +380,11 @@ Operators
 		p Pi
 
 		c	num
-			(to be implemented)
 			enumerated constants
 
-			c0 Golden Cut (sectio aurea)
-				(to be implemented)
+			c0 Golden Ratio (sectio aurea)
+
+				Calculated as (1 + sqrt(5))/2
 
 	Variables
 

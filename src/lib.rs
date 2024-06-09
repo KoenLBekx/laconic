@@ -91,6 +91,7 @@ impl Expression {
             '/' => &opr_funcs::divide,
             '%' => &opr_funcs::modulo,
             '^' => &opr_funcs::power,
+            'l' => &opr_funcs::log,
             'i' => &opr_funcs::intgr,
             'a' => &opr_funcs::abs,
             '°' => &opr_funcs::degrees,
@@ -99,6 +100,7 @@ impl Expression {
             'T' => &opr_funcs::tangent,
             'p' => &opr_funcs::pi,
             'e' => &opr_funcs::euler_const,
+            'c' => &opr_funcs::constants,
             ';' => &opr_funcs::combine,
             'm' => &opr_funcs::min,
             'M' => &opr_funcs::max,
@@ -320,8 +322,11 @@ struct Shuttle<'s> {
     alternative_count: u8,
     max_iterations: f64,
     orb: f64,
+    golden_ratio: Option<f64>,
     writer: &'s mut dyn Write,
     reader: &'s mut dyn input::StdinOrMock,
+    #[cfg(test)]
+    golden_ratio_calculations: u8,
 }
 
 impl<'s> Shuttle<'s> {
@@ -333,8 +338,11 @@ impl<'s> Shuttle<'s> {
             alternative_count: 0,
             max_iterations: 10_000f64,
             orb: 0.00000001f64,
+            golden_ratio: None,
             writer,
             reader,
+            #[cfg(test)]
+            golden_ratio_calculations: 0u8,
         }
     }
 
@@ -581,11 +589,11 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:`!w°SCT"       .contains(chr) => 1,
-                        chr if "+-*/^%&|x$W;mM=<>Zo".contains(chr) => 2,
-                        chr if "?O"                 .contains(chr) => 3,
-                        chr if "F"                  .contains(chr) => 5,
-                        _                                          => 0,
+                        chr if "~iav:`!w°SCTc"       .contains(chr) => 1,
+                        chr if "+-*/^l%&|x$W;mM=<>Zo".contains(chr) => 2,
+                        chr if "?O"                  .contains(chr) => 3,
+                        chr if "F"                   .contains(chr) => 5,
+                        _                                           => 0,
                     };
 
                     match *c {
@@ -660,7 +668,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^ia%°SCTpe$v:`?WF;mM()=<>!&|xZoOwr".contains(op)
+        "~+-*/^lia%°SCTpec$v:`?WF;mM()=<>!&|xZoOwr".contains(op)
     }
 }
 
@@ -979,12 +987,54 @@ pub(crate) mod opr_funcs {
         };
     }
 
+    pub fn log(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        if operands.len() < 2 {
+            *result_value = ValueType::Number(0f64);
+
+            return;
+        }
+
+        let base = operands[0].get_num_value(0f64);
+        let product = operands[1].get_num_value(0f64);
+        *result_value = ValueType::Number(product.log(base));
+    }
+
     pub fn pi(result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
         *result_value = ValueType::Number(std::f64::consts::PI);
     }
 
     pub fn euler_const(result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
         *result_value = ValueType::Number(std::f64::consts::E);
+    }
+
+    pub fn constants(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        if operands.is_empty() {
+            *result_value = ValueType::Number(0f64);
+
+            return;
+        }
+
+        let const_index = operands[0].get_num_value(-1f64);
+
+        *result_value = ValueType::Number(match const_index {
+            0f64 =>  {
+                match shuttle.golden_ratio {
+                    Some(gr) => gr,
+                    None => {
+                        let golden_ratio = (1f64 + 5f64.sqrt()) / 2f64;
+                        shuttle.golden_ratio = Some(golden_ratio);
+
+                        #[cfg(test)]
+                        {
+                            shuttle.golden_ratio_calculations += 1u8;
+                        }
+
+                        golden_ratio
+                    },
+                }
+            },
+            _ => 0f64,
+        });
     }
 
     pub fn assign_number_register(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
@@ -1818,7 +1868,20 @@ mod tests {
         }
 
         #[test]
-        fn op_assign_string() {
+        fn op_const_golden_ratio() {
+            let mut the_value = ValueType::Empty;
+            let mut ops = vec![Expression::new_number(0f64)];
+
+            let mut writer = Vec::<u8>::new();
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
+
+            // Have the golden ratio retrieved twice from the shuttle.
+            constants(&mut the_value, &mut ops, &mut shuttle);
+            constants(&mut the_value, &mut ops, &mut shuttle);
+
+            // Verify that the calculation only happened once.
+            assert_eq!(1u8, shuttle.golden_ratio_calculations);
         }
     }
 
@@ -2687,6 +2750,36 @@ mod tests {
         #[test]
         fn x_euler_const() {
             assert_eq!(1f64, Interpreter::execute("Z0 .000005 =e 2.71828".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_log_no_2_args() {
+            assert_eq!(0f64, Interpreter::execute("l10".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_log_more_args() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .000001 =2 l(10 100 3046)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_log10() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .000001 =3 l10 1000".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_log_ln() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .000001 =1 le e".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_consts_unknown() {
+            assert_eq!(0f64, Interpreter::execute("c~2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_consts_golden_ratio() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .000001   $0 10   $1 *v0c0   =/+v0v1 v1 /v1 v0".to_string()).unwrap().numeric_value);
         }
     }
 
