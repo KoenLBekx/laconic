@@ -7,7 +7,7 @@ LACONIC
 			~+-*/%^$():`;=<>!&|?°AabCceFilMmOoprSsTUuvWwxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?° a C eFilMmOoprS T  vWwxZ
+			~+-*/%^$():`;=<>!&|?° a CceFilMmOoprS T  vWwxZ
 
 		* Characters not to be used as operator:
 			' "     interfere with command line syntax
