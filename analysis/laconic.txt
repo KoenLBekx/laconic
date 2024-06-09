@@ -4,10 +4,10 @@ LACONIC
 		// TODO: indicate the standard number of operands for every operator.
 
 		* Characters assigned to operators:
-			~+-*/%^$():`;=<>!&|?°abCceFilMmOopRrSsTUuvWwxZ
+			~+-*/%^$():`;=<>!&|?°AabCceFilMmOoprSsTUuvWwxZ
 
 		*	Implemented operators:
-			~+-*/%^$(): ;=<>!&|?°a   eFi MmOo pRr    vWwxZ
+			~+-*/%^$():`;=<>!&|?° a C eFi MmOoprS T  vWwxZ
 
 		* Characters not to be used as operator:
 			' "     interfere with command line syntax
@@ -15,7 +15,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			´@#\{},§£ABDdEfGgHhIJjKkLNnPQqtVXz
+			´@#\{},§£€¶BDdEfGgHhIJjKkLNnPQRqtVXz
 
 			Note the Unicode point of some characters not on all keyboards:
 				^ 005E Circumflex accent
@@ -25,6 +25,8 @@ LACONIC
 				§ 00A7 Section (paragraph) sign
 				° 00B0 Degrees sign
 				´ 00B4 Acute accent
+				¶ 00B6 Pilcrow
+				€ 20AC Euro
 
 	General syntax
 
@@ -327,21 +329,50 @@ Operators
 	Trigonometric operators
 
 		S sine of n radians
-			(to be implemented)
+			
+			S°`45 yields 0.7071...
+
+		S` arcsine in radians
+
+			°S`0.7071 yields 44.999 etc.
 
 		C	cosine of n radians
-			(to be implemented)
 
-		T	tangens of n radians
-			(to be implemented)
+			C°`45 yields 0.7071...
+
+		C` arccosine in radians
+
+			°C`0.7071 yields 44.999 etc.
+
+		T	tangent of n radians
+
+			T°`45 yields 1
+
+		T` arctangent in radians
+
+			°T`1 yields 44.999 etc.
 
 		° degrees from radians
 
-			Dp yields 180
+			°p yields 180
 
-		R radians from degrees
+		°` radians from degrees
 
-			R180 yields 3.14159...
+			°`180 yields 3.14159...
+
+		A num num
+			(to be implemented)
+
+			atan2()
+
+			(Also to be implemented :)
+
+		S`` hyperbolic sine (sinh)
+		S``` inverse hyperbolic sine (asinh)
+		C`` hyperbolic cosine (cosinh)
+		C``` inverse hyperbolic cosine (acosinh)
+		T`` hyperbolic tangent (tanh)
+		T``` inverse hyperbolic tangent (atanh)
 
 	Constants (zero-operand operators)
 
@@ -701,6 +732,9 @@ Operators
 
 		` (Backtick) : modifies operation of previous operator:
 
+					° 1 yields the value of 1 radian in degrees.
+					°`1 yields the value of 1 degree in radians.
+
 					S 1 yields sine of 1 radian
 					S`1 yields arcsine of 1 in radians
 
@@ -711,6 +745,17 @@ Operators
 
 					b 2 sets base of subsequent input numbers
 					b`2 sets base of subsequent output numbers
+
+					The ` operator only takes one operand, and this number can't be overridden.
+
+					However, if the number of operands of the modified operator is overridden,
+					one is free to put the ` operator inside or before the (operands) group :
+
+					°`1
+					°(`1)
+					°`(1)
+
+						all yield the same result.
 
 		b n : Base of subsequent input numbers (numbers in the script).
 					(to be implemented)

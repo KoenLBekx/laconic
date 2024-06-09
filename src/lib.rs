@@ -93,8 +93,10 @@ impl Expression {
             '^' => &opr_funcs::power,
             'i' => &opr_funcs::intgr,
             'a' => &opr_funcs::abs,
-            'R' => &opr_funcs::radians,
             '°' => &opr_funcs::degrees,
+            'S' => &opr_funcs::sine,
+            'C' => &opr_funcs::cosine,
+            'T' => &opr_funcs::tangent,
             'p' => &opr_funcs::pi,
             'e' => &opr_funcs::euler_const,
             ';' => &opr_funcs::combine,
@@ -579,7 +581,7 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:`!wR°"         .contains(chr) => 1,
+                        chr if "~iav:`!w°SCT"       .contains(chr) => 1,
                         chr if "+-*/^%&|x$W;mM=<>Zo".contains(chr) => 2,
                         chr if "?O"                 .contains(chr) => 3,
                         chr if "F"                  .contains(chr) => 5,
@@ -592,10 +594,10 @@ impl Interpreter {
                         op_for_stack => {
                             let mut new_exp = Expression::new(op_for_stack);
 
-                            // The number of arguments for the : operator can't be overridden.
+                            // The number of arguments for the : and ` operators can't be overridden.
                             // The override_start marker will be applied to the previous operator
                             // instead.
-                            if override_start_found && (op_for_stack != ':') {
+                            if override_start_found && (!":`".contains(op_for_stack)) {
                                 new_exp.has_overridden_nr_of_ops = true;
                                 override_start_found = false;
 
@@ -658,7 +660,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^ia%R°pe$v:`?WF;mM()=<>!&|xZoOwr".contains(op)
+        "~+-*/^ia%°SCTpe$v:`?WF;mM()=<>!&|xZoOwr".contains(op)
     }
 }
 
@@ -921,10 +923,59 @@ pub(crate) mod opr_funcs {
         };
     }
 
-    pub fn degrees(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn degrees(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         *result_value = match operands.first() {
             None => ValueType::Number(0f64),
-            Some(e) => ValueType::Number(e.get_num_value(0f64).to_degrees()),
+            Some(e) => {
+                let num_val = e.get_num_value(0f64);
+
+                match shuttle.alternative_count {
+                    1 => ValueType::Number(num_val.to_radians()),
+                    _ => ValueType::Number(num_val.to_degrees()),
+                }
+            },
+        };
+    }
+
+    pub fn sine(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        *result_value = match operands.first() {
+            None => ValueType::Number(0f64),
+            Some(e) => {
+                let num_val = e.get_num_value(0f64);
+
+                match shuttle.alternative_count {
+                    1 => ValueType::Number(num_val.asin()),
+                    _ => ValueType::Number(num_val.sin()),
+                }
+            },
+        };
+    }
+
+    pub fn cosine(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        *result_value = match operands.first() {
+            None => ValueType::Number(0f64),
+            Some(e) => {
+                let num_val = e.get_num_value(0f64);
+
+                match shuttle.alternative_count {
+                    1 => ValueType::Number(num_val.acos()),
+                    _ => ValueType::Number(num_val.cos()),
+                }
+            },
+        };
+    }
+
+    pub fn tangent(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        *result_value = match operands.first() {
+            None => ValueType::Number(0f64),
+            Some(e) => {
+                let num_val = e.get_num_value(0f64);
+
+                match shuttle.alternative_count {
+                    1 => ValueType::Number(num_val.atan()),
+                    _ => ValueType::Number(num_val.tan()),
+                }
+            },
         };
     }
 
@@ -2580,7 +2631,47 @@ mod tests {
 
         #[test]
         fn x_radians() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .000005 = R180 p".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z0 .000005 = °`180 p".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_alternative_inside_override() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .000005 = °(`180) p".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_alternative_before_override() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .000005 = °`(180) p".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_sin() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .00001 = S°`45 0.7071".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_arcsin() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .5= °S`0.7071 45".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_cos() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .00001 = C°`45 0.7071".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_arccos() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .5 = °C`0.7071 45".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_tan() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .00001 = T°`45 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_arctan() {
+            assert_eq!(1f64, Interpreter::execute("Z0 .00001 = °T`1 45".to_string()).unwrap().numeric_value);
         }
 
         #[test]
