@@ -840,11 +840,11 @@ Operators
 								o(3 1057 1086 1102 1079) yields "Союз".
 
 			o 4 exp
-							Tests if exp is numeric
-								(to be implemented)
+							Returns type of expression
 
-								o4 39        yields 1
-								o4 [sWhat?]  yields 0
+								o4 39        yields 1 : numeric
+								o4 [sWhat?]  yields 2 : string
+								An empty expression will yield 0.
 
 			o  6  seq
 

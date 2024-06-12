@@ -4,8 +4,6 @@
 //          During evaluation of its operands, Expression.operate() should stop if any of its
 //          operands has a ValueType::Error value, and break its evaluation loop.
 //          (Also to be implemented for the W, F and ? operators.)
-//          (The v operator should continue to return 0 for an unitialized variable, however,
-//          otherwise a new operator should be created that just tests if a variable is empty.)
 // TODO: implement all intended operators.
 // TODO: implement Debug for Expression, using get_representation.
 // TODO: if struct Interpreter ends up having no internal state (no properties), simply delete it
@@ -363,10 +361,22 @@ impl<'s> Shuttle<'s> {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct ExecutionOutcome {
     pub numeric_value: f64,
     pub string_representation: String,
 }
+
+impl ExecutionOutcome {
+    pub fn new(numeric_value: f64, string_representation: String) -> Self {
+        Self {
+            numeric_value,
+            string_representation,
+        }
+    }
+}
+
+const NO_VALUE: &str = "(no_value)";
 
 pub struct Interpreter {
 }
@@ -407,18 +417,9 @@ impl Interpreter {
         }
 
         Ok(match tree.get_value() {
-            ValueType::Number(ref n) => ExecutionOutcome {
-                numeric_value: *n,
-                string_representation: format!("{}", *n),
-            },
-            ValueType::Text(ref s) => ExecutionOutcome {
-                numeric_value: 0f64,
-                string_representation: s.clone(),
-            },
-            ValueType::Empty => ExecutionOutcome {
-                numeric_value: 0f64,
-                string_representation: "(no_value)".to_string(),
-            },
+            ValueType::Number(ref n) => ExecutionOutcome::new(*n, format!("{}", *n)),
+            ValueType::Text(ref s) => ExecutionOutcome::new(0f64, s.clone()),
+            ValueType::Empty => ExecutionOutcome::new(0f64, NO_VALUE.to_string()),
         })
     }
 
@@ -735,7 +736,7 @@ pub mod input {
 
 pub(crate) mod opr_funcs {
     use std::str::FromStr;
-    use super::{Expression, Shuttle, ValueType, are_near};
+    use super::{Expression, NO_VALUE, Shuttle, ValueType, are_near};
 
     fn has_any_string_operands(operands: &[Expression]) -> bool {
         let mut opd_count = 0usize;
@@ -1063,7 +1064,7 @@ pub(crate) mod opr_funcs {
         } as i64;
 
         let found = match shuttle.nums.get(&index) {
-            None => ValueType::Number(0f64),
+            None => ValueType::Empty,
             Some(v) => v.clone(),
         };
 
@@ -1262,6 +1263,7 @@ pub(crate) mod opr_funcs {
         let opr_func = match operands[0].get_num_value(-1f64) {
             0f64 => enum_opr_sign,
             3f64 => get_unicode_chars,
+            4f64 => get_type,
             _ =>  {
                 *result_value = default_outcome;
 
@@ -1315,6 +1317,20 @@ pub(crate) mod opr_funcs {
 
         *result_value = ValueType::Text(result_string);
     }
+
+    pub fn get_type(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        if operands.is_empty() {
+            *result_value = ValueType::Number(0f64);
+
+            return;
+        }
+
+        *result_value = ValueType::Number(match operands[0].get_value() {
+            ValueType::Empty => 0f64,
+            ValueType::Number(_) => 1f64,
+            ValueType::Text(_) => 2f64,
+        });
+    }
     
     pub fn write(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         if operands.is_empty() {
@@ -1327,7 +1343,7 @@ pub(crate) mod opr_funcs {
         }
 
         for op in operands {
-            let _ = shuttle.writer.write(op.get_string_value("(no_value)".to_string()).as_bytes());
+            let _ = shuttle.writer.write(op.get_string_value(NO_VALUE.to_string()).as_bytes());
             let _ = shuttle.writer.write(b"\n");
         }
 
@@ -1465,7 +1481,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn exec_if(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        let mut outcome = 0f64;
+        let mut outcome = ValueType::Empty;
         let mut use_second = true;
 
         for op_tuple in operands.iter_mut().enumerate() {
@@ -1476,18 +1492,18 @@ pub(crate) mod opr_funcs {
                 },
                 (1, op) if use_second => {
                     op.operate(shuttle);
-                    outcome = op.get_num_value(0f64);
+                    outcome = op.get_value();
                 },
                 (1, _) => (),
                 (_, op) if !use_second => {
                     op.operate(shuttle);
-                    outcome = op.get_num_value(0f64);
+                    outcome = op.get_value();
                 }
                 _ => (),
             }
         }
 
-        *result_value = ValueType::Number(outcome);
+        *result_value = outcome;
     }
 }
 
@@ -1886,7 +1902,7 @@ mod tests {
     }
 
     mod exec {
-        use crate::{Interpreter, are_very_near};
+        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, ValueType, are_very_near};
         use crate::input::{MockByString, StdinReader};
 
         #[test]
@@ -2245,6 +2261,11 @@ mod tests {
         }
 
         #[test]
+        fn x_get_num_reg_uninit() {
+            assert_eq!(NO_VALUE.to_string(), Interpreter::execute("v200".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
         fn x_add_assign() {
             assert_eq!(90f64, Interpreter::execute("$18 88 +:-21 3 2 v18".to_string()).unwrap().numeric_value);
         }
@@ -2565,6 +2586,16 @@ mod tests {
         }
 
         #[test]
+        fn x_if_strings() {
+            assert_eq!(ExecutionOutcome::new(0f64, "Smaller".to_string()), Interpreter::execute("?<4 5 [sSmaller] [sGreater]".to_string()).unwrap());
+        }
+
+        #[test]
+        fn x_if_mixed() {
+            assert_eq!(ExecutionOutcome::new(5f64, "5".to_string()), Interpreter::execute("?5 5 [sNot five]".to_string()).unwrap());
+        }
+
+        #[test]
         fn x_enum_opr_unknown() {
             assert_eq!(0f64, Interpreter::execute("o1.5 2".to_string()).unwrap().numeric_value);
         }
@@ -2780,6 +2811,21 @@ mod tests {
         #[test]
         fn x_consts_golden_ratio() {
             assert_eq!(1f64, Interpreter::execute("Z0 .000001   $0 10   $1 *v0c0   =/+v0v1 v1 /v1 v0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_get_type_empty() {
+            assert_eq!(0f64, Interpreter::execute("o4 v9494".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_get_type_number() {
+            assert_eq!(1f64, Interpreter::execute("o4 %38 5".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_get_type_string() {
+            assert_eq!(2f64, Interpreter::execute("o4 +[sTotal: ]38".to_string()).unwrap().numeric_value);
         }
     }
 
