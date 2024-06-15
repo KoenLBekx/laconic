@@ -11,11 +11,11 @@ LACONIC
 
 		* Characters not to be used as operator:
 			' "     interfere with command line syntax
-			. [ ]   have other meanings in Laconic.
+			. [ ] # have other meanings in Laconic.
 			whitespace
 
 		* Common characters not used yet:
-			´@#\{},§£€¶BDdEfGgHhIJjKkLNnPQRqtVXz
+			´@\{},§£€¶BDdEfGgHhIJjKkLNnPQRqtVXz
 
 			Note the Unicode point of some characters not on all keyboards:
 				^ 005E Circumflex accent
@@ -30,13 +30,13 @@ LACONIC
 
 	General syntax
 
-		The laconic language is a Polish expression interpreter :
+		The Laconic language is a Polish expression interpreter :
 
 			*+4 2 3
 
 		evaluates to 18.
 
-		A laconic expression consists of atoms that can either be
+		A Laconic expression consists of atoms that can either be
 		- operators
 		- numbers
 		- string bracket contents
@@ -97,6 +97,7 @@ LACONIC
 			. = 0
 
 		Note that a second period in a number is considered to be the start of the repeating part of a number:
+				 (To be implemented.)
 
 			12.3.8 is interpreted as 12.3888...
 
@@ -110,6 +111,7 @@ LACONIC
 			)
 
 		A third period in a number is interpreted as the start of a new number between 1 and ~1 exclusively:
+				 (To be implemented.)
 
 			+1.0.0.2
 
@@ -134,6 +136,7 @@ LACONIC
 			b 16 10 yields 16(base10)
 
 		Number bases
+				 (To be implemented.)
 
 			The default number base is 10.
 
@@ -191,8 +194,7 @@ LACONIC
 
 			Note : an alternative form, that cannot contain whitespace, is the s operator :
 			       whatever characters follow constitute a string,
-			       until the first whitespace character found.
-				 (To be implemented.)
+			       until the first whitespace character or square bracket [ found.
 
 		Eg.:
 

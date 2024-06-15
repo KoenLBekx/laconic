@@ -428,9 +428,11 @@ impl Interpreter {
     fn split_atoms(program: &str) -> Result<Vec<Atom>, ProgramError> {
         let mut result = Vec::<Atom>::new();
         let mut reading_number = false;
+        let mut reading_simple_string = false;
         let mut bracket_nesting = 0u8;
         let mut opening_bracket_pos = Vec::<usize>::new();
         let mut current_num = 0f64;
+        let mut current_string = String::new();
         let mut current_bracket_content = String::new();
         let mut periods_found = 0u8;
         let mut frac_pos = 0i32;
@@ -441,14 +443,19 @@ impl Interpreter {
             pos += 1;
 
             if bracket_nesting == 0 {
-                if c == '_' {
+                if c == '_'{
                     // Ignore
                 } else if c.is_whitespace() {
                     if reading_number {
                         result.push(Atom::Number(current_num));
+                    } else if reading_simple_string {
+                        result.push(Atom::String(current_string.clone()));
+                        reading_simple_string = false;
+                        current_string = String::new();
                     }
 
                     reading_number = false;
+                    reading_simple_string = false;
                     current_num = 0f64;
                     periods_found = 0;
                     frac_pos = 0;
@@ -484,12 +491,30 @@ impl Interpreter {
                         current_num = 0f64;
                         periods_found = 0;
                         frac_pos = 0;
+                    } else if reading_simple_string {
+                        result.push(Atom::String(current_string.clone()));
+                        reading_simple_string = false;
+                        current_string = String::new();
                     }
 
                     bracket_nesting += 1;
                     opening_bracket_pos.push(pos);
                 } else if c == ']' {
                     return Err(ProgramError::UnexpectedClosingBracket{position: pos});
+                } else if c == '#' {
+                    if reading_simple_string {
+                        current_string.push(c);
+                    } else {
+                        if reading_number {
+                            result.push(Atom::Number(current_num));
+                            reading_number = false;
+                            current_num = 0f64;
+                            periods_found = 0;
+                            frac_pos = 0;
+                        }
+
+                        reading_simple_string = true;
+                    }
                 } else {
                     if reading_number {
                         result.push(Atom::Number(current_num));
@@ -499,10 +524,14 @@ impl Interpreter {
                         frac_pos = 0;
                     }
 
-                    if Self::is_known_operator(c) {
-                        result.push(Atom::Operator(c));
+                    if reading_simple_string {
+                       current_string.push(c); 
                     } else {
-                        return Err(ProgramError::UnknownOperator{position: pos, operator: c});
+                        if Self::is_known_operator(c) {
+                            result.push(Atom::Operator(c));
+                        } else {
+                            return Err(ProgramError::UnknownOperator{position: pos, operator: c});
+                        }
                     }
                 }
             } else {
@@ -560,6 +589,8 @@ impl Interpreter {
 
         if reading_number {
             result.push(Atom::Number(current_num));
+        } else if reading_simple_string {
+            result.push(Atom::String(current_string));
         }
 
         Ok(result)
@@ -1598,7 +1629,7 @@ mod tests {
 
         #[test]
         fn split_mixed() {
-            let result = Interpreter::split_atoms(";.11:+_5.2[cAnd now the second operand]9119 ~ 45 + 3 2");
+            let result = Interpreter::split_atoms(";.11:+_5.2#Simple#?[cAnd now the second operand]9119 ~ 45 + 3 2[sAaand another string]");
 
             assert_eq!(Ok(vec![
                 Atom::Operator(';'),
@@ -1606,6 +1637,7 @@ mod tests {
                 Atom::Operator(':'),
                 Atom::Operator('+'),
                 Atom::Number(5.2f64),
+                Atom::String("Simple#?".to_string()),
                 Atom::Comment("And now the second operand".to_string()),
                 Atom::Number(9119f64),
                 Atom::Operator('~'),
@@ -1613,6 +1645,7 @@ mod tests {
                 Atom::Operator('+'),
                 Atom::Number(3f64),
                 Atom::Number(2f64),
+                Atom::String("Aaand another string".to_string()),
             ]), result);
         }
 
@@ -1662,6 +1695,18 @@ mod tests {
         fn split_unclosed_bracket_nested() {
             let result = Interpreter::split_atoms("[c [cLaconic] $2 174 v2");
             assert_eq!(Err(ProgramError::UnclosedBracketsAtEnd), result);
+        }
+
+        #[test]
+        fn split_simple_string() {
+            let result = Interpreter::split_atoms("#Chomsky!");
+            assert_eq!(Ok(vec![Atom::String("Chomsky!".to_string())]), result);
+        }
+
+        #[test]
+        fn split_simple_string_ends_with_whitespace() {
+            let result = Interpreter::split_atoms("#Chomsky! 45");
+            assert_eq!(Ok(vec![Atom::String("Chomsky!".to_string()), Atom::Number(45f64)]), result);
         }
     }
 
