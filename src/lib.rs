@@ -1,4 +1,5 @@
 // TODO: resolve TODO's in code.
+// TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: have the operator functions return more ProgramErrors for unexpected conditions
 //          This will require the ValueType to have a ValueType::Error(ProgramError) variant.
 //          During evaluation of its operands, Expression.operate() should stop if any of its
@@ -10,7 +11,7 @@
 // and make its associated methods crate-level functions.
 // TODO: implement different variable arrays - see the 'u' operator.
 //      Default array: 0.
-//      This means that the key for HashMap Shuttle.nums has to be a (i64, i64) tuple.
+//      This means that the key for HashMap Shuttle.nums has to be a (ValueType, ValueType) tuple.
 // TODO: have all operators have an acceptable behavior with less or more operands than standard.
 //      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
@@ -18,10 +19,11 @@
 //      but create uninitialized number expressions having only a number's string representation.
 //      Upon their first call of operate(), they should calculate their number based on the
 //      current number base.
-//      (split_atoms can't be asked to handle calculated base specifications like Z 4 *n n .)
+//      (split_atoms can't be asked to handle calculated base specifications like b*n n .)
 
 use std::collections::HashMap;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::str::FromStr;
 
@@ -60,11 +62,59 @@ pub enum ProgramError {
     UnknownBracketContentTypeMarker{position: usize, marker: char},
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialOrd)]
 enum ValueType {
     Empty,
     Number(f64),
     Text(String),
+}
+
+impl ValueType {
+    fn get_type_as_num(&self) -> f64 {
+        match self {
+            ValueType::Empty => 0f64,
+            ValueType::Number(_) => 1f64,
+            ValueType::Text(_) => 2f64,
+        }
+    }
+
+    pub fn get_num_value(&self, default: f64) -> f64 {
+        match self {
+            ValueType::Number(num) => *num,
+            _ => default,
+        }
+    }
+
+    pub fn get_string_value(&self, default: String) -> String {
+        match self {
+            ValueType::Text(ref txt) => txt.clone(),
+            ValueType::Number(ref num) => format!("{}", num),
+            _ => default,
+        }
+    }
+}
+
+impl PartialEq for ValueType {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ValueType::Empty, ValueType::Empty) => true,
+            (ValueType::Number(s), ValueType::Number(o)) => s == o,
+            (ValueType::Text(ref s), ValueType::Text(ref o)) => *s == *o,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for ValueType {}
+
+impl Hash for ValueType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            ValueType::Empty => 0u8.hash(state),
+            ValueType::Text(s) => s.hash(state),
+            ValueType::Number(f) => f.to_be_bytes().hash(state),
+        };
+    }
 }
 
 struct Expression
@@ -165,18 +215,26 @@ impl Expression {
     }
 
     pub fn get_num_value(&self, default: f64) -> f64 {
+        /*
         match self.value {
             ValueType::Number(num) => num,
             _ => default,
         }
+        */
+
+        self.value.get_num_value(default)
     }
 
     pub fn get_string_value(&self, default: String) -> String {
+        /*
         match self.value {
             ValueType::Text(ref txt) => txt.clone(),
             ValueType::Number(ref num) => format!("{}", num),
             _ => default,
         }
+        */
+
+        self.value.get_string_value(default)
     }
 
     pub fn operate(&mut self, shuttle: &mut Shuttle) {
@@ -185,7 +243,7 @@ impl Expression {
         println!("operate {}", self.opr_mark);
         */
 
-        shuttle.assignment_indexes_stack.push(Vec::<i64>::new());
+        shuttle.assignment_indexes_stack.push(Vec::<ValueType>::new());
 
         let defer_opd_evaluation = "WF?".contains(self.opr_mark);
 
@@ -314,15 +372,16 @@ impl fmt::Debug for Expression {
 // Shuttle objects are used to be passed to every operator function
 // to provide state other than the operands.
 struct Shuttle<'s> {
-    nums: HashMap<i64, ValueType>,
+    nums: HashMap<ValueType, ValueType>,
     routines: HashMap<i64, Expression>,
-    assignment_indexes_stack: Vec<Vec<i64>>,
+    assignment_indexes_stack: Vec<Vec<ValueType>>,
     alternative_count: u8,
     max_iterations: f64,
     orb: f64,
     golden_ratio: Option<f64>,
     writer: &'s mut dyn Write,
     reader: &'s mut dyn input::StdinOrMock,
+
     #[cfg(test)]
     golden_ratio_calculations: u8,
 }
@@ -330,9 +389,9 @@ struct Shuttle<'s> {
 impl<'s> Shuttle<'s> {
     fn new(writer: &'s mut dyn Write, reader: &'s mut dyn input::StdinOrMock) -> Self {
         Shuttle {
-            nums: HashMap::<i64, ValueType>::new(),
+            nums: HashMap::<ValueType, ValueType>::new(),
             routines: HashMap::<i64, Expression>::new(),
-            assignment_indexes_stack: Vec::<Vec<i64>>::new(),
+            assignment_indexes_stack: Vec::<Vec<ValueType>>::new(),
             alternative_count: 0,
             max_iterations: 10_000f64,
             orb: 0.00000001f64,
@@ -450,7 +509,6 @@ impl Interpreter {
                         result.push(Atom::Number(current_num));
                     } else if reading_simple_string {
                         result.push(Atom::String(current_string.clone()));
-                        reading_simple_string = false;
                         current_string = String::new();
                     }
 
@@ -459,6 +517,23 @@ impl Interpreter {
                     current_num = 0f64;
                     periods_found = 0;
                     frac_pos = 0;
+                } else if c == '[' {
+                    if reading_number {
+                        result.push(Atom::Number(current_num));
+                        reading_number = false;
+                        current_num = 0f64;
+                        periods_found = 0;
+                        frac_pos = 0;
+                    } else if reading_simple_string {
+                        result.push(Atom::String(current_string.clone()));
+                        reading_simple_string = false;
+                        current_string = String::new();
+                    }
+
+                    bracket_nesting += 1;
+                    opening_bracket_pos.push(pos);
+                } else if reading_simple_string {
+                   current_string.push(c); 
                 } else if c.is_ascii_digit() {
                     reading_number = true;
 
@@ -484,21 +559,6 @@ impl Interpreter {
                 } else if c == '.' {
                     reading_number = true;
                     periods_found += 1;
-                } else if c == '[' {
-                    if reading_number {
-                        result.push(Atom::Number(current_num));
-                        reading_number = false;
-                        current_num = 0f64;
-                        periods_found = 0;
-                        frac_pos = 0;
-                    } else if reading_simple_string {
-                        result.push(Atom::String(current_string.clone()));
-                        reading_simple_string = false;
-                        current_string = String::new();
-                    }
-
-                    bracket_nesting += 1;
-                    opening_bracket_pos.push(pos);
                 } else if c == ']' {
                     return Err(ProgramError::UnexpectedClosingBracket{position: pos});
                 } else if c == '#' {
@@ -524,14 +584,10 @@ impl Interpreter {
                         frac_pos = 0;
                     }
 
-                    if reading_simple_string {
-                       current_string.push(c); 
+                    if Self::is_known_operator(c) {
+                        result.push(Atom::Operator(c));
                     } else {
-                        if Self::is_known_operator(c) {
-                            result.push(Atom::Operator(c));
-                        } else {
-                            return Err(ProgramError::UnknownOperator{position: pos, operator: c});
-                        }
+                        return Err(ProgramError::UnknownOperator{position: pos, operator: c});
                     }
                 }
             } else {
@@ -1075,13 +1131,47 @@ pub(crate) mod opr_funcs {
             return;
         }
 
-        let mut index = operands[0].get_num_value(0f64) as i64;
+        let name_is_string = operands[0].get_value().get_type_as_num() == 2f64;
+        let mut name = operands[0].get_value();
+
+        /*
+        #[cfg(test)]
+        println!("fn assign...: name_is_string={}", name_is_string);
+        */
+
+        let mut name_base = String::new();
+        let mut index = 0f64;
+
+        if name_is_string {
+            name_base = name.get_string_value("void".to_string());
+        } else {
+            index = name.get_num_value(0f64);
+        }
+
+        /*
+        #[cfg(test)]
+        println!("fn assign...: name_base={}", name_base.clone());
+        */
+
+        let mut counter = 0f64;
         let mut reg_val = ValueType::Number(0f64);
 
         for opd in &operands[1..operands.len()] {
+            /*
+            #[cfg(test)]
+            println!("fn assign...: name={:?}", name.clone());
+            */
+
             reg_val = opd.get_value();
-            shuttle.nums.insert(index, reg_val.clone());
-            index += 1;
+            shuttle.nums.insert(name, reg_val.clone());
+
+            counter += 1f64;
+
+            if name_is_string {
+                name = ValueType::Text(format!("{}{}", name_base, counter));
+            } else {
+                name = ValueType::Number(index + counter);
+            }
         }
 
         *result_value = reg_val;
@@ -1089,10 +1179,15 @@ pub(crate) mod opr_funcs {
 
     pub fn get_number_register(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let index = if operands.is_empty() {
-            0f64
+            ValueType::Number(0f64)
         } else {
-            operands[0].get_num_value(0f64)
-        } as i64;
+            operands[0].get_value()
+        };
+
+        /*
+        #[cfg(test)]
+        println!("fn get_number_register: index={:?}", index.clone());
+        */
 
         let found = match shuttle.nums.get(&index) {
             None => ValueType::Empty,
@@ -1104,10 +1199,10 @@ pub(crate) mod opr_funcs {
 
     pub fn assignment_maker(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let index = if !operands.is_empty() {
-            operands[0].get_num_value(0f64)
+            operands[0].get_value()
         } else {
-            0f64
-        } as i64;
+            ValueType::Number(0f64)
+        };
 
         let stack_len = shuttle.assignment_indexes_stack.len();
 
@@ -1117,7 +1212,7 @@ pub(crate) mod opr_funcs {
             shuttle
                 .assignment_indexes_stack
                 [stack_len - 2]
-                .push(index);
+                .push(index.clone());
         }
 
         let found = match shuttle.nums.get(&index) {
@@ -1141,12 +1236,29 @@ pub(crate) mod opr_funcs {
     
     pub fn equals(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut are_equal = true;
-        let mut first = 0f64;
+        let mut is_numeric = true;
+        let mut first = ValueType::Empty;
+        let mut first_type = 0f64;
+        let mut op_value: ValueType;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => first = op.get_num_value(0f64),
-                _ => are_equal = are_near(first, op.get_num_value(0f64), shuttle.orb),
+                0 => {
+                    first = op.get_value();
+                    first_type = first.get_type_as_num();
+                    is_numeric = first_type == 1f64;
+                },
+                _ => {
+                    op_value = op.get_value();       
+
+                    if first_type != op_value.get_type_as_num() {
+                        are_equal = false;
+                    } else if is_numeric {
+                        are_equal = are_equal && are_near(first.get_num_value(0f64), op.get_num_value(0f64), shuttle.orb);
+                    } else {
+                        are_equal = are_equal && (first == op_value)
+                    }
+                },
             }
         }
 
@@ -1159,14 +1271,14 @@ pub(crate) mod opr_funcs {
     
     pub fn less(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = true;
-        let mut first = 0f64;
-        let mut second: f64;
+        let mut first = ValueType::Empty;
+        let mut second: ValueType;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => first = op.get_num_value(0f64),
+                0 => first = op.get_value(),
                 _ => {
-                    second = op.get_num_value(0f64);
+                    second = op.get_value();
                     outcome = outcome && (first < second);
                     first = second;
                 },
@@ -1182,15 +1294,17 @@ pub(crate) mod opr_funcs {
     
     pub fn greater(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = true;
-        let mut first = 0f64;
-        let mut second: f64;
+        let mut first = ValueType::Empty;
+        let mut second: ValueType;
 
-        for (count, op) in operands.iter().enumerate() {
+        // We're reversing, as the smallest ValueType is known (ValueType::Empty),
+        // but not the greatest one (what's the greatest string ?).
+        for (count, op) in operands.iter().rev().enumerate() {
             match count {
-                0 => first = op.get_num_value(0f64),
+                0 => first = op.get_value(),
                 _ => {
-                    second = op.get_num_value(0f64);
-                    outcome = outcome && (first > second);
+                    second = op.get_value();
+                    outcome = outcome && (first < second);
                     first = second;
                 },
             }
@@ -1206,8 +1320,12 @@ pub(crate) mod opr_funcs {
     pub fn not(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = true;
 
-        for op in &*operands {
-            outcome &= are_near(0f64, op.get_num_value(0f64), shuttle.orb);
+        for op in operands {
+            match op.get_value() {
+                ValueType::Empty => (),
+                ValueType::Text(ref s) => outcome &= s.len() == 0,
+                ValueType::Number(n) => outcome &= are_near(0f64, n, shuttle.orb),
+            }
         }
 
         *result_value = ValueType::Number(if outcome {
@@ -1356,11 +1474,7 @@ pub(crate) mod opr_funcs {
             return;
         }
 
-        *result_value = ValueType::Number(match operands[0].get_value() {
-            ValueType::Empty => 0f64,
-            ValueType::Number(_) => 1f64,
-            ValueType::Text(_) => 2f64,
-        });
+        *result_value = ValueType::Number(operands[0].get_value().get_type_as_num());
     }
     
     pub fn write(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
@@ -1447,7 +1561,7 @@ pub(crate) mod opr_funcs {
         let mut counter_val = 0f64;
         let mut end_val = 0f64;
         let mut increment = 1f64;
-        let mut counter_var = 0i64;
+        let mut counter_var = ValueType::Number(0f64);
         let mut iter_count = 0f64;
 
         if operands.len() < 5 {
@@ -1465,7 +1579,7 @@ pub(crate) mod opr_funcs {
                 0 => counter_val = op.get_num_value(0f64),
                 1 => end_val = op.get_num_value(0f64),
                 2 => increment = op.get_num_value(1f64),
-                3 => counter_var = op.get_num_value(0f64) as i64,
+                3 => counter_var = op.get_value(),
                 _ => (),
             }
         }
@@ -1487,7 +1601,7 @@ pub(crate) mod opr_funcs {
                     break;
             }
 
-            shuttle.nums.insert(counter_var, ValueType::Number(counter_val));
+            shuttle.nums.insert(counter_var.clone(), ValueType::Number(counter_val));
             op_count = 4;
 
             while op_count < op_len {
@@ -1708,6 +1822,55 @@ mod tests {
             let result = Interpreter::split_atoms("#Chomsky! 45");
             assert_eq!(Ok(vec![Atom::String("Chomsky!".to_string()), Atom::Number(45f64)]), result);
         }
+
+        #[test]
+        fn split_simple_string_get_var() {
+            let result = Interpreter::split_atoms("v#reg1");
+            assert_eq!(Ok(vec![Atom::Operator('v'), Atom::String("reg1".to_string())]), result);
+        }
+    }
+
+    mod value_type {
+        use std::hash::{DefaultHasher, Hash, Hasher};
+        use crate::ValueType;
+
+        #[test]
+        fn vt_hash_same_value() {
+            let mut hasher1 = DefaultHasher::new();
+            let mut hasher2 = DefaultHasher::new();
+
+            let vt1 = ValueType::Text("reg2".to_string());
+            let vt2 = ValueType::Text("reg2".to_string());
+
+            vt1.hash(&mut hasher1);
+            let h1 = hasher1.finish();
+
+            vt2.hash(&mut hasher2);
+            let h2 = hasher2.finish();
+
+            println!("Hashes : {:?} and {:?}", h1, h2);
+
+            assert_eq!(h1, h2)
+        }
+
+        #[test]
+        fn vt_hash_diff_value() {
+            let mut hasher1 = DefaultHasher::new();
+            let mut hasher2 = DefaultHasher::new();
+
+            let vt1 = ValueType::Text("reg1".to_string());
+            let vt2 = ValueType::Text("reg2".to_string());
+
+            vt1.hash(&mut hasher1);
+            let h1 = hasher1.finish();
+
+            vt2.hash(&mut hasher2);
+            let h2 = hasher2.finish();
+
+            println!("Hashes : {:?} and {:?}", h1, h2);
+
+            assert_ne!(h1, h2)
+        }
     }
 
     mod expr {
@@ -1774,29 +1937,7 @@ mod tests {
             let mut shuttle = Shuttle::new(&mut writer, &mut reader);
             exp.operate(&mut shuttle);
 
-            match shuttle.nums.get(&4000i64) {
-                None => panic!("The numerical register assigned to has not been found back."),
-                Some(n) => {
-                    match n {
-                        ValueType::Number(num) => assert_eq!(500.1f64, *num),
-                        _ => panic!("The value found in shuttle.nums should be ValueType::Number."),
-                    }
-                },
-            }
-        }
-
-        #[test]
-        fn expr_assign_num_reg_dot7() {
-            let mut exp = Expression::new('$');
-            exp.push_operand(Expression::new_number(4000.7f64));
-            exp.push_operand(Expression::new_number( 500.1f64));
-
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
-            exp.operate(&mut shuttle);
-
-            match shuttle.nums.get(&4000i64) {
+            match shuttle.nums.get(&ValueType::Number(4000.3f64)) {
                 None => panic!("The numerical register assigned to has not been found back."),
                 Some(n) => {
                     match n {
@@ -1818,29 +1959,7 @@ mod tests {
             let mut shuttle = Shuttle::new(&mut writer, &mut reader);
             exp.operate(&mut shuttle);
 
-            match shuttle.nums.get(&-4000i64) {
-                None => panic!("The numerical register assigned to has not been found back."),
-                Some(n) => {
-                    match n {
-                        ValueType::Number(num) => assert_eq!(500.1f64, *num),
-                        _ => panic!("The value found in shuttle.nums should be ValueType::Number."),
-                    }
-                },
-            }
-        }
-
-        #[test]
-        fn expr_assign_num_reg_neg_dot7() {
-            let mut exp = Expression::new('$');
-            exp.push_operand(Expression::new_number(-4000.7f64));
-            exp.push_operand(Expression::new_number( 500.1f64));
-
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
-            exp.operate(&mut shuttle);
-
-            match shuttle.nums.get(&-4000i64) {
+            match shuttle.nums.get(&ValueType::Number(-4000.3f64)) {
                 None => panic!("The numerical register assigned to has not been found back."),
                 Some(n) => {
                     match n {
@@ -2301,6 +2420,11 @@ mod tests {
         }
 
         #[test]
+        fn x_assign_num_serial_assignation_string_name() {
+            assert_eq!(7f64, Interpreter::execute("$(#reg 1 2 3 4) +v#reg2 v#reg3".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_get_num_reg() {
             assert_eq!(90f64, Interpreter::execute("$/21 2 90 $(4) v/21 2".to_string()).unwrap().numeric_value);
         }
@@ -2366,6 +2490,41 @@ mod tests {
         }
 
         #[test]
+        fn x_equality_many_false() {
+            assert_eq!(0f64, Interpreter::execute("$1 -15 3 =(12 +7 5 *3 4 111 /36 3 v1)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_equality_different_type() {
+            assert_eq!(0f64, Interpreter::execute("=21.3 #xxx".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_equality_strings_true() {
+            assert_eq!(1f64, Interpreter::execute("=[sxxx] #xxx".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_equality_strings_false() {
+            assert_eq!(0f64, Interpreter::execute("=[sxxx !!] #xxx".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_equality_strings_upper_and_lower_case() {
+            assert_eq!(0f64, Interpreter::execute("=#xxx #XXX".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_equality_empty() {
+            assert_eq!(1f64, Interpreter::execute("=v44 v44".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_equality_number_and_empty() {
+            assert_eq!(0f64, Interpreter::execute("=708 v44".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_less_true() {
             assert_eq!(1f64, Interpreter::execute("< 5.000001 5.000002".to_string()).unwrap().numeric_value);
         }
@@ -2386,6 +2545,12 @@ mod tests {
         }
 
         #[test]
+        fn x_less_mixed() {
+            // v111 as uninitialized variable is VaueType::Empty.
+            assert_eq!(1f64, Interpreter::execute("<(v111 /~1 0 ~2036 2 6 /5 0 #Fruehling #Zambetas)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_greater_true() {
             assert_eq!(1f64, Interpreter::execute("> 5.000002 5.000001".to_string()).unwrap().numeric_value);
         }
@@ -2403,6 +2568,11 @@ mod tests {
         #[test]
         fn x_greater_3_true() {
             assert_eq!(1f64, Interpreter::execute(">(5.000002 5.000001 3)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_greater_mixed() {
+            assert_eq!(1f64, Interpreter::execute(">(#Zambetas #Fruehling /22 0 1_000_000.2 2024 ~85 /~3 0 v111)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -2427,7 +2597,37 @@ mod tests {
 
         #[test]
         fn x_not_3_false() {
-            assert_eq!(0f64, Interpreter::execute("!(~4 8 +90 1)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute("!(0 0 2)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_not_3_false_mixed() {
+            assert_eq!(0f64, Interpreter::execute("!(0 [sWow!] 0)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_not_empty() {
+            assert_eq!(1f64, Interpreter::execute("!v#uninit".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_not_empty_simple_string() {
+            assert_eq!(1f64, Interpreter::execute("!#".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_not_empty_string() {
+            assert_eq!(1f64, Interpreter::execute("![s]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_not_string() {
+            assert_eq!(0f64, Interpreter::execute("!#Voilà".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_not_not_empty() {
+            assert_eq!(0f64, Interpreter::execute("!!v#uninit".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -2871,6 +3071,21 @@ mod tests {
         #[test]
         fn x_get_type_string() {
             assert_eq!(2f64, Interpreter::execute("o4 +[sTotal: ]38".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_var_having_string_name() {
+            assert_eq!(5f64, Interpreter::execute("$0 11 $[sMy Number] 3 +v[sMy Number] 2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_var_having_simple_string_name() {
+            assert_eq!(5f64, Interpreter::execute("$0 11 $#myNum 3 +v#myNum 2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_var_having_string_name_make_assign() {
+            assert_eq!(5f64, Interpreter::execute("$#myNum 3 +:#myNum 2".to_string()).unwrap().numeric_value);
         }
     }
 

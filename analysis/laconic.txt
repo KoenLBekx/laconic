@@ -39,6 +39,7 @@ LACONIC
 		A Laconic expression consists of atoms that can either be
 		- operators
 		- numbers
+		- simple strings
 		- string bracket contents
 		- comment bracket contents
 		- number bracket contents
@@ -188,17 +189,18 @@ LACONIC
 					b 2 101
 						to wit 5(base10).
 
-	String brackets content
+	Strings
 
-		Strings are enclosed between [s and ]
-
-			Note : an alternative form, that cannot contain whitespace, is the s operator :
-			       whatever characters follow constitute a string,
-			       until the first whitespace character or square bracket [ found.
+		Strings are either
+			- enclosed between [s and ] : string bracket contents
+			- simple strings: enclosed between
+				# and whitespace or
+				# and [
 
 		Eg.:
 
 			[sKunji Namparshespa] yields the string "Kunji Namparshespa".
+			#Petrov yields the string "Petrov".
 
 		If any of their operands is a string, some numerical operators will perform string-related operations :
 
@@ -393,14 +395,15 @@ Operators
 		$ Variable assignment
 
 			Variables are designated by any number, including negative and non-integer ones.
-			However, this assignment operator truncates the fractal part of non integer numbers:
+			Apart of that, any string may be used as variable designator, either in simple or bracket form.
 
-			$4.2 10 assigns 10 to variable number 4.
-			$4.9 10 assigns 10 to variable number 4 also.
-			$~4.9 10 assigns 10 to variable number -4.
+			$4.2 10 assigns 10 to variable number 4.2
+			$~4.9 10 assigns 10 to variable number -4.9
+
+			$#startValue 10 assigns 10 to variable "startValue"
+			$[sstart value] 10 assigns 10 to variable "start value"
 
 			$0+2 8 assigns 10 to variable number 0.
-
 			$+3 1+2 8 assigns 10 to variable number (3 + 1), so variable number 4.
 
 			If the $ operator has more than two operands (used with parentheses),
@@ -412,9 +415,23 @@ Operators
 					4  to variable 11 and
 					5  to variable 12.
 
+			If the $ operator has more than two operands and the first one has a string value,
+			consecutive variables are assigned to also, to wit as follows:
+
+			$(#reg 20 30 40 50)
+				assigns
+					20 to variable "reg",
+					30 to variable "reg1",
+					40 to variable "reg2",
+					50 to variable "reg3".
+
 		v references a variable
 
-			$2 30 +v2 4 yields 34
+			$2 30 +v2 4
+				yields 34
+
+			$#theNumber 11 +v#theNumber 9
+				yields 20
 
 		: references and assigns to a variable
 
@@ -426,11 +443,15 @@ Operators
 
 			+:0 5
 				means $0 +v0 5 (Assign to variable(0) the value of variable(0) plus 5)
+
 			+0 :5
 				means $5 +0 v5 (Assign to variable(5) the value of 0 plus variable(5))
 
 			~:2
 				means $2 ~v2   (Convert the value of variable 2 to its opposite)
+
+			*:#product 3
+				means $#product *#product 3 (Assign to variable "product" its current value times 3)
 
 			It is even possible to assign the value of the parent operator to two variables referenced as operands:
 
@@ -515,6 +536,13 @@ Operators
 
 			< 5 20 yields 1
 
+			< #A #a yields 1
+				Upper case characters are considered "smaller" than lower case ones,
+				as they have a lower Unicode point.
+
+			< 1_000_000 [sI am a string.] yields 1
+				Numbers are considered smaller than strings.
+
 			!< 5 5 yields 1 (greater or equal)
 			!< 6 5 yields 1
 
@@ -522,6 +550,12 @@ Operators
 			one can test if a series of numbes is ascending:
 
 			<(2 8 50 401 800) yields 1
+
+			Note: uninitialized variables are considered "empty" and to be smaller than any other value,
+			even smaller than negative infinity, which can be obtained by dividing a negative number by zero :
+
+			< v#UnusedForNow /~1 0
+				yields 1
 
 		> 
 
@@ -535,25 +569,41 @@ Operators
 
 			>(701 90 87 4) yields 1
 
+			> #Brussels #Antwerp yields 1
+			> #金 #gold yields 1 as Chinese characters have a higher Unicode point than Latin ones.
+			> #1024 1024 yields 1, as the first operand is a string and the second a number.
+			> 20 v#UnusedForNow yields 1, as an uninitialized variable is smaller than anything else.
+
 	Logic
 
 		Note:
 
-			0 = false, everything else = true.
+			0 = false,
+			# (empty string) = false,
+			[s] (empty string) = false,
+			uninitialized variable = false,
+			everything else = true.
 
 		! not
 
-			Converts 0 to 1, and everything else to 0.
+			Converts false values to 1, and everything else to 0.
 
 			!4 yields 0
 			!1 yields 0
 			!0 yields 1
+			!v#NotUsedYet yields 1
+			![s] yields 1
+			!# yields 1
+			!!# yields 0
+			!#Hello yields 0
+			![s Hello, Mylady] yields 0
 
 			Used with more than the standard one operand,
 			! can be used to test if a series of expressions are all 0.
 
 			!(0 -4 4 * 25 0) yields 1
 			!(0 0 9) yields 0
+			!(# # #Haha) yields 0
 
 		& logical and : if all operands are non-zero (true), then 1, else zero (false)
 

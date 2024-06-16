@@ -1,2 +1,28 @@
-[c Put the radicand in register 0 by prefixing this script on the command line, e.g.: "$0 85"]
-$1 0[c1=bin form]$2 0[c2=Pow 10]W>v0 0[cDo];;?=%v0 2 1;+:1^10 v2-:0 1 0/:0 2+:2 1v1
+$30 0
+W
+	(
+		!=v30 1
+		w[sEnter a number to convert from base10 to base2:]
+		$0 r
+		$30 o4 v0
+		?
+			!=v30 1
+			w[sThat was no valid number.]
+			0
+	)
+
+$1 0 [c1=bin form]
+$2 0 [c2=Pow 10]
+W
+	>v0 0
+	;
+		;
+			?
+				=%v0 2 1
+				;
+					+:1^10 v2
+					-:0 1
+				0
+			/:0 2
+		+:2 1
+v1
