@@ -179,6 +179,8 @@ impl Expression {
             'O' => &opr_funcs::enumerated_opr,
             'w' => &opr_funcs::write,
             'r' => &opr_funcs::read,
+            's' => &opr_funcs::sign,
+            't' => &opr_funcs::get_type,
             _ => &opr_funcs::nop,
         };
 
@@ -693,7 +695,7 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:`!w°SCTc"       .contains(chr) => 1,
+                        chr if "~iav:`!w°SCTcst"     .contains(chr) => 1,
                         chr if "+-*/^l%&|x$W;mM=<>Zo".contains(chr) => 2,
                         chr if "?O"                  .contains(chr) => 3,
                         chr if "F"                   .contains(chr) => 5,
@@ -772,7 +774,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^lia%°SCTpec$v:`?WF;mM()=<>!&|xZoOwr".contains(op)
+        "~+-*/^lia%°SCTpec$v:`?WF;mM()=<>!&|xZoOwrst".contains(op)
     }
 }
 
@@ -1293,8 +1295,6 @@ pub(crate) mod opr_funcs {
         let mut outcome = true;
         let mut first = ValueType::Empty;
         let mut current: ValueType;
-        let mut count: usize;
-        let mut op: Expression;
         let mut ops = operands.iter().enumerate();
 
         loop {
@@ -1328,8 +1328,6 @@ pub(crate) mod opr_funcs {
         let mut outcome = true;
         let mut first = ValueType::Empty;
         let mut current: ValueType;
-        let mut count: usize;
-        let mut op: Expression;
         let mut ops = operands.iter().enumerate();
 
         loop {
@@ -1473,10 +1471,10 @@ pub(crate) mod opr_funcs {
             return;
         }
 
-        let opr_func = match operands[0].get_num_value(-1f64) {
-            0f64 => enum_opr_sign,
-            3f64 => get_unicode_chars,
-            4f64 => get_type,
+        let opr_func = match operands[0].get_value() {
+            // 0f64 => enum_opr_sign,
+            ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
+            // 4f64 => get_type,
             _ =>  {
                 *result_value = default_outcome;
 
@@ -1487,7 +1485,7 @@ pub(crate) mod opr_funcs {
         (opr_func)(result_value, &mut operands[1..], shuttle);
     }
 
-    pub fn enum_opr_sign(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn sign(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut all_positive = true;
         let mut all_negative = true;
 
@@ -3009,43 +3007,48 @@ mod tests {
         }
 
         #[test]
-        fn x_enum_opr_sign_no_operands() {
-            assert_eq!(0f64, Interpreter::execute("o(0)".to_string()).unwrap().numeric_value);
+        fn x_sign_no_operands() {
+            assert_eq!(0f64, Interpreter::execute("s".to_string()).unwrap().numeric_value);
         }
 
         #[test]
-        fn x_enum_opr_sign_all_pos() {
-            assert_eq!(1f64, Interpreter::execute("o(0 45 7 99 4022)".to_string()).unwrap().numeric_value);
+        fn x_sign_all_pos() {
+            assert_eq!(1f64, Interpreter::execute("s(45 7 99 4022)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
-        fn x_enum_opr_sign_all_neg() {
-            assert_eq!(-1f64, Interpreter::execute("o(0 ~45 ~7 ~99 ~4022)".to_string()).unwrap().numeric_value);
+        fn x_sign_all_neg() {
+            assert_eq!(-1f64, Interpreter::execute("s(~45 ~7 ~99 ~4022)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
-        fn x_enum_opr_sign_mixed() {
-            assert_eq!(0f64, Interpreter::execute("o(0 ~45 7 ~99 4022)".to_string()).unwrap().numeric_value);
+        fn x_sign_mixed() {
+            assert_eq!(0f64, Interpreter::execute("s(~45 7 ~99 4022)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
-        fn x_enum_opr_sign_assign() {
-            assert_eq!(-1f64, Interpreter::execute("$~22 ~4 o0 :~22 v~22".to_string()).unwrap().numeric_value);
+        fn x_sign_assign() {
+            assert_eq!(-1f64, Interpreter::execute("$~22 ~4 s:~22 v~22".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_enum_opr_override() {
-            assert_eq!(1f64, Interpreter::execute("O(0 55)".to_string()).unwrap().numeric_value);
+            assert_eq!("fg".to_string(), Interpreter::execute("O(#uni 102 103)".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_enum_opr_unicode_chars() {
-            assert_eq!("\n".to_string(), Interpreter::execute("O3 10".to_string()).unwrap().string_representation);
+            assert_eq!("\n".to_string(), Interpreter::execute("O#uni 10".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_enum_opr_unicode_chars_more() {
-            assert_eq!("Союз".to_string(), Interpreter::execute("o(3 1057 1086 1102 1079)".to_string()).unwrap().string_representation);
+            assert_eq!("Союз".to_string(), Interpreter::execute("o(#uni 1057 1086 1102 1079)".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_enum_opr_unicode_chars_more_bis() {
+            assert_eq!("Союз".to_string(), Interpreter::execute("o#uni(1057 1086 1102 1079)".to_string()).unwrap().string_representation);
         }
 
         #[test]
@@ -3223,17 +3226,17 @@ mod tests {
 
         #[test]
         fn x_get_type_empty() {
-            assert_eq!(0f64, Interpreter::execute("o4 v9494".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute("t v9494".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_get_type_number() {
-            assert_eq!(1f64, Interpreter::execute("o4 %38 5".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("t %38 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_get_type_string() {
-            assert_eq!(2f64, Interpreter::execute("o4 +[sTotal: ]38".to_string()).unwrap().numeric_value);
+            assert_eq!(2f64, Interpreter::execute("t +[sTotal: ]38".to_string()).unwrap().numeric_value);
         }
 
         #[test]

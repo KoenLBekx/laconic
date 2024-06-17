@@ -4,7 +4,7 @@ W
 		!=v30 1
 		w[sEnter a number to convert from base10 to base2:]
 		$0 r
-		$30 o4 v0
+		$30 tv0
 		?
 			!=v30 1
 			w[sThat was no valid number.]
