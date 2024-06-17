@@ -1124,12 +1124,12 @@ pub(crate) mod opr_funcs {
             return;
         }
 
-        let const_index = operands[0].get_num_value(-1f64);
+        let const_index = operands[0].get_value();
 
-        *result_value = ValueType::Number(match const_index {
-            0f64 =>  {
+        *result_value = match const_index {
+            ValueType::Text(name) if name == "gold".to_string() =>  {
                 match shuttle.golden_ratio {
-                    Some(gr) => gr,
+                    Some(gr) => ValueType::Number(gr),
                     None => {
                         let golden_ratio = (1f64 + 5f64.sqrt()) / 2f64;
                         shuttle.golden_ratio = Some(golden_ratio);
@@ -1139,12 +1139,12 @@ pub(crate) mod opr_funcs {
                             shuttle.golden_ratio_calculations += 1u8;
                         }
 
-                        golden_ratio
+                        ValueType::Number(golden_ratio)
                     },
                 }
             },
-            _ => 0f64,
-        });
+            _ => ValueType::Empty,
+        };
     }
 
     pub fn assign_number_register(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
@@ -1442,24 +1442,24 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn setting(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        let mut setting_nr = -1i64;
-        let mut setting_value = 0f64;
+        let mut setting_name = ValueType::Empty;
+        let mut setting_value = ValueType::Empty;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                0 => setting_nr = op.get_num_value(-1f64) as i64,
-                1 => setting_value = op.get_num_value(0f64),
+                0 => setting_name = op.get_value(),
+                1 => setting_value = op.get_value(),
                 _ => (),
             }
         }
 
-        match setting_nr {
-            0i64 => shuttle.orb = setting_value,
-            1i64 => shuttle.max_iterations = setting_value,
+        match setting_name {
+            ValueType::Text(name) if name ==  "prec".to_string() => shuttle.orb = setting_value.get_num_value(0f64),
+            ValueType::Text(name) if name == "loops".to_string() => shuttle.max_iterations = setting_value.get_num_value(0f64),
             _ => (),
         }
 
-        *result_value = ValueType::Number(setting_value);
+        *result_value = setting_value;
     }
 
     pub fn enumerated_opr(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
@@ -2053,7 +2053,7 @@ mod tests {
         #[test]
         fn expr_set_orb() {
             let mut exp = Expression::new('Z');
-            exp.push_operand(Expression::new_number(0f64));
+            exp.push_operand(Expression::new_text("prec".to_string()));
             exp.push_operand(Expression::new_number(0.001f64));
 
             let mut writer = Vec::<u8>::new();
@@ -2068,7 +2068,7 @@ mod tests {
         #[test]
         fn expr_set_max_iterations() {
             let mut exp = Expression::new('Z');
-            exp.push_operand(Expression::new_number(1f64));
+            exp.push_operand(Expression::new_text("loops".to_string()));
             exp.push_operand(Expression::new_number(500f64));
 
             let mut writer = Vec::<u8>::new();
@@ -2130,7 +2130,7 @@ mod tests {
         #[test]
         fn op_const_golden_ratio() {
             let mut the_value = ValueType::Empty;
-            let mut ops = vec![Expression::new_number(0f64)];
+            let mut ops = vec![Expression::new_text("gold".to_string())];
 
             let mut writer = Vec::<u8>::new();
             let mut reader = MockByString::new(Vec::<String>::new());
@@ -2592,12 +2592,12 @@ mod tests {
 
         #[test]
         fn x_equality_2_in_orb() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .1 =21.3 21.35".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .1 =21.3 21.35".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_2_outside_orb() {
-            assert_eq!(0f64, Interpreter::execute("Z0 .01 =21.3 21.35".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute("Z#prec .01 =21.3 21.35".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -2953,7 +2953,7 @@ mod tests {
 
         #[test]
         fn x_for_5_op_exceeds_limit() {
-            assert_eq!(15f64, Interpreter::execute("Z1 2 $0 1 F3 11 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
+            assert_eq!(15f64, Interpreter::execute("Z#loops 2 $0 1 F3 11 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -3136,62 +3136,62 @@ mod tests {
 
         #[test]
         fn x_radians() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .000005 = °`180 p".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 = °`180 p".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_alternative_inside_override() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .000005 = °(`180) p".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 = °(`180) p".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_alternative_before_override() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .000005 = °`(180) p".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 = °`(180) p".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_sin() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .00001 = S°`45 0.7071".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .00001 = S°`45 0.7071".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_arcsin() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .5= °S`0.7071 45".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .5= °S`0.7071 45".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_cos() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .00001 = C°`45 0.7071".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .00001 = C°`45 0.7071".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_arccos() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .5 = °C`0.7071 45".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .5 = °C`0.7071 45".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_tan() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .00001 = T°`45 1".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .00001 = T°`45 1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_arctan() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .00001 = °T`1 45".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .00001 = °T`1 45".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_degrees() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .000005 = 180 °p".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 = 180 °p".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_pi() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .000005 =p 3.14159".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 =p 3.14159".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_euler_const() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .000005 =e 2.71828".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 =e 2.71828".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -3201,27 +3201,27 @@ mod tests {
 
         #[test]
         fn x_log_more_args() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .000001 =2 l(10 100 3046)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .000001 =2 l(10 100 3046)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_log10() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .000001 =3 l10 1000".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .000001 =3 l10 1000".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_log_ln() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .000001 =1 le e".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .000001 =1 le e".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_consts_unknown() {
-            assert_eq!(0f64, Interpreter::execute("c~2".to_string()).unwrap().numeric_value);
+            assert_eq!(NO_VALUE.to_string(), Interpreter::execute("c~2".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_consts_golden_ratio() {
-            assert_eq!(1f64, Interpreter::execute("Z0 .000001   $0 10   $1 *v0c0   =/+v0v1 v1 /v1 v0".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("Z#prec .000001   $0 10   $1 *v0c#gold   =/+v0v1 v1 /v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]

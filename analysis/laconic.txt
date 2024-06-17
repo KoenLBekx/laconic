@@ -2,20 +2,12 @@ LACONIC
 
 		// TODO: explain standard number of operands and how to deviate from it.
 		// TODO: indicate the standard number of operands for every operator.
-		// TODO: replace operator o4 (type) to operator 't'.
-		// TODO: replace operator o0 (sign) to operator 's'.
-		// TODO: convert the enumerated operators to having a short string as first operand instead of a number.
-		//          E.g.
-		//              o3 938
-		//          to  o#uni 938
-		// TODO: do the same with the Z (settings) operator.
-		// TODO: do the same with the c (constants) operator.
 
-		* Characters assigned or to be assigned to operators:
+		* Characters assigned (or to be assigned) to operators:
 			~+-*/%^$():`;=<>!&|?°AabCceFilMmOoprSsTtUuvWwxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?° a CceFilMmOoprS T   vWwxZ
+			~+-*/%^$():`;=<>!&|?° a CceFilMmOoprSsTt  vWwxZ
 
 		* Characters not to be used as operator:
 			' "     interfere with command line syntax
@@ -24,17 +16,17 @@ LACONIC
 
 		* Common characters not used yet:
 			´@\{},§£€¶BDdEfGgHhIJjKkLNnPQRqVXz
-
-			Note the Unicode point of some characters not on all keyboards:
-				^ 005E Circumflex accent
-				` 0060 Grave accent or Backtick
-				~	007E Tilde
-				£ 00A3 Pound
-				§ 00A7 Section (paragraph) sign
-				° 00B0 Degrees sign
-				´ 00B4 Acute accent
-				¶ 00B6 Pilcrow
-				€ 20AC Euro
+			
+		Note the Unicode point of some characters not on all keyboards:
+			^ 005E Circumflex accent
+			` 0060 Grave accent or Backtick
+			~	007E Tilde
+			£ 00A3 Pound
+			§ 00A7 Section (paragraph) sign
+			° 00B0 Degrees sign
+			´ 00B4 Acute accent
+			¶ 00B6 Pilcrow
+			€ 20AC Euro
 
 	General syntax
 
@@ -76,7 +68,7 @@ LACONIC
 
 		Note: the characters " and ' are nowhere used in Laconic, as they interfere with command line syntax.
 
-		Note: there are also enumerated operators - see the O and o operators.
+		Note: there are also named operators - see the O and o operators.
 
 		Every operator has a default number of operands it expects. E.g., the + operator expects two operands :
 		+ 1 2 yields 3.
@@ -201,11 +193,14 @@ LACONIC
 
 		Strings are either
 			- enclosed between [s and ] : string bracket contents
+
 			- simple strings: enclosed between any of
 				# and whitespace
 				# and [
 				# and (
 				# and )
+	
+				Note that the # character doesn't terminate a simple string, so it can be part of one.
 
 		Eg.:
 
@@ -339,6 +334,22 @@ Operators
 			M~7 4.1 yields 4.1
 			M(4 2 1 19) yields 19
 
+		s Sign
+
+			if number > 0, yields 1
+			if number = 0, yields 0
+			if number < 0, yields -1
+
+			If there are more than 1 operands :
+				if operands 1 until last > 0, yields 1
+				if operands 1 until last < 0, yields -1
+				else, yields 0.
+
+			e.g.
+				s~14 yields -1.
+				s300 yields 1.
+				s(~3 5) yields 0.
+
 	Trigonometric operators
 
 		S sine of n radians
@@ -393,11 +404,10 @@ Operators
 
 		p Pi
 
-		c	num
-			enumerated constants
+		c	name
+			named constants
 
-			c0 Golden Ratio (sectio aurea)
-				(To be replaced by c#gold)
+			c#gold Golden Ratio (sectio aurea)
 
 				Calculated as (1 + sqrt(5))/2
 
@@ -539,9 +549,9 @@ Operators
 
 			The equality operator takes the precision orb into account.
 
-				(The orb can be set using expression Z 0 n)
+				(The orb can be set using expression Z#prec n)
 
-			Z0 .1 =21.3 21.35 yields 1
+			Z#prec .1 =21.3 21.35 yields 1
 
 		< less than:
 
@@ -847,46 +857,37 @@ Operators
 
 					The b` operator returns the value of its base.
 
-		o Operator designated by number, 2 operands
+		t exp
+				Returns type of expression
+
+				t 39           yields 1 : numeric
+				t [sWhat?]     yields 2 : string
+				t v#NotUsedYet yields 0 : empty or uninitialized : an empty expression will yield 0.
+
+		o Operator designated by name, 2 operands
 
 			(lower case o)
 
 			The number of characters to represent operators is limited.
-			Moreover, for most people, the beautiful 汉Han 字Zi are difficult to enter using a keyboard. 
-			That's why there are also operators that are designated by a number; these are called "enumerated operators".
-			The o and O operators take that number as their first operand in order to perform the operation of an enumerated operator.
+			Moreover, for most people, the beautiful 汉字 (Han zi) are difficult to enter using a keyboard. 
+			That's why there are also operators that are designated by a name; these are called "named operators".
+			The o and O operators take that name as their first operand in order to perform the operation of a named operator.
 
 			The difference between both operators is that
-			- the lower case o operator takes 2 operands : the enumerated operator number and one operation operand;
-			- the upper case O operator takes 3 operands : the enumerated operator number and two operation operands.
+			- the lower case o operator takes 2 operands : the named operator name and one operation operand;
+			- the upper case O operator takes 3 operands : the named operator name and two operation operands.
 
 			Both operators, however, can have their number of operands overridden by the ( and ) operators,
 			in which case they can be used interchangeably.
 
-			The enumerated operators are :
+			The operator's name, which is the first operand of the o and O operators, can either be a number or a string.
+			For readability, however, strings are chosen for the implemented operators.
 
-			o  0  opd
-							Sign
-							(To be replaced by operator 's')
+			The named operators are :
 
-								if a > 0, yields 1
-								if a = 0, yields 0
-								if a < 0, yields -1
-
-								If there are more than 2 operands :
-									if operands 2 until last > 0, yields 1
-									if operands 2 until last < 0, yields -1
-									else, yields 0.
-
-								e.g.
-									o0 ~14 yields -1.
-									O(0 300) yields 1.
-									O0 ~3 5 yields 0.
-
-			o(2 dividend divisor remainder_var)
+			o(#quotrem dividend divisor remainder_var)
 
 							Integer division and remainder
-							(To be replaced by o#qr)
 								(to be implemented)
 
 								Returns the integer quotient of dividend/divisor
@@ -894,27 +895,18 @@ Operators
 								This allows both the quotient and the remainder to be known using one division.
 
 								e.g
-									o(2 17 3 100)	yields 5 and stores 2 in variable 100.
+									o(#quotrem 17 3 100)	yields 5 and stores 2 in variable 100.
 
-			o 3 num
+			o#uni num
 							A string having one character having Unicode point <num>.
-							(To be replaced by o#uni)
 
 							If more operands are provided, a string having characters from the given unicode points is returned.
 
 							e.g.
-								03 10	yields the newline character.
-								o(3 1057 1086 1102 1079) yields "Союз".
+								o#uni 10	yields the newline character.
+								o(#uni 1057 1086 1102 1079) yields "Союз".
 
-			o 4 exp
-							Returns type of expression
-							(To be replaced by operator 't')
-
-								o4 39        yields 1 : numeric
-								o4 [sWhat?]  yields 2 : string
-								An empty expression will yield 0.
-
-			o  6  seq
+			o#fib  seq
 
 							Fibonacci number
 							(To be replaced by o#fib)
@@ -925,20 +917,19 @@ Operators
 								absolute value before being used to get a Fibonacci number.
 								
 								e.g.
-									o6 0 yields 0
-									o6 1 yields 1
-									o6 2 yields 1
-									o6 3 yields 2
-									o6 4 yields 3
-									o6 5 yields 5
-									o6 6 yields 8
-									o6 6.1 yields 8
-									o6 ~6.1 yields 8
+									o #fib 0 yields 0
+									o #fib 1 yields 1
+									o #fib 2 yields 1
+									o #fib 3 yields 2
+									o #fib 4 yields 3
+									o #fib 5 yields 5
+									o #fib 6 yields 8
+									o #fib 6.1 yields 8
+									o #fib ~6.1 yields 8
 
-			o(7 year month day)
+			o(#dow year month day)
 
 							Day of week
-							(To be replaced by o#dow)
 								(to be implemented)
 
 								Returns a number from 0 to 6, where 0 is Saturday and 6 is Friday.
@@ -946,11 +937,10 @@ Operators
 								If the day operator is ommitted, day "0" is presumed - i.e., the last day of the previous month.
 								
 								e.g.
-									o(7 2024 5 27)	yields 3: monday.
-									O 7 2024 5			yields 3: tuesday.
+									o(#dow 2024 5 27)	yields 3: monday.
+									O #dow 2024 5			yields 3: tuesday.
 
-			o(8 year month day)
-							(To be replaced by o#ymd)
+			o(#ymd year month day)
 							(to be implemented)
 
 							Sequence number of a day, assuming
@@ -961,7 +951,7 @@ Operators
 								(Laconic's calendar operators calculate within the fiction
 								of the Gregorian calendar having been used since Roman imperial era.)
 		
-		O Operator designated by number, 3 operands
+		O Operator designated by name, 3 operands
 		
 			(upper case O)
 			
@@ -975,19 +965,19 @@ Operators
 		If the first operand refers to an unknown option,
 		the operator and its operands are ignored.
 
-		Z 0 n : Precision "orb" for =-operator.
+		Z#prec n : Precision "orb" for =-operator.
 					 Default : 0; if n is negative, this default is restored.
 
-		Z 1 n : maximum number of loops executed by F- or W-operator.
+		Z#loops n : maximum number of loops executed by F- or W-operator.
 					 If 0, no maximum is imposed, which removes the protection against infinite loops.
 					 Default : 10,000.
 
-		Z 2 n : number of digits before fractal dot in output
+		Z#ints n : number of digits before fractal dot in output
 					(to be implemented)
 
 					If n=0, only the numbers needed will be output.
 
-		Z 3 n : number of digits after fractal dot in output
+		Z#fracts n : number of digits after fractal dot in output
 					(to be implemented)
 
 					If n=0, only the numbers needed will be output.
