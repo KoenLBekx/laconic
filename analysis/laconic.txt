@@ -201,9 +201,11 @@ LACONIC
 
 		Strings are either
 			- enclosed between [s and ] : string bracket contents
-			- simple strings: enclosed between
-				# and whitespace or
+			- simple strings: enclosed between any of
+				# and whitespace
 				# and [
+				# and (
+				# and )
 
 		Eg.:
 

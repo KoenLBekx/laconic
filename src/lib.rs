@@ -1,4 +1,5 @@
 // TODO: resolve TODO's in code.
+// TODO: have a simple string terminated by ( and ) also.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: have the operator functions return more ProgramErrors for unexpected conditions
 //          This will require the ValueType to have a ValueType::Error(ProgramError) variant.
@@ -533,6 +534,20 @@ impl Interpreter {
 
                     bracket_nesting += 1;
                     opening_bracket_pos.push(pos);
+                } else if "()".contains(c) {
+                    if reading_number {
+                        result.push(Atom::Number(current_num));
+                        reading_number = false;
+                        current_num = 0f64;
+                        periods_found = 0;
+                        frac_pos = 0;
+                    } else if reading_simple_string {
+                        result.push(Atom::String(current_string.clone()));
+                        reading_simple_string = false;
+                        current_string = String::new();
+                    }
+
+                    result.push(Atom::Operator(c));
                 } else if reading_simple_string {
                    current_string.push(c); 
                 } else if c.is_ascii_digit() {
@@ -1870,6 +1885,24 @@ mod tests {
         fn split_simple_string_ends_with_whitespace() {
             let result = Interpreter::split_atoms("#Chomsky! 45");
             assert_eq!(Ok(vec![Atom::String("Chomsky!".to_string()), Atom::Number(45f64)]), result);
+        }
+
+        #[test]
+        fn split_simple_string_ends_with_opening_bracket() {
+            let result = Interpreter::split_atoms("#Arundhati[cTest]");
+            assert_eq!(Ok(vec![Atom::String("Arundhati".to_string()), Atom::Comment("Test".to_string())]), result);
+        }
+
+        #[test]
+        fn split_simple_string_ends_with_opening_parenthesis() {
+            let result = Interpreter::split_atoms("#Arundhati(30)");
+            assert_eq!(Ok(vec![Atom::String("Arundhati".to_string()), Atom::Operator('('), Atom::Number(30f64), Atom::Operator(')')]), result);
+        }
+
+        #[test]
+        fn split_simple_string_ends_with_closing_parenthesis() {
+            let result = Interpreter::split_atoms("(#Arundhati)");
+            assert_eq!(Ok(vec![Atom::Operator('('), Atom::String("Arundhati".to_string()), Atom::Operator(')')]), result);
         }
 
         #[test]
