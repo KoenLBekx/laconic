@@ -67,6 +67,9 @@ enum ValueType {
     Empty,
     Number(f64),
     Text(String),
+
+    /// Only to be used to serve functionality like opr_funcs::min.
+    Max,
 }
 
 impl ValueType {
@@ -75,6 +78,7 @@ impl ValueType {
             ValueType::Empty => 0f64,
             ValueType::Number(_) => 1f64,
             ValueType::Text(_) => 2f64,
+            ValueType::Max => 99f64,
         }
     }
 
@@ -89,6 +93,7 @@ impl ValueType {
         match self {
             ValueType::Text(ref txt) => txt.clone(),
             ValueType::Number(ref num) => format!("{}", num),
+            ValueType::Max => "ValueType::Max".to_string(),
             _ => default,
         }
     }
@@ -100,6 +105,7 @@ impl PartialEq for ValueType {
             (ValueType::Empty, ValueType::Empty) => true,
             (ValueType::Number(s), ValueType::Number(o)) => s == o,
             (ValueType::Text(ref s), ValueType::Text(ref o)) => *s == *o,
+            (ValueType::Max, ValueType::Max) => true,
             _ => false,
         }
     }
@@ -113,6 +119,7 @@ impl Hash for ValueType {
             ValueType::Empty => 0u8.hash(state),
             ValueType::Text(s) => s.hash(state),
             ValueType::Number(f) => f.to_be_bytes().hash(state),
+            ValueType::Max => 99u8.hash(state),
         };
     }
 }
@@ -226,14 +233,6 @@ impl Expression {
     }
 
     pub fn get_string_value(&self, default: String) -> String {
-        /*
-        match self.value {
-            ValueType::Text(ref txt) => txt.clone(),
-            ValueType::Number(ref num) => format!("{}", num),
-            _ => default,
-        }
-        */
-
         self.value.get_string_value(default)
     }
 
@@ -326,6 +325,7 @@ impl Expression {
                 ValueType::Empty => "no_value".to_string(),
                 ValueType::Number(num) => num.to_string(),
                 ValueType::Text(ref txt) => txt.clone(),
+                ValueType::Max => panic!("An Expression having opr_mark 0 or \" should not have a value of ValueType::Max."),
             };
 
             exp_rep.push_str(val_rep.as_str());
@@ -479,6 +479,7 @@ impl Interpreter {
             ValueType::Number(ref n) => ExecutionOutcome::new(*n, format!("{}", *n)),
             ValueType::Text(ref s) => ExecutionOutcome::new(0f64, s.clone()),
             ValueType::Empty => ExecutionOutcome::new(0f64, NO_VALUE.to_string()),
+            ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
         })
     }
 
@@ -948,38 +949,42 @@ pub(crate) mod opr_funcs {
     pub fn combine(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         *result_value = match operands.last() {
             Some(e) => e.get_value(),
-            None => ValueType::Number(0f64),
+            None => ValueType::Empty,
         };
     }
     
     pub fn min(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
-        let mut outcome = f64::MAX;
-        let mut current: f64;
+        let mut outcome = ValueType::Max;
+        let mut current: ValueType;
 
         for op in &*operands {
-            current = op.get_num_value(f64::MAX);
+            current = op.get_value();
 
             if outcome > current {
                 outcome = current;
             }
         }
 
-        *result_value = ValueType::Number(outcome);
+        if outcome == ValueType::Max {
+            outcome = ValueType::Empty;
+        }
+
+        *result_value = outcome;
     }
     
     pub fn max(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
-        let mut outcome = f64::MIN;
-        let mut current: f64;
+        let mut outcome = ValueType::Empty;
+        let mut current: ValueType;
 
         for op in &*operands {
-            current = op.get_num_value(f64::MIN);
+            current = op.get_value();
 
             if outcome < current {
                 outcome = current;
             }
         }
 
-        *result_value = ValueType::Number(outcome);
+        *result_value = outcome;
     }
 
     pub fn unaryminus(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
@@ -1272,16 +1277,28 @@ pub(crate) mod opr_funcs {
     pub fn less(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = true;
         let mut first = ValueType::Empty;
-        let mut second: ValueType;
+        let mut current: ValueType;
+        let mut count: usize;
+        let mut op: Expression;
+        let mut ops = operands.iter().enumerate();
 
-        for (count, op) in operands.iter().enumerate() {
-            match count {
-                0 => first = op.get_value(),
-                _ => {
-                    second = op.get_value();
-                    outcome = outcome && (first < second);
-                    first = second;
+        loop {
+            match ops.next(){
+                Some((count, op)) => {
+                    match count {
+                        0 => first = op.get_value(),
+                        _ => {
+                            current = op.get_value();
+                            outcome = outcome && (first < current);
+                            first = current;
+                        },
+                    }
+
+                    if !outcome {
+                        break;
+                    }
                 },
+                None => break,
             }
         }
 
@@ -1295,18 +1312,28 @@ pub(crate) mod opr_funcs {
     pub fn greater(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
         let mut outcome = true;
         let mut first = ValueType::Empty;
-        let mut second: ValueType;
+        let mut current: ValueType;
+        let mut count: usize;
+        let mut op: Expression;
+        let mut ops = operands.iter().enumerate();
 
-        // We're reversing, as the smallest ValueType is known (ValueType::Empty),
-        // but not the greatest one (what's the greatest string ?).
-        for (count, op) in operands.iter().rev().enumerate() {
-            match count {
-                0 => first = op.get_value(),
-                _ => {
-                    second = op.get_value();
-                    outcome = outcome && (first < second);
-                    first = second;
+        loop {
+            match ops.next(){
+                Some((count, op)) => {
+                    match count {
+                        0 => first = op.get_value(),
+                        _ => {
+                            current = op.get_value();
+                            outcome = outcome && (first > current);
+                            first = current;
+                        },
+                    }
+
+                    if !outcome {
+                        break;
+                    }
                 },
+                None => break,
             }
         }
 
@@ -1325,6 +1352,7 @@ pub(crate) mod opr_funcs {
                 ValueType::Empty => (),
                 ValueType::Text(ref s) => outcome &= s.len() == 0,
                 ValueType::Number(n) => outcome &= are_near(0f64, n, shuttle.orb),
+                ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
             }
         }
 
@@ -1338,8 +1366,13 @@ pub(crate) mod opr_funcs {
     pub fn and(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = true;
 
-        for op in &*operands {
-            outcome &= !are_near(0f64, op.get_num_value(0f64), shuttle.orb);
+        for op in operands {
+            match op.get_value() {
+                ValueType::Empty => outcome = false,
+                ValueType::Text(ref s) => outcome &= s.len() > 0,
+                ValueType::Number(n) => outcome &= !are_near(0f64, n, shuttle.orb),
+                ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+            }
         }
 
         *result_value = ValueType::Number(if outcome {
@@ -1352,8 +1385,13 @@ pub(crate) mod opr_funcs {
     pub fn or(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut outcome = false;
 
-        for op in &*operands {
-            outcome |= !are_near(0f64, op.get_num_value(0f64), shuttle.orb);
+        for op in operands {
+            match op.get_value() {
+                ValueType::Empty => (),
+                ValueType::Text(ref s) => outcome |= s.len() > 0,
+                ValueType::Number(n) => outcome |= !are_near(0f64, n, shuttle.orb),
+                ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+            }
         }
 
         *result_value = ValueType::Number(if outcome {
@@ -1366,10 +1404,21 @@ pub(crate) mod opr_funcs {
     pub fn xor(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         let mut trues = 0usize;
 
-        for op in &*operands {
-              if !are_near(0f64, op.get_num_value(0f64), shuttle.orb) {
-                  trues += 1;
-              }
+        for op in operands {
+            match op.get_value() {
+                ValueType::Empty => (),
+                ValueType::Text(ref s) =>  {
+                    if s.len() > 0 {
+                        trues += 1;
+                    }
+                },
+                ValueType::Number(n) => {
+                    if !are_near(0f64, n, shuttle.orb) {
+                      trues += 1;
+                    }
+                },
+                ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+            }
         }
 
         *result_value = ValueType::Number(if trues == 1 {
@@ -2151,7 +2200,7 @@ mod tests {
 
         #[test]
         fn x_combine_0_op() {
-            assert_eq!(0f64, Interpreter::execute(";".to_string()).unwrap().numeric_value);
+            assert_eq!(NO_VALUE.to_string(), Interpreter::execute(";".to_string()).unwrap().string_representation);
         }
 
         #[test]
@@ -2385,6 +2434,24 @@ mod tests {
         }
 
         #[test]
+        fn x_min_empty() {
+            assert_eq!(
+                NO_VALUE.to_string(),
+                Interpreter::execute("m(128 v#notUsedYet [s Huh?] 277 ~31 5)".to_string())
+                    .unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_min_num_and_string() {
+            assert_eq!(-31f64, Interpreter::execute("m#Voilà ~31".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_min_strings() {
+            assert_eq!("Voilà".to_string(), Interpreter::execute("m#Voilà #voilà".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
         fn x_max_two_first() {
             assert_eq!(128f64, Interpreter::execute("M128 27".to_string()).unwrap().numeric_value);
         }
@@ -2402,6 +2469,24 @@ mod tests {
         #[test]
         fn x_max_more() {
             assert_eq!(366f64, Interpreter::execute("M(128 277 ~31 5 366)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_max_empty() {
+            assert_eq!(
+                " Huh?".to_string(),
+                Interpreter::execute("M(128 v#notUsedYet [s Huh?] 277 ~31 5)".to_string())
+                    .unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_max_num_and_string() {
+            assert_eq!("Voilà".to_string(), Interpreter::execute("M#Voilà ~31".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_max_strings() {
+            assert_eq!("voilà".to_string(), Interpreter::execute("M#Voilà #voilà".to_string()).unwrap().string_representation);
         }
 
         #[test]
@@ -2666,6 +2751,21 @@ mod tests {
         }
 
         #[test]
+        fn x_and_empty() {
+            assert_eq!(0f64, Interpreter::execute("& 9 v#uninit".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_and_empty_string() {
+            assert_eq!(0f64, Interpreter::execute("& 9 [s]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_and_string() {
+            assert_eq!(1f64, Interpreter::execute("& 9 #Nostromo".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_or_0() {
             assert_eq!(0f64, Interpreter::execute("|".to_string()).unwrap().numeric_value);
         }
@@ -2698,6 +2798,21 @@ mod tests {
         #[test]
         fn x_or_3_false() {
             assert_eq!(0f64, Interpreter::execute("|( 0 -5 5 %20 5)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_or_empty() {
+            assert_eq!(1f64, Interpreter::execute("| 9 v#uninit".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_or_empty_string() {
+            assert_eq!(1f64, Interpreter::execute("| 9 [s]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_or_string() {
+            assert_eq!(1f64, Interpreter::execute("| 9 #Nostromo".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -2748,6 +2863,21 @@ mod tests {
         #[test]
         fn x_xor_3_false_0_true() {
             assert_eq!(0f64, Interpreter::execute("x(0 -5 5 %20 5)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_xor_empty() {
+            assert_eq!(1f64, Interpreter::execute("x 9 v#uninit".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_xor_empty_string() {
+            assert_eq!(1f64, Interpreter::execute("x 9 [s]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_xor_string() {
+            assert_eq!(0f64, Interpreter::execute("x 9 #Nostromo".to_string()).unwrap().numeric_value);
         }
 
         #[test]

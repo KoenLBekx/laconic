@@ -2,12 +2,20 @@ LACONIC
 
 		// TODO: explain standard number of operands and how to deviate from it.
 		// TODO: indicate the standard number of operands for every operator.
+		// TODO: replace operator o4 (type) to operator 't'.
+		// TODO: replace operator o0 (sign) to operator 's'.
+		// TODO: convert the enumerated operators to having a short string as first operand instead of a number.
+		//          E.g.
+		//              o3 938
+		//          to  o#uni 938
+		// TODO: do the same with the Z (settings) operator.
+		// TODO: do the same with the c (constants) operator.
 
-		* Characters assigned to operators:
-			~+-*/%^$():`;=<>!&|?°AabCceFilMmOoprSsTUuvWwxZ
+		* Characters assigned or to be assigned to operators:
+			~+-*/%^$():`;=<>!&|?°AabCceFilMmOoprSsTtUuvWwxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?° a CceFilMmOoprS T  vWwxZ
+			~+-*/%^$():`;=<>!&|?° a CceFilMmOoprS T   vWwxZ
 
 		* Characters not to be used as operator:
 			' "     interfere with command line syntax
@@ -15,7 +23,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			´@\{},§£€¶BDdEfGgHhIJjKkLNnPQRqtVXz
+			´@\{},§£€¶BDdEfGgHhIJjKkLNnPQRqVXz
 
 			Note the Unicode point of some characters not on all keyboards:
 				^ 005E Circumflex accent
@@ -387,6 +395,7 @@ Operators
 			enumerated constants
 
 			c0 Golden Ratio (sectio aurea)
+				(To be replaced by c#gold)
 
 				Calculated as (1 + sqrt(5))/2
 
@@ -856,6 +865,8 @@ Operators
 
 			o  0  opd
 							Sign
+							(To be replaced by operator 's')
+
 								if a > 0, yields 1
 								if a = 0, yields 0
 								if a < 0, yields -1
@@ -873,6 +884,7 @@ Operators
 			o(2 dividend divisor remainder_var)
 
 							Integer division and remainder
+							(To be replaced by o#qr)
 								(to be implemented)
 
 								Returns the integer quotient of dividend/divisor
@@ -884,6 +896,7 @@ Operators
 
 			o 3 num
 							A string having one character having Unicode point <num>.
+							(To be replaced by o#uni)
 
 							If more operands are provided, a string having characters from the given unicode points is returned.
 
@@ -893,6 +906,7 @@ Operators
 
 			o 4 exp
 							Returns type of expression
+							(To be replaced by operator 't')
 
 								o4 39        yields 1 : numeric
 								o4 [sWhat?]  yields 2 : string
@@ -901,6 +915,7 @@ Operators
 			o  6  seq
 
 							Fibonacci number
+							(To be replaced by o#fib)
 								(to be implemented)
 
 								(F is the 6th letter.)
@@ -921,6 +936,7 @@ Operators
 			o(7 year month day)
 
 							Day of week
+							(To be replaced by o#dow)
 								(to be implemented)
 
 								Returns a number from 0 to 6, where 0 is Saturday and 6 is Friday.
@@ -932,6 +948,7 @@ Operators
 									O 7 2024 5			yields 3: tuesday.
 
 			o(8 year month day)
+							(To be replaced by o#ymd)
 							(to be implemented)
 
 							Sequence number of a day, assuming
