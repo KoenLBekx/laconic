@@ -1,5 +1,4 @@
 // TODO: resolve TODO's in code.
-// TODO: have a simple string terminated by ( and ) also.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: have the operator functions return more ProgramErrors for unexpected conditions
 //          This will require the ValueType to have a ValueType::Error(ProgramError) variant.
@@ -26,7 +25,6 @@ use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
-use std::str::FromStr;
 
 // Static lifetime: justified, because the functions referenced
 // are compiled into the application and live as long as it runs.
@@ -38,7 +36,7 @@ type OperatorFunc = &'static dyn Fn(&mut ValueType, &mut [Expression], &mut Shut
 #[derive(PartialEq)]
 enum Atom {
     Operator(char),
-    Number(f64),
+    Number(String),
     String(String),
     Comment(String),
 }
@@ -47,7 +45,7 @@ impl fmt::Debug for Atom {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Atom::Operator(c) => write!(f, "{}", c),
-            Atom::Number(n) => write!(f, "{} ", n),
+            Atom::Number(ref n) => write!(f, "{} ", n),
             Atom::String(_) => write!(f, "[s...]"),
             Atom::Comment(_) => write!(f, "[c...]"),
         }
@@ -194,11 +192,11 @@ impl Expression {
         }
     }
 
-    pub fn new_number(num: f64) -> Self {
+    pub fn new_number(string_representation: String) -> Self {
         Expression {
             operator: &opr_funcs::nop,
             operands: Vec::<Expression>::new(),
-            value: ValueType::Number(num),
+            value: ValueType::Text(string_representation),
             opr_mark: '0',
             is_last_of_override: false,
             has_overridden_nr_of_ops: false,
@@ -494,13 +492,10 @@ impl Interpreter {
         let mut reading_simple_string = false;
         let mut bracket_nesting = 0u8;
         let mut opening_bracket_pos = Vec::<usize>::new();
-        let mut current_num = 0f64;
+        let mut current_num = String::new();
         let mut current_string = String::new();
         let mut current_bracket_content = String::new();
-        let mut periods_found = 0u8;
-        let mut frac_pos = 0i32;
         let mut pos = 0usize;
-        let mut digit_value: f64;
 
         for c in program.chars() {
             pos += 1;
@@ -518,16 +513,12 @@ impl Interpreter {
 
                     reading_number = false;
                     reading_simple_string = false;
-                    current_num = 0f64;
-                    periods_found = 0;
-                    frac_pos = 0;
+                    current_num = String::new();
                 } else if c == '[' {
                     if reading_number {
                         result.push(Atom::Number(current_num));
                         reading_number = false;
-                        current_num = 0f64;
-                        periods_found = 0;
-                        frac_pos = 0;
+                        current_num = String::new();
                     } else if reading_simple_string {
                         result.push(Atom::String(current_string.clone()));
                         reading_simple_string = false;
@@ -540,9 +531,7 @@ impl Interpreter {
                     if reading_number {
                         result.push(Atom::Number(current_num));
                         reading_number = false;
-                        current_num = 0f64;
-                        periods_found = 0;
-                        frac_pos = 0;
+                        current_num = String::new();
                     } else if reading_simple_string {
                         result.push(Atom::String(current_string.clone()));
                         reading_simple_string = false;
@@ -555,28 +544,12 @@ impl Interpreter {
                 } else if c.is_ascii_digit() {
                     reading_number = true;
 
-                    digit_value = match f64::from_str(&c.to_string()) {
-                        Err(err) => return Err(ProgramError::DigitParsingFailure{position: pos, reason: err.to_string()}),
-                        Ok(val) => val,
-                    };
-
-                    match periods_found {
-                        0 => current_num = (current_num * 10f64) + digit_value,
-                        // TODO : treat second period as the start of the repeated numbers sequence.
-                        1 | 2 => {
-                            frac_pos += 1;
-                            current_num += digit_value / 10f64.powi(frac_pos);
-                        },
-                        _ => {
-                            result.push(Atom::Number(current_num));
-                            current_num = digit_value;
-                            periods_found = 1;
-                            frac_pos = 0;
-                        },
-                    }
+                    // Simply push the character to the current_num string; parsing happens in
+                    // opr_funcs::nop.
+                    current_num.push(c);
                 } else if c == '.' {
                     reading_number = true;
-                    periods_found += 1;
+                    current_num.push(c);
                 } else if c == ']' {
                     return Err(ProgramError::UnexpectedClosingBracket{position: pos});
                 } else if c == '#' {
@@ -586,9 +559,7 @@ impl Interpreter {
                         if reading_number {
                             result.push(Atom::Number(current_num));
                             reading_number = false;
-                            current_num = 0f64;
-                            periods_found = 0;
-                            frac_pos = 0;
+                            current_num = String::new();
                         }
 
                         reading_simple_string = true;
@@ -597,9 +568,7 @@ impl Interpreter {
                     if reading_number {
                         result.push(Atom::Number(current_num));
                         reading_number = false;
-                        current_num = 0f64;
-                        periods_found = 0;
-                        frac_pos = 0;
+                        current_num = String::new();
                     }
 
                     if Self::is_known_operator(c) {
@@ -631,6 +600,7 @@ impl Interpreter {
                                         match first {
                                             's' => result.push(Atom::String(rest)),
                                             'c' => result.push(Atom::Comment(rest)),
+                                            'n' => result.push(Atom::Number(rest)),
                                             _ => (),
                                         }
                                     },
@@ -675,8 +645,6 @@ impl Interpreter {
         let mut override_start_found = false;
         let mut needed_ops: usize;
 
-        // Preprocess atoms to replace the ':' operator with extra atoms.
-
         for exp in atoms.iter().rev() {
 
             /*
@@ -685,8 +653,8 @@ impl Interpreter {
             */
 
             match exp {
-                Atom::Number(n) => {
-                    let new_exp = Expression::new_number(*n);
+                Atom::Number(string_rep) => {
+                    let new_exp = Expression::new_number(string_rep.to_string());
                     exp_stack.push(new_exp);
                 },
                 Atom::String(s) => {
@@ -759,7 +727,7 @@ impl Interpreter {
 
         // If the stack has more than one expression, put whatever remains on the stack as operands in a ; - expression.
         match exp_stack.len() {
-            0 => Expression::new_number(0f64),
+            0 => Expression::new_number("0".to_string()),
             1 => exp_stack.pop().expect("Is should be possible to pop the single Expression from the expression stack."),
             _ => {
                 let mut result = Expression::new(';');
@@ -865,9 +833,60 @@ pub(crate) mod opr_funcs {
         false
     }
     
-    pub fn nop(_result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
-        // Don't do anything.
-        // Meant for Expressions that contain a fixed numerical value from creation.
+    pub fn nop(result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        // If still needed, parse the string representation to a number.
+        // TODO : for now, invalid strings are parsed to NaN; later on, a ValueType::Error is
+        // needed.
+
+        match result_value {
+            ValueType::Text(string_rep) => {
+                let mut num = 0f64;
+                let mut periods_found = 0u8;
+                let mut frac_pos = 0i32;
+                let mut digit_value: f64;
+
+                for c in string_rep.chars() {
+
+                    #[cfg(test)]
+                    println!("fn nop: handling char {}", c);
+
+                    match c {
+                        // Ignore underscores.
+                        '_' => (),
+                        '.' => {
+                            periods_found += 1;
+                        },
+                        other if other.is_ascii_digit() => {
+                            digit_value = match f64::from_str(&other.to_string()) {
+                                Err(_err) => f64::NAN,
+                                Ok(val) => val,
+                            };
+
+                            match periods_found {
+                                0 => num = (num * 10f64) + digit_value,
+                                // TODO : treat a second period as the start of the repeated numbers sequence.
+                                _ => {
+                                    frac_pos += 1;
+                                    num += digit_value / 10f64.powi(frac_pos);
+                                },
+                            }
+                        },
+                        _ => num = f64::NAN,
+                    }
+
+                    #[cfg(test)]
+                    println!("fn nop: num = {}", num);
+
+                }
+
+                *result_value = ValueType::Number(num);
+            },
+            //_ => (),
+            _ =>  {
+                #[cfg(test)]
+                println!("fn nop: non-Number ValueType found.");
+            },
+        }
     }
 
     pub fn string_expr(_result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
@@ -1031,13 +1050,6 @@ pub(crate) mod opr_funcs {
         *result_value = match operands.first() {
             None => ValueType::Number(0f64),
             Some(e) => ValueType::Number(e.get_num_value(0f64).abs()),
-        };
-    }
-
-    pub fn radians(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
-        *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
-            Some(e) => ValueType::Number(e.get_num_value(0f64).to_radians()),
         };
     }
 
@@ -1722,73 +1734,73 @@ mod tests {
         #[test]
         fn split_positive_integer() {
             let result = Interpreter::split_atoms("138");
-            assert_eq!(Ok(vec![Atom::Number(138f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number("138".to_string())]), result);
         }
 
         #[test]
         fn split_positive_integer_contains_underscore() {
             let result = Interpreter::split_atoms("1_38");
-            assert_eq!(Ok(vec![Atom::Number(138f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number("138".to_string())]), result);
         }
 
         #[test]
         fn split_positive_integer_starts_with_underscore() {
             let result = Interpreter::split_atoms("_138");
-            assert_eq!(Ok(vec![Atom::Number(138f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number("138".to_string())]), result);
         }
 
         #[test]
         fn split_positive_integer_ends_with_underscore() {
             let result = Interpreter::split_atoms("138_");
-            assert_eq!(Ok(vec![Atom::Number(138f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number("138".to_string())]), result);
         }
 
         #[test]
         fn split_positive_fractal_greater_than_1() {
             let result = Interpreter::split_atoms("22.6");
-            assert_eq!(Ok(vec![Atom::Number(22.6f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number("22.6".to_string())]), result);
         }
 
         #[test]
         fn split_positive_fractal_smaller_than_1_starting_with_dot() {
             let result = Interpreter::split_atoms(".922");
-            assert_eq!(Ok(vec![Atom::Number(0.922f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number(".922".to_string())]), result);
         }
 
         #[test]
         fn split_positive_fractal_smaller_than_1_starting_with_0() {
             let result = Interpreter::split_atoms("0.922");
-            assert_eq!(Ok(vec![Atom::Number(0.922f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number("0.922".to_string())]), result);
         }
 
         #[test]
         fn split_positive_fractal_smaller_than_1_starting_with_00() {
             let result = Interpreter::split_atoms("00.922");
-            assert_eq!(Ok(vec![Atom::Number(0.922f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number("00.922".to_string())]), result);
         }
 
         #[test]
         fn split_positive_fractal_greater_than_1_contains_underscores() {
             let result = Interpreter::split_atoms("_22_._6_");
-            assert_eq!(Ok(vec![Atom::Number(22.6f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number("22.6".to_string())]), result);
         }
 
         #[test]
         fn split_positive_integer_ends_with_dot() {
             let result = Interpreter::split_atoms("22.");
-            assert_eq!(Ok(vec![Atom::Number(22f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number("22.".to_string())]), result);
         }
 
         #[test]
         fn split_positive_integer_dot() {
             let result = Interpreter::split_atoms(".");
-            assert_eq!(Ok(vec![Atom::Number(0f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number(".".to_string())]), result);
         }
 
         #[test]
         fn split_two_numbers() {
             let result = Interpreter::split_atoms("741 _.60");
-            assert_eq!(Ok(vec![Atom::Number(741f64), Atom::Number(0.60f64)]), result);
+            assert_eq!(Ok(vec![Atom::Number("741".to_string()), Atom::Number(".60".to_string())]), result);
         }
 
         #[test]
@@ -1809,18 +1821,18 @@ mod tests {
 
             assert_eq!(Ok(vec![
                 Atom::Operator(';'),
-                Atom::Number(0.11f64),
+                Atom::Number(".11".to_string()),
                 Atom::Operator(':'),
                 Atom::Operator('+'),
-                Atom::Number(5.2f64),
+                Atom::Number("5.2".to_string()),
                 Atom::String("Simple#?".to_string()),
                 Atom::Comment("And now the second operand".to_string()),
-                Atom::Number(9119f64),
+                Atom::Number("9119".to_string()),
                 Atom::Operator('~'),
-                Atom::Number(45f64),
+                Atom::Number("45".to_string()),
                 Atom::Operator('+'),
-                Atom::Number(3f64),
-                Atom::Number(2f64),
+                Atom::Number("3".to_string()),
+                Atom::Number("2".to_string()),
                 Atom::String("Aaand another string".to_string()),
             ]), result);
         }
@@ -1882,7 +1894,7 @@ mod tests {
         #[test]
         fn split_simple_string_ends_with_whitespace() {
             let result = Interpreter::split_atoms("#Chomsky! 45");
-            assert_eq!(Ok(vec![Atom::String("Chomsky!".to_string()), Atom::Number(45f64)]), result);
+            assert_eq!(Ok(vec![Atom::String("Chomsky!".to_string()), Atom::Number("45".to_string())]), result);
         }
 
         #[test]
@@ -1894,7 +1906,7 @@ mod tests {
         #[test]
         fn split_simple_string_ends_with_opening_parenthesis() {
             let result = Interpreter::split_atoms("#Arundhati(30)");
-            assert_eq!(Ok(vec![Atom::String("Arundhati".to_string()), Atom::Operator('('), Atom::Number(30f64), Atom::Operator(')')]), result);
+            assert_eq!(Ok(vec![Atom::String("Arundhati".to_string()), Atom::Operator('('), Atom::Number("30".to_string()), Atom::Operator(')')]), result);
         }
 
         #[test]
@@ -1959,7 +1971,11 @@ mod tests {
 
         #[test]
         fn expr_new_number_get_value() {
-            let exp = Expression::new_number(47.11f64);
+            let mut exp = Expression::new_number("47.11".to_string());
+            let mut writer = Vec::<u8>::new();
+            let mut reader = MockByString::new(Vec::<String>::new());
+            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
+            exp.operate(&mut shuttle);
             assert_eq!(47.11f64, exp.get_num_value(0f64));
 
             // Check if we can get the value a second time.
@@ -1969,8 +1985,8 @@ mod tests {
         #[test]
         fn expr_add_numbers() {
             let mut exp = Expression::new('+');
-            exp.push_operand(Expression::new_number(4000.3f64));
-            exp.push_operand(Expression::new_number( 500.1f64));
+            exp.push_operand(Expression::new_number("4000.3".to_string()));
+            exp.push_operand(Expression::new_number("500.1".to_string()));
 
             let mut writer = Vec::<u8>::new();
             let mut reader = MockByString::new(Vec::<String>::new());
@@ -1988,12 +2004,12 @@ mod tests {
             let mut exp = Expression::new('+');
 
             let mut op1 = Expression::new('+');
-            op1.push_operand(Expression::new_number( 43f64));
-            op1.push_operand(Expression::new_number(500f64));
+            op1.push_operand(Expression::new_number("43".to_string()));
+            op1.push_operand(Expression::new_number("500".to_string()));
 
             let mut op2 = Expression::new('+');
-            op2.push_operand(Expression::new_number( 9.03f64));
-            op2.push_operand(Expression::new_number(22f64));
+            op2.push_operand(Expression::new_number("9.03".to_string()));
+            op2.push_operand(Expression::new_number("22".to_string()));
 
             exp.push_operand(op1);
             exp.push_operand(op2);
@@ -2009,8 +2025,8 @@ mod tests {
         #[test]
         fn expr_assign_num_reg_dot3() {
             let mut exp = Expression::new('$');
-            exp.push_operand(Expression::new_number(4000.3f64));
-            exp.push_operand(Expression::new_number( 500.1f64));
+            exp.push_operand(Expression::new_number("4000.3".to_string()));
+            exp.push_operand(Expression::new_number("500.1".to_string()));
 
             let mut writer = Vec::<u8>::new();
             let mut reader = MockByString::new(Vec::<String>::new());
@@ -2029,32 +2045,10 @@ mod tests {
         }
 
         #[test]
-        fn expr_assign_num_reg_neg_dot3() {
-            let mut exp = Expression::new('$');
-            exp.push_operand(Expression::new_number(-4000.3f64));
-            exp.push_operand(Expression::new_number(500.1f64));
-
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
-            exp.operate(&mut shuttle);
-
-            match shuttle.nums.get(&ValueType::Number(-4000.3f64)) {
-                None => panic!("The numerical register assigned to has not been found back."),
-                Some(n) => {
-                    match n {
-                        ValueType::Number(num) => assert_eq!(500.1f64, *num),
-                        _ => panic!("The value found in shuttle.nums should be ValueType::Number."),
-                    }
-                },
-            }
-        }
-
-        #[test]
         fn expr_set_orb() {
             let mut exp = Expression::new('Z');
             exp.push_operand(Expression::new_text("prec".to_string()));
-            exp.push_operand(Expression::new_number(0.001f64));
+            exp.push_operand(Expression::new_number("0.001".to_string()));
 
             let mut writer = Vec::<u8>::new();
             let mut reader = MockByString::new(Vec::<String>::new());
@@ -2069,7 +2063,7 @@ mod tests {
         fn expr_set_max_iterations() {
             let mut exp = Expression::new('Z');
             exp.push_operand(Expression::new_text("loops".to_string()));
-            exp.push_operand(Expression::new_number(500f64));
+            exp.push_operand(Expression::new_number("500".to_string()));
 
             let mut writer = Vec::<u8>::new();
             let mut reader = MockByString::new(Vec::<String>::new());
@@ -2103,28 +2097,6 @@ mod tests {
                 ValueType::Number(n) => assert_eq!(500f64, n),
                 _ => panic!("A ValueType::Number was expected, other variant was found."),
             }
-        }
-
-        #[test]
-        fn op_add() {
-            let mut the_value = ValueType::Empty;
-            let mut ops = vec![Expression::new_number(12f64), Expression::new_number(68f64)];
-
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
-
-            add(&mut the_value, &mut ops, &mut shuttle);
-
-            // Check the value.
-            match the_value {
-                ValueType::Number(n) => assert_eq!(80f64, n),
-                _ => panic!("A ValueType::Number was expected, other variant was found."),
-            }
-
-            // Verify that the operands didn't change.
-            assert_eq!(12f64, ops[0].get_num_value(0f64));
-            assert_eq!(68f64, ops[1].get_num_value(0f64));
         }
 
         #[test]
@@ -2538,6 +2510,11 @@ mod tests {
         #[test]
         fn x_assign_num_serial_assignation_string_name() {
             assert_eq!(7f64, Interpreter::execute("$(#reg 1 2 3 4) +v#reg2 v#reg3".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_assign_to_neg_register() {
+            assert_eq!(7f64, Interpreter::execute("$~10 7) v~10".to_string()).unwrap().numeric_value);
         }
 
         #[test]

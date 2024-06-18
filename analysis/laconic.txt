@@ -111,20 +111,19 @@ LACONIC
 				https://math.hmc.edu/funfacts/why-does-0-999-1/
 			)
 
-		A third period in a number is interpreted as the start of a new number between 1 and ~1 exclusively:
-				 (To be implemented.)
+		Surplus periods in a number will be ignored:
 
 			+1.0.0.2
 
 			is interpreted as
 
-			+1 .2
+			+1.002
 			
 			and yields
 
-			1.2
+			1.002
 
-			Using the b n command one can use other bases than 10 for the script's numbers.
+		Using the b n command one can use other bases than 10 for the script's numbers.
 
 			However, as non-decimal-digit characters are interpreted as commands,
 			numbers using a base larger than 10 and having digits above 9
