@@ -9,6 +9,8 @@ LACONIC
 		*	Implemented operators:
 			~+-*/%^$():`;=<>!&|?° a CceFilMmOoprSsTt  vWwxZ
 
+			b : implemented for input base; b` to be implemented in Expression::get_string_value().
+
 		* Characters not to be used as operator:
 			' "     interfere with command line syntax
 			. [ ] # have other meanings in Laconic.
@@ -136,7 +138,6 @@ LACONIC
 			b 16 10 yields 16(base10)
 
 		Number bases
-				 (To be implemented.)
 
 			The default number base is 10.
 

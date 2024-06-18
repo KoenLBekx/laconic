@@ -1,4 +1,8 @@
 // TODO: resolve TODO's in code.
+// TODO: the r operator should evaluate the input string as an expression, with a
+//          reference of the current shuttle.
+// TODO: the w operator and Interpreter::execute_opts should call Expression.get_string_value(),
+//          which has to take the output base into account.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: have the operator functions return more ProgramErrors for unexpected conditions
 //          This will require the ValueType to have a ValueType::Error(ProgramError) variant.
@@ -15,11 +19,6 @@
 // TODO: have all operators have an acceptable behavior with less or more operands than standard.
 //      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
-// TODO: fn split_atoms should not construct f64 numbers,
-//      but create uninitialized number expressions having only a number's string representation.
-//      Upon their first call of operate(), they should calculate their number based on the
-//      current number base.
-//      (split_atoms can't be asked to handle calculated base specifications like b*n n .)
 
 use std::collections::HashMap;
 use std::fmt;
@@ -179,6 +178,7 @@ impl Expression {
             'r' => &opr_funcs::read,
             's' => &opr_funcs::sign,
             't' => &opr_funcs::get_type,
+            'b' => &opr_funcs::change_base,
             _ => &opr_funcs::nop,
         };
 
@@ -380,6 +380,8 @@ struct Shuttle<'s> {
     max_iterations: f64,
     orb: f64,
     golden_ratio: Option<f64>,
+    input_base: f64,
+    output_base: f64,
     writer: &'s mut dyn Write,
     reader: &'s mut dyn input::StdinOrMock,
 
@@ -397,6 +399,8 @@ impl<'s> Shuttle<'s> {
             max_iterations: 10_000f64,
             orb: 0.00000001f64,
             golden_ratio: None,
+            input_base: 10f64,
+            output_base: 10f64,
             writer,
             reader,
             #[cfg(test)]
@@ -591,7 +595,7 @@ impl Interpreter {
                             // An empty bracket content is ignored.
                             if !current_bracket_content.is_empty() {
                                 match current_bracket_content.chars().next().unwrap() {
-                                    first if "sc".contains(first) => {
+                                    first if "scn".contains(first) => {
                                         let rest = match current_bracket_content.get(1..) {
                                             None => String::new(),
                                             Some(r) => r.to_string(),
@@ -663,7 +667,7 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:`!w°SCTcst"     .contains(chr) => 1,
+                        chr if "~iav:`!w°SCTcstb"    .contains(chr) => 1,
                         chr if "+-*/^l%&|x$W;mM=<>Zo".contains(chr) => 2,
                         chr if "?O"                  .contains(chr) => 3,
                         chr if "F"                   .contains(chr) => 5,
@@ -742,7 +746,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^lia%°SCTpec$v:`?WF;mM()=<>!&|xZoOwrst".contains(op)
+        "~+-*/^lia%°SCTpec$v:`?WF;mM()=<>!&|xZoOwrstb".contains(op)
     }
 }
 
@@ -832,51 +836,87 @@ pub(crate) mod opr_funcs {
 
         false
     }
-    
-    pub fn nop(result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
+
+    pub fn nop(result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) {
         // If still needed, parse the string representation to a number.
         // TODO : for now, invalid strings are parsed to NaN; later on, a ValueType::Error is
         // needed.
 
         match result_value {
             ValueType::Text(string_rep) => {
+                let mut string_rep_ext = string_rep.clone().trim().to_string();
+                string_rep_ext.push(' ');
+
                 let mut num = 0f64;
                 let mut periods_found = 0u8;
+                let mut first_frac = 0usize;
+                let mut digit_value =  0u32;
+                let mut has_pending_digit = false;
                 let mut frac_pos = 0i32;
-                let mut digit_value: f64;
 
-                for c in string_rep.chars() {
+                let mut digits = Vec::<u32>::new();
+                let using_multichar_digits = shuttle.input_base > 36f64;
+                let mut char_val: u32;
+                let diff_0 = '0' as u32;
+                let diff_a = ('A' as u32) - 10u32;
 
-                    #[cfg(test)]
-                    println!("fn nop: handling char {}", c);
-
+                // Compose an array of u32 digit values.
+                for c in string_rep_ext.to_uppercase().chars() {
                     match c {
-                        // Ignore underscores.
-                        '_' => (),
                         '.' => {
-                            periods_found += 1;
-                        },
-                        other if other.is_ascii_digit() => {
-                            digit_value = match f64::from_str(&other.to_string()) {
-                                Err(_err) => f64::NAN,
-                                Ok(val) => val,
-                            };
+                            if using_multichar_digits && has_pending_digit {
+                                digits.push(digit_value);
+                                digit_value = 0u32;
+                                has_pending_digit = false;
+                            }
 
-                            match periods_found {
-                                0 => num = (num * 10f64) + digit_value,
-                                // TODO : treat a second period as the start of the repeated numbers sequence.
-                                _ => {
-                                    frac_pos += 1;
-                                    num += digit_value / 10f64.powi(frac_pos);
-                                },
+                            periods_found += 1;
+
+                            if periods_found == 1 {
+                                first_frac = digits.len();
                             }
                         },
-                        _ => num = f64::NAN,
+                        ch @ '0'..='9' | ch @ 'A'..='Z' => {
+                            char_val = ch as u32;
+
+                            if using_multichar_digits {
+                                has_pending_digit = true;
+                                digit_value = (digit_value * 10) + char_val - diff_0;
+                            } else {
+                                digits.push(char_val - if ch <= '9' { diff_0 } else { diff_a });
+                            }
+                        },
+                        // Ignore spaces if single-character digits are used (base <= 36).
+                        ' ' => {
+                            if using_multichar_digits && has_pending_digit {
+                                digits.push(digit_value);
+                                digit_value = 0u32;
+                                has_pending_digit = false;
+                            }
+                        },
+                        // Ignore everything else.
+                        _ => (),
                     }
+                }
 
-                    #[cfg(test)]
-                    println!("fn nop: num = {}", num);
+                if periods_found == 0 {
+                    first_frac = digits.len();
+                }
 
+                // TODO : treat a second period as the start of the repeated numbers sequence.
+                for (dcount, d) in digits.into_iter().enumerate() {
+                    digit_value = if (d as f64) >= shuttle.input_base {
+                        (shuttle.input_base as u32) - 1u32
+                    } else {
+                        d
+                    };
+
+                    if dcount < first_frac {
+                        num = (num * shuttle.input_base) + (digit_value as f64);
+                    } else {
+                        frac_pos += 1;
+                        num += (digit_value as f64) / shuttle.input_base.powi(frac_pos);
+                    }
                 }
 
                 *result_value = ValueType::Number(num);
@@ -884,7 +924,7 @@ pub(crate) mod opr_funcs {
             //_ => (),
             _ =>  {
                 #[cfg(test)]
-                println!("fn nop: non-Number ValueType found.");
+                println!("nop: non-Number ValueType found.");
             },
         }
     }
@@ -1550,6 +1590,27 @@ pub(crate) mod opr_funcs {
 
         *result_value = ValueType::Number(operands[0].get_value().get_type_as_num());
     }
+
+    pub fn change_base(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        match operands.first() {
+            None => (),
+            Some(e) => {
+                let num_val = e.get_num_value(0f64).trunc();
+
+                if (num_val > 1f64) && (num_val < f64::INFINITY) {
+                    match shuttle.alternative_count {
+                        1 => shuttle.output_base = num_val,
+                        _ => shuttle.input_base = num_val,
+                    }
+                }
+
+                *result_value = match shuttle.alternative_count {
+                    1 => ValueType::Number(shuttle.output_base),
+                    _ => ValueType::Number(shuttle.input_base),
+                }
+            },
+        };
+    }
     
     pub fn write(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         if operands.is_empty() {
@@ -1817,7 +1878,7 @@ mod tests {
 
         #[test]
         fn split_mixed() {
-            let result = Interpreter::split_atoms(";.11:+_5.2#Simple#?[cAnd now the second operand]9119 ~ 45 + 3 2[sAaand another string]");
+            let result = Interpreter::split_atoms(";.11:+_5.2#Simple#?[cAnd now the second operand]9119 ~ 45 + 3 2[sAaand another string][nFF88]");
 
             assert_eq!(Ok(vec![
                 Atom::Operator(';'),
@@ -1834,6 +1895,7 @@ mod tests {
                 Atom::Number("3".to_string()),
                 Atom::Number("2".to_string()),
                 Atom::String("Aaand another string".to_string()),
+                Atom::Number("FF88".to_string()),
             ]), result);
         }
 
@@ -3229,6 +3291,66 @@ mod tests {
         #[test]
         fn x_var_having_string_name_make_assign() {
             assert_eq!(5f64, Interpreter::execute("$#myNum 3 +:#myNum 2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base2() {
+            assert_eq!(14.5f64, Interpreter::execute("b2 1110.1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base16() {
+            assert_eq!(14.5f64, Interpreter::execute("b16 [ne.8]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base10_digit_too_great() {
+            assert_eq!(99f64, Interpreter::execute("b10 [n9F]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base36() {
+            assert_eq!(71.5f64, Interpreter::execute("b36 [n1Z.I]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base38() {
+            assert_eq!(77.5f64, Interpreter::execute("b38 [n 2 1.19]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base38_starts_with_period() {
+            assert_eq!(0.5f64, Interpreter::execute("b38 [n .19]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base37_ends_with_period() {
+            assert_eq!(114f64, Interpreter::execute("b37 [n 3 3.]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base40_second_period_ignored() {
+            assert_eq!(0.5125f64, Interpreter::execute("b40 [n .20.20]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base5_space_separated() {
+            assert_eq!(11.2f64, Interpreter::execute("b5 [n 2 1 . 1]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base40_starts_and_ends_with_period() {
+            assert_eq!(0.5f64, Interpreter::execute("b40 [n .20.]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base100_spaces_around_period() {
+            assert_eq!(243.15f64, Interpreter::execute("b100 [n 2 43 . 15]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_base60_double_spaces() {
+            assert_eq!(121.2f64, Interpreter::execute("b60 [n 2  1  .  12]".to_string()).unwrap().numeric_value);
         }
     }
 
