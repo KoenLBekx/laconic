@@ -4,10 +4,10 @@ LACONIC
 		// TODO: indicate the standard number of operands for every operator.
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():`;=<>!&|?°AabCceFilMmOoprSsTtUuvWwxZ
+			~+-*/%^$():`;=<>!&|?°AabCceFilMmnOoprSsTtUuvWwxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?° a CceFilMmOoprSsTt  vWwxZ
+			~+-*/%^$():`;=<>!&|?° a CceFilMm OoprSsTt  vWwxZ
 
 			b : implemented for input base; b` to be implemented in Expression::get_string_value().
 
@@ -17,7 +17,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			´@\{},§£€¶BDdEfGgHhIJjKkLNnPQRqVXz
+			´@\{},§£€¶BDdEfGgHhIJjKkLNPQRqVXz
 			
 		Note the Unicode point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -249,7 +249,9 @@ LACONIC
 				yields
 					11
 
-		Other numerical operators, or other combinations of number and string operands, will ignore the string operands.
+		Other numerical operators, or other combinations of number and string operands, will treat the string operands
+		as being NaN.
+			(To be implemented)
 
 	Comment brackets content
 
@@ -864,6 +866,17 @@ Operators
 				t [sWhat?]     yields 2 : string
 				t v#NotUsedYet yields 0 : empty or uninitialized : an empty expression will yield 0.
 
+		n exp
+				Converts a string expression to a number.
+					(to be implemented)
+
+				If the first operand is a string, the n operator converts it to a a number, if possible.
+				If not, the returned number is NaN and all calculations with it will return NaN.
+
+				If the first operand is empty, NaN will be returned also.
+
+				If the first operand is already a number, it will be returned as is.
+
 		o Operator designated by name, 2 operands
 
 			(lower case o)
@@ -885,6 +898,17 @@ Operators
 
 			The named operators are :
 
+			o#version num
+							Version of Laconic interpreter.
+								(to be implemented)
+
+							The version information returned depends on the second operand:
+
+							o#version 0 yields a string containing full version information, e.g.: "001.000.003"
+							o#version 1 yields the major version as a number, e.g.: 1
+							o#version 1 yields the minor version as a number, e.g.: 0
+							o#version 1 yields the revision as a number, e.g.: 3
+							
 			o(#quotrem dividend divisor remainder_var)
 
 							Integer division and remainder
