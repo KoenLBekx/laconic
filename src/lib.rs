@@ -1,7 +1,6 @@
 // TODO: resolve TODO's in code.
-// TODO: the r operator should evaluate the input string as an expression, with a
-//          reference of the current shuttle.
-// TODO: the + and w operator should call shuttle.number_format.format for numeric operands.
+// TODO: the read operator's test if the input is a number should take the current base
+//          into account.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: have the operator functions return more ProgramErrors for unexpected conditions
 //          This will require the ValueType to have a ValueType::Error(ProgramError) variant.
@@ -123,7 +122,6 @@ impl Hash for ValueType {
 
 struct NumberFormat {
     base: f64,
-    integer_digits: f64,
     fractal_digits: f64,
     fractal_separator: char,
     use_thousands_separator: bool,
@@ -133,11 +131,11 @@ struct NumberFormat {
 
 impl NumberFormat {
     const DEFAULT_PRECISION: f64 = 0.000_001;
+    const THOUSANDS_GROUP: f64 = 3f64;
 
     fn new() -> Self {
         NumberFormat {
             base: 10f64,
-            integer_digits: 0f64,
             fractal_digits: 6f64,
             fractal_separator: '.',
             use_thousands_separator: false,
@@ -177,35 +175,78 @@ impl NumberFormat {
             f64::NEG_INFINITY => "-inf".to_string(),
             num => {
                 let is_positive = num >= 0f64;
-                let mut int = num.abs().trunc();
+                let mut nr = num.abs();
+
+                let mut int = nr.trunc();
+
+                let round_factor = self.base.powf(self.fractal_digits);
+                let mut fract = nr.fract();
+                fract = (fract * round_factor).round() / round_factor;
+
+                if fract >= 1f64 {
+                    int += 1f64;
+                    fract = fract.fract();
+                }
+
                 let mut int_text = String::new();
                 let mut fract_text = String::new();
                 let mut modulus: f64;
                 let digit_separator = if self.base > 36f64 { String::from(self.digit_separator) } else { String::new() };
                 let mut digit_count: f64;
+                let mut mod_digit: String;
+                let mut add_thousands_separator: bool;
+                let mut thsepa: String;
 
                 digit_count = 0f64;
 
-                while (int >= 1f64) || (digit_count < self.integer_digits) {
-                    modulus = int % self.base;
-                    int_text = format!("{}{}{}", digit_separator, self.format_digit(modulus), int_text);
-                    int /= self.base;
+                while int >= 1f64 {
                     digit_count += 1f64;
+                    modulus = int % self.base;
+                    mod_digit = self.format_digit(modulus);
+
+                    add_thousands_separator = 
+                        self.use_thousands_separator &&
+                        (digit_count > 1f64) &&
+                        (digit_count % Self::THOUSANDS_GROUP == 1f64) &&
+                        (self.base <= 36f64);
+
+                    thsepa = if add_thousands_separator {
+                        self.thousands_separator.to_string()
+                    } else {
+                        String::new()
+                    };
+
+                    int_text = format!("{}{}{}{}", digit_separator, mod_digit, thsepa, int_text);
+                    int -= modulus;
+                    int /= self.base;
                 }
 
                 if int_text.is_empty() {
                     int_text = "0".to_string();
+                } else if self.base > 36f64 {
+                    int_text = int_text.trim().to_string();
                 }
 
-                let round_factor = self.base.powf(self.fractal_digits);
-                let mut fract = (num.abs().fract() * round_factor).round() / round_factor;
                 digit_count = 0f64;
 
                 while digit_count < self.fractal_digits {
-                    fract *= self.base;
-                    fract_text = format!("{}{}{}", fract_text, self.format_digit(fract.trunc()), digit_separator);
-                    fract = fract.fract();
                     digit_count += 1f64;
+                    fract *= self.base;
+
+                    add_thousands_separator = 
+                        self.use_thousands_separator &&
+                        (digit_count > 1f64) &&
+                        (digit_count % Self::THOUSANDS_GROUP == 1f64) &&
+                        (self.base <= 36f64);
+
+                    thsepa = if add_thousands_separator {
+                        self.thousands_separator.to_string()
+                    } else {
+                        String::new()
+                    };
+
+                    fract_text = format!("{}{}{}{}", fract_text, thsepa, self.format_digit(fract.trunc()), digit_separator);
+                    fract = fract.fract();
                 }
 
                 if !fract_text.is_empty() {
@@ -221,9 +262,9 @@ impl NumberFormat {
                 format!(
                     "{}{}{}",
                     sign_text,
-                    int_text.trim(),
+                    int_text,
                     fract_text.trim()
-                ).trim().to_string()
+                )
             }
         }
     }
@@ -236,20 +277,18 @@ impl NumberFormat {
         }
     }
 
-    fn set_integer_digits(&mut self, integer_digits: f64) {
-        self.integer_digits = integer_digits.abs().trunc();
-    }
-
     fn set_fractal_digits(&mut self, fractal_digits: f64) {
         self.fractal_digits = fractal_digits.abs().trunc();
     }
 
     fn set_fractal_separator(&mut self, separator: String) {
-        if separator.len() == 0 {
-            self.fractal_separator = '.';
-        } else {
-            self.fractal_separator = separator.chars().nth(0)
+        if !separator.is_empty() {
+            let proposed = separator.chars().nth(0)
                 .expect("A string of length > 0 should have a first character.");
+
+            if proposed != self.thousands_separator {
+                self.fractal_separator = proposed;
+            }
         }
     }
 
@@ -258,11 +297,16 @@ impl NumberFormat {
     }
 
     fn set_thousands_separator(&mut self, separator: String) {
-        if separator.len() == 0 {
-            self.thousands_separator = '.';
+        if separator.is_empty() {
+            self.use_thousands_separator = false;
         } else {
-            self.thousands_separator = separator.chars().nth(0)
+            let proposed = separator.chars().nth(0)
                 .expect("A string of length > 0 should have a first character.");
+
+            if proposed != self.fractal_separator {
+                self.thousands_separator = proposed;
+                self.use_thousands_separator = true;
+            }
         }
     }
 }
@@ -651,7 +695,10 @@ impl Interpreter {
 
             if bracket_nesting == 0 {
                 if c == '_'{
-                    // Ignore
+                    // Ignore if not reading a string.
+                    if reading_simple_string {
+                       current_string.push(c); 
+                    }
                 } else if c.is_whitespace() {
                     if reading_number {
                         result.push(Atom::Number(current_num));
@@ -1079,13 +1126,20 @@ pub(crate) mod opr_funcs {
         // Meant for Expressions that contain a fixed string value from creation.
     }
     
-    pub fn add(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn add(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         if has_any_string_operands(operands) {
             let mut string_outcome = String::new();
 
             // &* : fresh borrow avoids move of the operands.
             for op in &*operands {
-                string_outcome.push_str(op.get_string_value("".to_string()).as_str());
+                string_outcome.push_str(
+                    (match op.get_value() {
+                        ValueType::Empty => NO_VALUE.to_string(),   
+                        ValueType::Number(num) => shuttle.number_format.format(num),
+                        ValueType::Text(txt) => txt,
+                        ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+                    }).as_str()
+                );
             }
 
             *result_value = ValueType::Text(string_outcome);
@@ -1669,9 +1723,8 @@ pub(crate) mod opr_funcs {
         }
 
         let opr_func = match operands[0].get_value() {
-            // 0f64 => enum_opr_sign,
             ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
-            // 4f64 => get_type,
+            ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
             _ =>  {
                 *result_value = default_outcome;
 
@@ -1680,6 +1733,19 @@ pub(crate) mod opr_funcs {
         };
 
         (opr_func)(result_value, &mut operands[1..], shuttle);
+    }
+
+    pub fn set_number_format(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        for (count, op) in operands.iter().enumerate() {
+            match count {
+                0 => shuttle.number_format.set_fractal_digits(op.get_num_value(0f64)),
+                1 => shuttle.number_format.set_fractal_separator(op.get_string_value(".".to_string())),
+                2 => shuttle.number_format.set_thousands_separator(op.get_string_value(",".to_string())),
+                _ => (),
+            }
+        }
+
+        *result_value = ValueType::Empty;
     }
 
     pub fn sign(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
@@ -1768,7 +1834,15 @@ pub(crate) mod opr_funcs {
         }
 
         for op in operands {
-            let _ = shuttle.writer.write(op.get_string_value(NO_VALUE.to_string()).as_bytes());
+            let _ = shuttle.writer.write(
+                (match op.get_value() {
+                    ValueType::Empty => NO_VALUE.to_string(),   
+                    ValueType::Number(num) => shuttle.number_format.format(num),
+                    ValueType::Text(txt) => txt,
+                    ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+                }).as_bytes()
+            );
+
             let _ = shuttle.writer.write(b"\n");
         }
 
@@ -1976,15 +2050,20 @@ mod tests {
         #[test]
         fn nf_base10_pos_mixed_required_digits() {
             let mut nf = NumberFormat::new();
-            nf.set_integer_digits(6f64);
             nf.set_fractal_digits(3f64);
-            assert_eq!("000387.529".to_string(), nf.format(387.529f64));
+            assert_eq!("387.529".to_string(), nf.format(387.529f64));
+        }
+
+        #[test]
+        fn nf_base10_more_digits() {
+            let mut nf = NumberFormat::new();
+            nf.set_fractal_digits(3f64);
+            assert_eq!("387.523".to_string(), nf.format(387.5227f64));
         }
 
         #[test]
         fn nf_base10_pos_int_less_required_digits() {
             let mut nf = NumberFormat::new();
-            nf.set_integer_digits(3f64);
             nf.set_fractal_digits(3f64);
             assert_eq!("4387.000".to_string(), nf.format(4387f64));
         }
@@ -1993,7 +2072,6 @@ mod tests {
         fn nf_base2_pos_mixed() {
             let mut nf = NumberFormat::new();
             nf.set_base(2f64);
-            nf.set_integer_digits(0f64);
             nf.set_fractal_digits(6f64);
             assert_eq!("1011.011000".to_string(), nf.format(11.375f64));
         }
@@ -2002,7 +2080,6 @@ mod tests {
         fn nf_base5_neg_mixed() {
             let mut nf = NumberFormat::new();
             nf.set_base(5f64);
-            nf.set_integer_digits(0f64);
             nf.set_fractal_digits(6f64);
             assert_eq!("-102.100000".to_string(), nf.format(-27.2f64));
         }
@@ -2011,7 +2088,6 @@ mod tests {
         fn nf_base16_pos_int() {
             let mut nf = NumberFormat::new();
             nf.set_base(16f64);
-            nf.set_integer_digits(0f64);
             nf.set_fractal_digits(0f64);
             assert_eq!("E20D".to_string(), nf.format(57869f64));
         }
@@ -2020,7 +2096,6 @@ mod tests {
         fn nf_base16_neg_mixed() {
             let mut nf = NumberFormat::new();
             nf.set_base(16f64);
-            nf.set_integer_digits(0f64);
             nf.set_fractal_digits(6f64);
             assert_eq!("-12C.C00000".to_string(), nf.format(-300.75f64));
         }
@@ -2029,7 +2104,6 @@ mod tests {
         fn nf_base36_mixed() {
             let mut nf = NumberFormat::new();
             nf.set_base(36f64);
-            nf.set_integer_digits(0f64);
             nf.set_fractal_digits(6f64);
             assert_eq!("BK.100000".to_string(), nf.format(416.027777778f64));
         }
@@ -2038,7 +2112,6 @@ mod tests {
         fn nf_base100_mixed() {
             let mut nf = NumberFormat::new();
             nf.set_base(100f64);
-            nf.set_integer_digits(0f64);
             nf.set_fractal_digits(6f64);
             assert_eq!("7 25 8.7 8 0 0 0 0".to_string(), nf.format(72508.0708f64));
         }
@@ -2047,7 +2120,6 @@ mod tests {
         fn nf_base60_neg_mixed() {
             let mut nf = NumberFormat::new();
             nf.set_base(60f64);
-            nf.set_integer_digits(0f64);
             nf.set_fractal_digits(6f64);
             assert_eq!("-1 59.20 0 0 0 0 0".to_string(), nf.format(-119.33333333334));
         }
@@ -2056,7 +2128,6 @@ mod tests {
         fn nf_base1() {
             let mut nf = NumberFormat::new();
             nf.set_base(1f64);
-            nf.set_integer_digits(0f64);
             nf.set_fractal_digits(0f64);
             assert_eq!("42".to_string(), nf.format(42f64));
         }
@@ -2065,7 +2136,6 @@ mod tests {
         fn nf_base_fract() {
             let mut nf = NumberFormat::new();
             nf.set_base(3.5f64);
-            nf.set_integer_digits(0f64);
             nf.set_fractal_digits(0f64);
             assert_eq!("101".to_string(), nf.format(10f64));
         }
@@ -2074,9 +2144,33 @@ mod tests {
         fn nf_base_neg() {
             let mut nf = NumberFormat::new();
             nf.set_base(-3f64);
-            nf.set_integer_digits(0f64);
             nf.set_fractal_digits(0f64);
             assert_eq!("10".to_string(), nf.format(10f64));
+        }
+
+        #[test]
+        fn nf_base10_thousands_separator() {
+            let mut nf = NumberFormat::new();
+            nf.set_fractal_digits(6f64);
+            nf.set_use_thousands_separator(true);
+            assert_eq!("43,500.000,000".to_string(), nf.format(43500f64));
+        }
+
+        #[test]
+        fn nf_base10_neg_thousands_separator() {
+            let mut nf = NumberFormat::new();
+            nf.set_fractal_digits(0f64);
+            nf.set_use_thousands_separator(true);
+            assert_eq!("-100,774".to_string(), nf.format(-100774f64));
+        }
+
+        #[test]
+        fn nf_base100_never_thousands_separator() {
+            let mut nf = NumberFormat::new();
+            nf.set_base(100f64);
+            nf.set_fractal_digits(6f64);
+            nf.set_use_thousands_separator(true);
+            assert_eq!("4 35 0.0 0 0 0 0 0".to_string(), nf.format(43500f64));
         }
     }
 
@@ -2506,7 +2600,7 @@ mod tests {
 
         #[test]
         fn x_add_strings() {
-            assert_eq!("23.75 km.".to_string(), Interpreter::execute("+23.75 [s km.]".to_string()).unwrap().string_representation);
+            assert_eq!("23.750000 km.".to_string(), Interpreter::execute("+23.75 [s km.]".to_string()).unwrap().string_representation);
         }
 
         #[test]
@@ -3405,8 +3499,20 @@ mod tests {
             let mut reader = MockByString::new(Vec::<String>::new());
             Interpreter::execute_opts("w+100 300".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
 
-            assert_eq!(4, writer.len());
-            assert_eq!(vec![b'4', b'0', b'0', b'\n'], writer);
+            // 400.000000\n = 11 chars.
+            assert_eq!(11, writer.len());
+            assert_eq!(vec![b'4', b'0', b'0', b'.', b'0', b'0', b'0', b'0', b'0', b'0', b'\n'], writer);
+        }
+
+        #[test]
+        fn x_write_number_formatted() {
+            let mut writer = Vec::<u8>::new();
+            let mut reader = MockByString::new(Vec::<String>::new());
+            Interpreter::execute_opts("b`16 o(#fmt 2 #. #,) w31.5".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+
+            // 1F.80\n
+            assert_eq!(6, writer.len());
+            assert_eq!(vec![b'1', b'F', b'.', b'8', b'0', b'\n'], writer);
         }
 
         #[test]
@@ -3445,14 +3551,14 @@ mod tests {
         fn x_read_string() {
             let mut writer = std::io::sink();
             let mut reader = MockByString::new(vec!["1a1".to_string()]);
-            assert_eq!("1a1200".to_string(), Interpreter::execute_opts("w[sEnter something:]+r200".to_string(), true, false, false, &mut writer, &mut reader).unwrap().string_representation);
+            assert_eq!("1a1200.000000".to_string(), Interpreter::execute_opts("w[sEnter something:]+r200".to_string(), true, false, false, &mut writer, &mut reader).unwrap().string_representation);
         }
 
         #[test]
         fn x_read_number_and_string() {
             let mut writer = std::io::sink();
             let mut reader = MockByString::new(vec!["200".to_string(), "1a1".to_string()]);
-            assert_eq!("1a1200".to_string(), Interpreter::execute_opts("+rr".to_string(), true, false, false, &mut writer, &mut reader).unwrap().string_representation);
+            assert_eq!("1a1200.000000".to_string(), Interpreter::execute_opts("+rr".to_string(), true, false, false, &mut writer, &mut reader).unwrap().string_representation);
         }
 
         #[test]
@@ -3647,6 +3753,36 @@ mod tests {
         #[test]
         fn x_obase2() {
             assert_eq!("1000110.000000".to_string(), Interpreter::execute("b`2 70".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_split_underscore_in_simple_string() {
+            assert_eq!("_".to_string(), Interpreter::execute("#_ ".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_set_fmt() {
+            assert_eq!("4=500_555=6".to_string(), Interpreter::execute("o(#fmt 4 #_ #=) 4500.55559".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_set_fmt_round() {
+            assert_eq!("4=500_23".to_string(), Interpreter::execute("o(#fmt 2 #_ #=) 4500.229".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_set_fmt_round_to_int() {
+            assert_eq!("2".to_string(), Interpreter::execute("o(#fmt 0 #. #,) 1.9".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_set_fmt_round_to_neg_int() {
+            assert_eq!("-2".to_string(), Interpreter::execute("o(#fmt 0 #. #,) ~1.9".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_add_fmt() {
+            assert_eq!("Total: 4=500_555=6".to_string(), Interpreter::execute("o(#fmt 4 #_ #=) +[sTotal: ] 4500.55559".to_string()).unwrap().string_representation);
         }
     }
 

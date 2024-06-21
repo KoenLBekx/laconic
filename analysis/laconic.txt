@@ -908,6 +908,39 @@ Operators
 							o#version 1 yields the major version as a number, e.g.: 1
 							o#version 1 yields the minor version as a number, e.g.: 0
 							o#version 1 yields the revision as a number, e.g.: 3
+
+			o(#fmt nr_of_fractal_digits fractal_separator thousands_separator)
+
+							Set the output format for numbers when written using the w operator or output as string:
+
+							nr_of_fractal_digits : the numbers displaying the fractal part of the number.
+																If the number has more fractal digits, these will be rounded; otherwise,
+																the number will be right-padded with zeroes.
+																Default: 6
+
+							fractal_separator : the character between the integer and fractal part of the number.
+																Only the first character of whatever string is provided is used.
+																Default : '.'
+
+							thousands_separator : the character between groups of three digits.
+																Only the first character of whatever string is provided is used.
+																This won't be used for bases above 36.
+																Default : empty string ([s])
+
+							Note:
+							- Laconic won't allow the fractal and thousands separator to be equal.
+								A command to that effect will be ignored.
+							- If you don't want a thousands separator, provide an empty string: [s] or #
+							- This formatting is strictly for output.
+								In Laconic script code and as input
+								for the r(ead) operator, fractal separators should always be '.' dots and
+								thousands separators, if any, '_' underscores.
+
+							E.g.:
+								o(#fmt 3 #, #.) 1200.25     returns 1.200,250 (European Continental style)
+								o(#fmt 3 #, #) 1200.25      returns 1200,250
+								o(#fmt 3 #, #) 1200.2526    returns 1200,253
+								o(#fmt 6 #. #___) 1200.2526 returns 1_200.252_6
 							
 			o(#quotrem dividend divisor remainder_var)
 
