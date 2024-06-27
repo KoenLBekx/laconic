@@ -1,6 +1,4 @@
 // TODO: resolve TODO's in code.
-// TODO: the read operator's test if the input is a number should take the current base
-//          into account.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: have the operator functions return more ProgramErrors for unexpected conditions
 //          This will require the ValueType to have a ValueType::Error(ProgramError) variant.
@@ -8,7 +6,6 @@
 //          operands has a ValueType::Error value, and break its evaluation loop.
 //          (Also to be implemented for the W, F and ? operators.)
 // TODO: implement all intended operators.
-// TODO: implement Debug for Expression, using get_representation.
 // TODO: if struct Interpreter ends up having no internal state (no properties), simply delete it
 // and make its associated methods crate-level functions.
 // TODO: implement different variable arrays - see the 'u' operator.
@@ -167,15 +164,15 @@ impl NumberFormat {
         }
     }
 
-    fn format(&self, nr: f64) -> String {
+    fn format(&self, numr: f64) -> String {
 
-        match nr {
+        match numr {
             n if n.is_nan() => "NaN".to_string(),
             f64::INFINITY => "inf".to_string(),
             f64::NEG_INFINITY => "-inf".to_string(),
             num => {
                 let is_positive = num >= 0f64;
-                let mut nr = num.abs();
+                let nr = num.abs();
 
                 let mut int = nr.trunc();
 
@@ -1029,6 +1026,98 @@ pub(crate) mod opr_funcs {
         false
     }
 
+    fn parse_number(string_rep: &String, input_base: f64, ignore_non_numeric_chars: bool) -> Result<f64, String> {
+        let mut string_rep_ext = string_rep.clone().trim().to_string();
+        string_rep_ext.push(' ');
+
+        let mut num = 0f64;
+        let mut periods_found = 0u8;
+        let mut first_frac = 0usize;
+        let mut digit_value =  0u32;
+        let mut has_pending_digit = false;
+        let mut frac_pos = 0i32;
+
+        let mut digits = Vec::<u32>::new();
+        let using_multichar_digits = input_base > 36f64;
+        let mut char_val: u32;
+        let diff_0 = '0' as u32;
+        let diff_a = ('A' as u32) - 10u32;
+
+        let last_char_pos = string_rep_ext.len() - 1;
+
+        // Compose an array of u32 digit values.
+        for (char_count, c) in string_rep_ext.to_uppercase().chars().enumerate() {
+            match c {
+                '.' => {
+                    if using_multichar_digits && has_pending_digit {
+                        digits.push(digit_value);
+                        digit_value = 0u32;
+                        has_pending_digit = false;
+                    }
+
+                    periods_found += 1;
+
+                    if periods_found == 1 {
+                        first_frac = digits.len();
+                    } else if !ignore_non_numeric_chars {
+                        return Err("Excess periods found in number input".to_string());
+                    }
+                },
+                ch @ '0'..='9' | ch @ 'A'..='Z' => {
+                    char_val = ch as u32;
+
+                    if using_multichar_digits {
+                        has_pending_digit = true;
+                        digit_value = (digit_value * 10) + char_val - diff_0;
+                    } else {
+                        digits.push(char_val - if ch <= '9' { diff_0 } else { diff_a });
+                    }
+                },
+                // Ignore spaces if single-character digits are used (base <= 36).
+                ' ' => {
+                    if using_multichar_digits && has_pending_digit {
+                        digits.push(digit_value);
+                        digit_value = 0u32;
+                        has_pending_digit = false;
+                    } else if (!ignore_non_numeric_chars) && (char_count < last_char_pos) {
+                        return Err("Illegal spaces in number input".to_string());
+                    }
+                },
+                _ =>  {
+                    if !ignore_non_numeric_chars {
+                        return Err("Illegal characters in number input".to_string());
+                    }
+                },
+            }
+        }
+
+        if periods_found == 0 {
+            first_frac = digits.len();
+        }
+
+        // TODO : treat a second period as the start of the repeated numbers sequence.
+        for (dcount, d) in digits.into_iter().enumerate() {
+            digit_value = if (d as f64) >= input_base {
+                if ignore_non_numeric_chars {
+                    (input_base as u32) - 1u32
+                } else {
+                    return Err("Digit value too high for base of input number".to_string());
+                }
+            } else {
+                d
+            };
+
+            if dcount < first_frac {
+                num = (num * input_base) + (digit_value as f64);
+            } else {
+                frac_pos += 1;
+                num += (digit_value as f64) / input_base.powi(frac_pos);
+            }
+        }
+
+        Ok(num)
+    }
+
     pub fn nop(result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) {
         // If still needed, parse the string representation to a number.
         // TODO : for now, invalid strings are parsed to NaN; later on, a ValueType::Error is
@@ -1036,88 +1125,11 @@ pub(crate) mod opr_funcs {
 
         match result_value {
             ValueType::Text(string_rep) => {
-                let mut string_rep_ext = string_rep.clone().trim().to_string();
-                string_rep_ext.push(' ');
 
-                let mut num = 0f64;
-                let mut periods_found = 0u8;
-                let mut first_frac = 0usize;
-                let mut digit_value =  0u32;
-                let mut has_pending_digit = false;
-                let mut frac_pos = 0i32;
-
-                let mut digits = Vec::<u32>::new();
-                let using_multichar_digits = shuttle.input_base > 36f64;
-                let mut char_val: u32;
-                let diff_0 = '0' as u32;
-                let diff_a = ('A' as u32) - 10u32;
-
-                // Compose an array of u32 digit values.
-                for c in string_rep_ext.to_uppercase().chars() {
-                    match c {
-                        '.' => {
-                            if using_multichar_digits && has_pending_digit {
-                                digits.push(digit_value);
-                                digit_value = 0u32;
-                                has_pending_digit = false;
-                            }
-
-                            periods_found += 1;
-
-                            if periods_found == 1 {
-                                first_frac = digits.len();
-                            }
-                        },
-                        ch @ '0'..='9' | ch @ 'A'..='Z' => {
-                            char_val = ch as u32;
-
-                            if using_multichar_digits {
-                                has_pending_digit = true;
-                                digit_value = (digit_value * 10) + char_val - diff_0;
-                            } else {
-                                digits.push(char_val - if ch <= '9' { diff_0 } else { diff_a });
-                            }
-                        },
-                        // Ignore spaces if single-character digits are used (base <= 36).
-                        ' ' => {
-                            if using_multichar_digits && has_pending_digit {
-                                digits.push(digit_value);
-                                digit_value = 0u32;
-                                has_pending_digit = false;
-                            }
-                        },
-                        // Ignore everything else.
-                        _ => (),
-                    }
-                }
-
-                if periods_found == 0 {
-                    first_frac = digits.len();
-                }
-
-                // TODO : treat a second period as the start of the repeated numbers sequence.
-                for (dcount, d) in digits.into_iter().enumerate() {
-                    digit_value = if (d as f64) >= shuttle.input_base {
-                        (shuttle.input_base as u32) - 1u32
-                    } else {
-                        d
-                    };
-
-                    if dcount < first_frac {
-                        num = (num * shuttle.input_base) + (digit_value as f64);
-                    } else {
-                        frac_pos += 1;
-                        num += (digit_value as f64) / shuttle.input_base.powi(frac_pos);
-                    }
-                }
-
-                *result_value = ValueType::Number(num);
+                *result_value = ValueType::Number(parse_number(&string_rep, shuttle.input_base, true).
+                    expect("Function parse_num should never fail when called from function nop."));
             },
-            //_ => (),
-            _ =>  {
-                #[cfg(test)]
-                println!("nop: non-Number ValueType found.");
-            },
+            _ => (),
         }
     }
 
@@ -1858,7 +1870,7 @@ pub(crate) mod opr_funcs {
             None => String::new(),
         };
         
-        *result_value = match f64::from_str(input_string.as_str()) {
+        *result_value = match parse_number(&input_string, shuttle.input_base, false) {
             Ok(num) => ValueType::Number(num),
             Err(_) => ValueType::Text(input_string),
         }
@@ -2387,7 +2399,7 @@ mod tests {
             vt2.hash(&mut hasher2);
             let h2 = hasher2.finish();
 
-            println!("Hashes : {:?} and {:?}", h1, h2);
+            // println!("Hashes : {:?} and {:?}", h1, h2);
 
             assert_eq!(h1, h2)
         }
@@ -2406,7 +2418,7 @@ mod tests {
             vt2.hash(&mut hasher2);
             let h2 = hasher2.finish();
 
-            println!("Hashes : {:?} and {:?}", h1, h2);
+            // println!("Hashes : {:?} and {:?}", h1, h2);
 
             assert_ne!(h1, h2)
         }
@@ -2567,6 +2579,11 @@ mod tests {
     mod exec {
         use crate::{ExecutionOutcome, Interpreter, NO_VALUE, ValueType, are_very_near};
         use crate::input::{MockByString, StdinReader};
+
+        #[test]
+        fn x_nop_hex_case_insensitive() {
+            assert_eq!(1f64, Interpreter::execute("b16 =[n1A][n1a]".to_string()).unwrap().numeric_value)
+        }
 
         #[test]
         fn x_remaining_stack_items_while_making_tree() {
@@ -3541,10 +3558,17 @@ mod tests {
         }
 
         #[test]
-        fn x_read_number() {
+        fn x_read_number_base10() {
             let mut writer = std::io::sink();
             let mut reader = MockByString::new(vec!["16.2".to_string()]);
             assert_eq!(17f64, Interpreter::execute_opts("w[sEnter a number:]+r0.8".to_string(), true, false, false, &mut writer, &mut reader).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_read_number_base16() {
+            let mut writer = std::io::sink();
+            let mut reader = MockByString::new(vec!["1F.3".to_string()]);
+            assert_eq!(32f64, Interpreter::execute_opts("b16 w[sEnter a number:]+r[n0.D]".to_string(), true, false, false, &mut writer, &mut reader).unwrap().numeric_value);
         }
 
         #[test]
@@ -3567,7 +3591,7 @@ mod tests {
             // To be tested using the -- --ignored --nocapture arguments.
             let mut writer = std::io::stdout();
             let mut reader = StdinReader::new();
-            Interpreter::execute_opts("w[sEnter a number:] $0r w+[sYou entered: ]v0 w+[sDouble is:]*v0 2".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+            Interpreter::execute_opts("w[sEnter a number:] $0r w+[sYou entered: ]v0 w+[sDouble is: ]*v0 2".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
         }
 
         #[test]

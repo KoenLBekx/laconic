@@ -1,0 +1,9 @@
+b16
+w[sEnter a hexadecimal number:]
+$0r
+?
+	=
+		1
+		tv0
+	v0
+	[sThat is not a valid hexadecimal number.]
