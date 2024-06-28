@@ -17,7 +17,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			´@\{},§£€¶BDdEfGgHhIJjKkLNPQRqVXz
+			´@\{},§£€¶µBDdEfGgHhIJjKkLNPQRqVXz
 			
 		Note the Unicode point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -27,6 +27,7 @@ LACONIC
 			§ 00A7 Section (paragraph) sign
 			° 00B0 Degrees sign
 			´ 00B4 Acute accent
+			µ 00B5 Mu
 			¶ 00B6 Pilcrow
 			€ 20AC Euro
 
@@ -830,6 +831,20 @@ Operators
 					°`(1)
 
 						all yield the same result.
+
+		N : number of operands of the preceding same-level operator.
+				(To be implemented)
+
+				This allows for calculation of averages :
+
+				/+(1 2 3 4 5) N
+					yields 3.
+
+				Note that the ( and ) operators are not considered by the N operator.
+
+				If the preceding operator is the F or W operator, the number of iterations is returned.
+
+				If there are no preceding operators, 0 is returned.
 
 		b n : Base of subsequent input numbers (numbers in the script).
 					(to be implemented)
