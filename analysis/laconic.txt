@@ -4,12 +4,10 @@ LACONIC
 		// TODO: indicate the standard number of operands for every operator.
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():`;=<>!&|?°AabCceFilMmnOoprSsTtUuvWwxZ
+			~+-*/%^$():`;=<>!&|?°AabCceFilMmNnOoprSsTtUuvWwxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?° a CceFilMm OoprSsTt  vWwxZ
-
-			b : implemented for input base; b` to be implemented in Expression::get_string_value().
+			~+-*/%^$():`;=<>!&|?° abCceFilMmN OoprSsTt  vWwxZ
 
 		* Characters not to be used as operator:
 			' "     interfere with command line syntax
@@ -833,7 +831,6 @@ Operators
 						all yield the same result.
 
 		N : number of operands of the preceding same-level operator.
-				(To be implemented)
 
 				This allows for calculation of averages :
 

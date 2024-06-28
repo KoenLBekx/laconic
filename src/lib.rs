@@ -343,6 +343,7 @@ impl Expression {
             ';' => &opr_funcs::combine,
             'm' => &opr_funcs::min,
             'M' => &opr_funcs::max,
+            'N' => &opr_funcs::preceding_nr_operands,
             'W' => &opr_funcs::exec_while,
             'F' => &opr_funcs::exec_for,
             '$' => &opr_funcs::assign_number_register,
@@ -459,6 +460,10 @@ impl Expression {
             shuttle.nums.insert(index, self.get_value());
         }
 
+        if !"FW".contains(self.opr_mark) {
+            shuttle.preceding_nr_operands = self.operands.len() as f64;
+        }
+
         /*
         #[cfg(test)]
         println!("operate {} ==> {:?}", self.opr_mark, self.get_value());
@@ -563,6 +568,7 @@ struct Shuttle<'s> {
     routines: HashMap<i64, Expression>,
     assignment_indexes_stack: Vec<Vec<ValueType>>,
     alternative_count: u8,
+    preceding_nr_operands: f64,
     max_iterations: f64,
     orb: f64,
     golden_ratio: Option<f64>,
@@ -582,6 +588,7 @@ impl<'s> Shuttle<'s> {
             routines: HashMap::<i64, Expression>::new(),
             assignment_indexes_stack: Vec::<Vec<ValueType>>::new(),
             alternative_count: 0,
+            preceding_nr_operands: 0f64,
             max_iterations: 10_000f64,
             orb: 0.00000001f64,
             golden_ratio: None,
@@ -935,7 +942,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^lia%°SCTpec$v:`?WF;mM()=<>!&|xZoOwrstb".contains(op)
+        "~+-*/^lia%°SCTpec$v:`?WF;mMN()=<>!&|xZoOwrstb".contains(op)
     }
 }
 
@@ -1876,6 +1883,10 @@ pub(crate) mod opr_funcs {
         }
     }
 
+    pub fn preceding_nr_operands(result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) {
+        *result_value = ValueType::Number(shuttle.preceding_nr_operands);
+    }
+
     pub fn exec_while(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
         if operands.is_empty() {
             *result_value = ValueType::Number(0f64);
@@ -1890,9 +1901,8 @@ pub(crate) mod opr_funcs {
         let mut op: &mut Expression;
 
         'outer: loop {
-            iter_count += 1f64;
 
-            if (shuttle.max_iterations > 0f64) && (iter_count > shuttle.max_iterations) {
+            if (shuttle.max_iterations > 0f64) && (iter_count >= shuttle.max_iterations) {
                 break;
             }
 
@@ -1910,6 +1920,7 @@ pub(crate) mod opr_funcs {
                         }
                     },
                     _ => {
+                        iter_count += 1f64;
                         op.operate(shuttle);
                         outcome = op.get_num_value(0f64);
                     },
@@ -1918,6 +1929,8 @@ pub(crate) mod opr_funcs {
                 op_count += 1;
             }
         }
+
+        shuttle.preceding_nr_operands = iter_count;
 
         *result_value = ValueType::Number(outcome);
     }
@@ -1956,9 +1969,7 @@ pub(crate) mod opr_funcs {
         let mut op: &mut Expression;
 
         loop {
-            iter_count += 1f64;
-
-            if (shuttle.max_iterations > 0f64) && (iter_count > shuttle.max_iterations) {
+            if (shuttle.max_iterations > 0f64) && (iter_count >= shuttle.max_iterations) {
                 break;
             }
 
@@ -1969,6 +1980,8 @@ pub(crate) mod opr_funcs {
 
             shuttle.nums.insert(counter_var.clone(), ValueType::Number(counter_val));
             op_count = 4;
+
+            iter_count += 1f64;
 
             while op_count < op_len {
                 op = &mut operands[op_count];
@@ -1987,6 +2000,8 @@ pub(crate) mod opr_funcs {
                 counter_val -= increment;
             }
         }
+
+        shuttle.preceding_nr_operands = iter_count;
 
         *result_value = ValueType::Number(outcome);
     }
@@ -3373,6 +3388,11 @@ mod tests {
         }
 
         #[test]
+        fn x_while_max_iterations() {
+            assert_eq!(2f64, Interpreter::execute("$#sum 1 $#countDown 10 Z#loops 2 W>v#countDown 0 ;+:#sum v#countDown -:#countDown 1 N".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_for_4_op_asc() {
             assert_eq!(0f64, Interpreter::execute("F(3 11 2 1)".to_string()).unwrap().numeric_value);
         }
@@ -3807,6 +3827,31 @@ mod tests {
         #[test]
         fn x_add_fmt() {
             assert_eq!("Total: 4=500_555=6".to_string(), Interpreter::execute("o(#fmt 4 #_ #=) +[sTotal: ] 4500.55559".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_prec_nr_operands() {
+            assert_eq!(5f64, Interpreter::execute(";+(7 3 9 -74 3 1) N".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_prec_nr_operands_none() {
+            assert_eq!(0f64, Interpreter::execute("N".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_prec_nr_operands_avg() {
+            assert_eq!(18.2f64, Interpreter::execute("/+(7 3 9 -74 3 1) N".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_prec_nr_operands_while() {
+            assert_eq!(6f64, Interpreter::execute("$0 6;W>v0 0-:0 1N".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_prec_nr_operands_for() {
+            assert_eq!(3f64, Interpreter::execute("F5 1 2 0 0N".to_string()).unwrap().numeric_value);
         }
     }
 
