@@ -2,6 +2,7 @@ LACONIC
 
 		// TODO: explain standard number of operands and how to deviate from it.
 		// TODO: indicate the standard number of operands for every operator.
+		// TODO: explain the routine operators (R and X) in more detail.
 		// TODO: explain different behavior of variables and stack items
 		//				in relation with subroutines.
 		//				(Routines start their execution without any variables;
@@ -12,30 +13,32 @@ LACONIC
 		//				Another difference is that stack items are removed when read.)
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():`;=<>!&|?°AabCceFiKklMmNnOoprSsTtUuvWwxZ
+			~+-*/%^$():`;=<>!&|?°ØAabCceFiKklMmNnOopRrSsTtUuvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?° abCceFi  lMmN OoprSsTt  vWwxZ
+			~+-*/%^$():`;=<>!&|?°Ø abCceFi  lMmN OopRrSsTt  vWwXxZ
 
 		* Characters not to be used as operator:
-			' "     interfere with command line syntax
+			' " \   interfere with command line syntax or string literals
 			. [ ] # have other meanings in Laconic.
 			whitespace
 
 		* Common characters not used yet:
-			´@\{},§£€¶µBDdEfGgHhIJjLNPQRqVXz
+			´{},@§£€¶µBDdEfGgHhIJjLNPQqVz
 			
 		Note the Unicode point of some characters not on all keyboards:
 			^ 005E Circumflex accent
 			` 0060 Grave accent or Backtick
 			~	007E Tilde
 			£ 00A3 Pound
-			§ 00A7 Section (paragraph) sign
-			° 00B0 Degrees sign
+			§ 00A7 Section (paragraph) sign (Alt-Shift-S)
+			° 00B0 Degrees sign (Alt-Shift-:)
 			´ 00B4 Acute accent
 			µ 00B5 Mu
 			¶ 00B6 Pilcrow
 			€ 20AC Euro
+			ø 00F8 (Alt-l)
+			Ø 00D8 (Alt-Shift-L)
 
 	General syntax
 
@@ -786,6 +789,11 @@ Operators
 					*:1v2 [c loop execution body]
 				v1
 
+	Routines
+
+		R defines a Routine.
+
+		X eXecutes a routine.
 
 	Input & Output
 
@@ -902,6 +910,12 @@ Operators
 				t 39           yields 1 : numeric
 				t [sWhat?]     yields 2 : string
 				t v#NotUsedYet yields 0 : empty or uninitialized : an empty expression will yield 0.
+
+		Ø
+				(Upper case Ø)
+				Returns the Empty value.
+
+				tØ	yields 0
 
 		n exp
 				Converts a string expression to a number.

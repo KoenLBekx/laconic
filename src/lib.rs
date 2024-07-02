@@ -1,4 +1,7 @@
 // TODO: resolve TODO's in code.
+// TODO: shuttle.nums should be a stack of hashmaps.
+//      Before the operate call in fn exec_routine, push an empty hashmap;
+//      after the call, pop it to throw it away.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: have the operator functions return more ProgramErrors for unexpected conditions
 //          This will require the ValueType to have a ValueType::Error(ProgramError) variant.
@@ -307,6 +310,7 @@ impl NumberFormat {
     }
 }
 
+#[derive(Clone)]
 struct Expression
 {
     operator: OperatorFunc,
@@ -350,6 +354,8 @@ impl Expression {
             'N' => &opr_funcs::preceding_nr_operands,
             'W' => &opr_funcs::exec_while,
             'F' => &opr_funcs::exec_for,
+            'R' => &opr_funcs::define_routine,
+            'X' => &opr_funcs::exec_routine,
             '$' => &opr_funcs::assign_number_register,
             'v' => &opr_funcs::get_number_register,
             ':' => &opr_funcs::assignment_maker,
@@ -373,6 +379,7 @@ impl Expression {
             't' => &opr_funcs::get_type,
             'b' if alternative_marks_count == 0 => &opr_funcs::input_base,
             'b' => &opr_funcs::output_base,
+            'Ø' => &opr_funcs::empty,
             _ => &opr_funcs::nop,
         };
 
@@ -439,7 +446,7 @@ impl Expression {
 
         shuttle.assignment_indexes_stack.push(Vec::<ValueType>::new());
 
-        let defer_opd_evaluation = "WF?".contains(self.opr_mark);
+        let defer_opd_evaluation = "WF?R".contains(self.opr_mark);
 
         if !defer_opd_evaluation {
             for op in &mut self.operands {
@@ -569,7 +576,7 @@ impl fmt::Debug for Expression {
 struct Shuttle<'s> {
     nums: HashMap<ValueType, ValueType>,
     stack: Vec<ValueType>,
-    routines: HashMap<i64, Expression>,
+    routines: HashMap<ValueType, Expression>,
     assignment_indexes_stack: Vec<Vec<ValueType>>,
     preceding_nr_operands: f64,
     max_iterations: f64,
@@ -594,7 +601,7 @@ impl<'s> Shuttle<'s> {
             assignment_indexes_stack: Vec::new(),
             preceding_nr_operands: 0f64,
             max_iterations: 10_000f64,
-            orb: 0.00000001f64,
+            orb: 0.000_000_01f64,
             golden_ratio: None,
             input_base: 10f64,
             number_format: NumberFormat::new(),
@@ -852,11 +859,11 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:!w°SCTcstbK"   .contains(chr) => 1,
-                        chr if "+-*/^l%&|x$W;mM=<>Zo".contains(chr) => 2,
-                        chr if "?O"                  .contains(chr) => 3,
-                        chr if "F"                   .contains(chr) => 5,
-                        _                                           => 0,
+                        chr if "~iav:!w°SCTcstbKX"    .contains(chr) => 1,
+                        chr if "+-*/^l%&|x$W;mM=<>ZoR".contains(chr) => 2,
+                        chr if "?O"                   .contains(chr) => 3,
+                        chr if "F"                    .contains(chr) => 5,
+                        _                                            => 0,
                     };
 
                     match *c {
@@ -937,7 +944,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^lia%°SCTpec$v:Kk§`?WF;mMN()=<>!&|xZoOwrstb".contains(op)
+        "~+-*/^lia%°SCTpec$v:Kk§`?WF;mMN()=<>!&|xZoOwrstbRXØ".contains(op)
     }
 }
 
@@ -1132,6 +1139,10 @@ pub(crate) mod opr_funcs {
             },
             _ => (),
         }
+    }
+
+    pub fn empty(result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
+        *result_value = ValueType::Empty;
     }
 
     pub fn string_expr(_result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
@@ -2095,6 +2106,79 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = outcome;
+    }
+    
+    pub fn define_routine(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        if operands.len() < 2 {
+            *result_value = ValueType::Empty;
+            
+            return;
+        }
+
+        let mut name = ValueType::Empty;
+        let mut expressions = Vec::<Expression>::new();
+
+        for op_tuple in operands.iter_mut().enumerate() {
+            match op_tuple {
+                (0, op) => {
+                    op.operate(shuttle);
+                    name = op.get_value();
+                },
+                (_, op) => {
+                    expressions.push(op.clone());
+                },
+            }
+        }
+
+        let body = if expressions.len() > 1 {
+            let mut combinator = Expression::new(';', 0);
+
+            for expr in expressions.into_iter() {
+                combinator.operands.push(expr);
+            }
+
+            combinator
+        } else {
+            expressions.pop().expect("A one-element vector should support a pop() call.")
+        };
+
+        shuttle.routines.insert(name.clone(), body);
+        *result_value = name;
+    }
+
+    pub fn exec_routine(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        *result_value = ValueType::Empty;
+
+        if operands.len() < 1 {
+            return;
+        }
+
+        // Returns empty value.
+        let mut body = Expression::new('Ø', 0);
+
+        for op_tuple in operands.iter_mut().enumerate() {
+            match op_tuple {
+                (0, op) => {
+                    let name = op.get_value();
+
+                    if let Some(ref expr) = shuttle.routines.get(&name) {
+                        body = (*expr).clone();
+                    } else {
+                        return;
+                    }
+                },
+                (_, op) => {
+                    shuttle.stack.push(op.get_value());
+                },
+            }
+        }
+
+        // TODO: shuttle.nums should be a stack of hashmaps.
+        // Before the operate call, push an empty hashmap;
+        // after the call, pop it to throw it away.
+        body.operate(shuttle);
+
+        *result_value = body.get_value();
     }
 }
 
@@ -3958,6 +4042,41 @@ mod tests {
         #[test]
         fn x_stack_pop_reverse_order() {
             assert_eq!(1f64, Interpreter::execute("K3 K9 >kk".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_empty() {
+            assert_eq!(0f64, Interpreter::execute("tØ".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_routine_undeclared() {
+            assert_eq!(0f64, Interpreter::execute("tX#unknown".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_routine_one_operand() {
+            assert_eq!(0f64, Interpreter::execute("R(#oneOp) X#oneOp".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_routine_two_operands() {
+            assert_eq!(1f64, Interpreter::execute("R#tau *2p Z#prec .01 =6.28 X#tau".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_routine_more_operands_call_twice() {
+            assert_eq!(50f64, Interpreter::execute("R(#sumStack $100 0 Wk`+:100k v100) +X(#sumStack 20 30 ~10 2)X(#sumStack 9 3 ~4)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_routine_redefine() {
+            assert_eq!(9f64, Interpreter::execute("R2 ^2 .5 R2 9 X2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_routine_declaration_yields_name() {
+            assert_eq!("tau".to_string(), Interpreter::execute("R#tau *p2".to_string()).unwrap().string_representation);
         }
     }
 
