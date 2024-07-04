@@ -2,15 +2,6 @@ LACONIC
 
 		// TODO: explain standard number of operands and how to deviate from it.
 		// TODO: indicate the standard number of operands for every operator.
-		// TODO: explain the routine operators (R and X) in more detail.
-		// TODO: explain different behavior of variables and stack items
-		//				in relation with subroutines.
-		//				(Routines start their execution without any variables;
-		//				while the stack is always global and can be adressed by
-		//				main script code and routines alike.
-		//				The consequence of this is that only the stack can be
-		//				used to pass values to routines.
-		//				Another difference is that stack items are removed when read.)
 
 		* Characters assigned (or to be assigned) to operators:
 			~+-*/%^$():`;=<>!&|?°ØAabCceFiKklMmNnOopRrSsTtUuvWwXxZ
@@ -24,7 +15,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			´{},@§£€¶µBDdEfGgHhIJjLNPQqVz
+			´{},@§£€¶µBDdEfGgHhIJjLPQqVz
 			
 		Note the Unicode point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -791,9 +782,106 @@ Operators
 
 	Routines
 
-		R defines a Routine.
+		R defines a Routine which will have separate variables and can't use the variables of the calling code.
 
-		X eXecutes a routine.
+			E.g.:
+				R#tau *2p
+					defines a routine named "tau" that returns Tau, which is twice Pi.
+
+			E.g.:
+				R#tau *2p $#peripheryA *X#tau v#radA
+					defines a routine and calls it.
+
+			(These are just examples - it's more efficient to calculate Tau once and store it in a variable.)
+
+			If a routine has to consist of more than one operator executed in series,
+			these operators can
+			- either be chained by ; (the combinator operator)
+			- or else the R operator's operands can be enclosed in parentheses:
+
+			E.g. both scripts to the same :
+				R#revertStack ;;$(0kk) Kv0 Kv1
+				R(#revertStack $(0kk) Kv0 Kv1)
+			to wit, they define a routine that switches the order of the stack's top two items.
+
+			As routines declared using the bare R operator (no `) have a separate variables scope,
+			any values stored in variables during these routines' operation are lost afterwards.
+			If this is not desired, use the R` declaration operator.
+
+			Parameter passing:
+
+			As routines defined by the bare R operator (no `) don't have access to the variables of the calling code,
+			values have to be passed to it by putting items on the stack.
+			Mind that the stack items are read in reverse order : last-in, first-out.
+
+			E.g.:
+				[c This routine returns the average of the items on the stack.]
+				R(
+					#average
+					$#count k`
+					$#total 0
+					W
+						k`
+						+:#total k
+					/v#total v#count
+				)
+
+				[c Let us put some items on the stack and call the routine.]
+				K(41 25 60 ~50 4)
+				X#average
+				[c This call should return 16.]
+
+			Return value: the return value of the routine's last operator is returned.
+
+			It is possible to call a previously declared routine from within another routine.
+
+			(It is even possible to (re-)declare a routine within a routine. As the routines library is global during
+			script execution, that second declared routine will be available after the first execution of the declaring routine.
+			Anyway, that declared routine will be redeclared on every call of the declaring routine.
+			This can be useful to have a different behaviour under the same routine name, depending on circumstances.)
+
+		R` defines a Routine which will share the variables of the calling code.
+
+			Behaves in the same way as the bare R operator, except that the routine
+			will have access to the calling code's variables, so it can manipulate these.
+			Values can be passed using both the stack or variables.
+
+			E.g.:
+				[c This routine swaps the value of two variables, the names of which are read from the stack.]
+				R`(
+					#swap
+					$#swpVar1 k
+					$#swpVar2 k
+					Kvv#swpVar1
+					$v#swpVar1 vv#swpVar2
+					$v#swpVar2 k
+				)
+
+				[c Putting 4 in variable 0 and 8 in variable 1]
+				$(0 4 8)
+
+				[c Putting the names of both variables on the stack.]
+				K(0 1)
+
+				[c Calling the swap routine.]
+				X#swap
+
+				[c Checking the result.]
+				w+[svar0: ] v0
+				w+[svar1: ] v1
+
+		X eXecutes a routine and returns the routine's return value.
+
+			The first operand of the X operator should be a routine's name (or number).
+
+			If any other operands follow, they are put on the stack before the routine is executed,
+			so the routine can use these stack items as arguments.
+
+			E.g.: both scripts do the same:
+				X(#average 20 1 5 80)
+				K(20 1 5 80) X#average
+
+			If a non-declared routine is called, the Empty value is returned.
 
 	Input & Output
 
@@ -877,7 +965,6 @@ Operators
 				If there are no preceding operators, 0 is returned.
 
 		b n : Base of subsequent input numbers (numbers in the script).
-					(to be implemented)
 
 					Bases from 2 up to any large number are supported.
 					If any other base is requested (base < 2), base 10 is assumed.
@@ -900,7 +987,6 @@ Operators
 					The b operator returns the value of its base.
 
 		b`n : Base of subsequent output numbers (displayed as final output and by the w(rite) operator).
-					(to be implemented)
 
 					The b` operator returns the value of its base.
 
@@ -1079,13 +1165,3 @@ Operators
 		Z#loops n : maximum number of loops executed by F- or W-operator.
 					 If 0, no maximum is imposed, which removes the protection against infinite loops.
 					 Default : 10,000.
-
-		Z#ints n : number of digits before fractal dot in output
-					(to be implemented)
-
-					If n=0, only the numbers needed will be output.
-
-		Z#fracts n : number of digits after fractal dot in output
-					(to be implemented)
-
-					If n=0, only the numbers needed will be output.

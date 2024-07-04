@@ -1,7 +1,4 @@
 // TODO: resolve TODO's in code.
-// TODO: shuttle.nums should be a stack of hashmaps.
-//      Before the operate call in fn exec_routine, push an empty hashmap;
-//      after the call, pop it to throw it away.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: have the operator functions return more ProgramErrors for unexpected conditions
 //          This will require the ValueType to have a ValueType::Error(ProgramError) variant.
@@ -354,7 +351,8 @@ impl Expression {
             'N' => &opr_funcs::preceding_nr_operands,
             'W' => &opr_funcs::exec_while,
             'F' => &opr_funcs::exec_for,
-            'R' => &opr_funcs::define_routine,
+            'R' if alternative_marks_count == 0 => &opr_funcs::define_routine_with_new_scope,
+            'R' => &opr_funcs::define_routine_sharing_variables,
             'X' => &opr_funcs::exec_routine,
             '$' => &opr_funcs::assign_number_register,
             'v' => &opr_funcs::get_number_register,
@@ -467,7 +465,7 @@ impl Expression {
         for index in assignment_indexes {
             // Assign the resulting value to the variable
             // referenced by the first operand and stored by it in the shuttle.
-            shuttle.nums.insert(index, self.get_value());
+            shuttle.set_var(index, self.get_value());
         }
 
         if !"FW".contains(self.opr_mark) {
@@ -485,7 +483,11 @@ impl Expression {
             '0' => match self.value {
                 ValueType::Empty => "empty_num".to_string(),
                 ValueType::Number(num) => num.to_string(),
-                _ => panic!("An expression with opr_mark '0' should either have a ValueType::Number or ValueType::Empty"),
+
+                // ValueType::Text: for numbers in routine definitions.
+                ValueType::Text(ref txt) => txt.clone(),
+
+                _ => panic!("An expression with opr_mark '0' should have a ValueType::Number, ValueType::Text or ValueType::Empty"),
             },
             '"' => match self.value {
                 ValueType::Empty => "no_value".to_string(),
@@ -571,12 +573,18 @@ impl fmt::Debug for Expression {
     }
 }
 
+#[derive(Clone)]
+struct Routine {
+    body: Expression,
+    in_new_variables_scope: bool,
+}
+
 // Shuttle objects are used to be passed to every operator function
 // to provide state other than the operands.
 struct Shuttle<'s> {
-    nums: HashMap<ValueType, ValueType>,
+    nums: Vec<HashMap<ValueType, ValueType>>,
     stack: Vec<ValueType>,
-    routines: HashMap<ValueType, Expression>,
+    routines: HashMap<ValueType, Routine>,
     assignment_indexes_stack: Vec<Vec<ValueType>>,
     preceding_nr_operands: f64,
     max_iterations: f64,
@@ -594,8 +602,7 @@ struct Shuttle<'s> {
 impl<'s> Shuttle<'s> {
     fn new(writer: &'s mut dyn Write, reader: &'s mut dyn input::StdinOrMock) -> Self {
         Shuttle {
-            // nums: HashMap::<ValueType, ValueType>::new(),
-            nums: HashMap::new(),
+            nums: vec![HashMap::<ValueType, ValueType>::new()],
             stack: Vec::new(),
             routines: HashMap::new(),
             assignment_indexes_stack: Vec::new(),
@@ -609,6 +616,28 @@ impl<'s> Shuttle<'s> {
             reader,
             #[cfg(test)]
             golden_ratio_calculations: 0u8,
+        }
+    }
+
+    fn get_top_of_vars_stack(&mut self) -> &mut HashMap<ValueType, ValueType> {
+        if self.nums.is_empty() {
+            self.nums.push(HashMap::<ValueType, ValueType>::new());
+        }
+
+        self.nums.last_mut().expect("The Shuttle.nums stack vector should always have at least one HashMap element.")
+    }
+
+    fn set_var(&mut self, name: ValueType, value: ValueType) {
+        let vars = self.get_top_of_vars_stack();
+        vars.insert(name, value);
+    }
+
+    fn get_var(&mut self, name: &ValueType) -> ValueType {
+        let vars = self.get_top_of_vars_stack();
+
+        match vars.get(name) {
+            None => ValueType::Empty,
+            Some(v) => v.clone(),
         }
     }
 }
@@ -1010,7 +1039,8 @@ pub mod input {
 }
 
 pub(crate) mod opr_funcs {
-    use super::{Expression, NO_VALUE, Shuttle, ValueType, are_near};
+    use std::collections::HashMap;
+    use super::{Expression, NO_VALUE, Routine, Shuttle, ValueType, are_near};
 
     fn has_any_string_operands(operands: &[Expression]) -> bool {
         let mut opd_count = 0usize;
@@ -1488,7 +1518,7 @@ pub(crate) mod opr_funcs {
             */
 
             reg_val = opd.get_value();
-            shuttle.nums.insert(name, reg_val.clone());
+            shuttle.set_var(name, reg_val.clone());
 
             counter += 1f64;
 
@@ -1514,12 +1544,7 @@ pub(crate) mod opr_funcs {
         println!("fn get_number_register: index={:?}", index.clone());
         */
 
-        let found = match shuttle.nums.get(&index) {
-            None => ValueType::Empty,
-            Some(v) => v.clone(),
-        };
-
-        *result_value = found;
+        *result_value = shuttle.get_var(&index);
     }
 
     pub fn assignment_maker(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
@@ -1540,12 +1565,7 @@ pub(crate) mod opr_funcs {
                 .push(index.clone());
         }
 
-        let found = match shuttle.nums.get(&index) {
-            None => ValueType::Number(0f64),
-            Some(v) => v.clone(),
-        };
-
-        *result_value = found;
+        *result_value = shuttle.get_var(&index);
     }
 
     pub fn push_stack(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
@@ -2054,7 +2074,7 @@ pub(crate) mod opr_funcs {
                     break;
             }
 
-            shuttle.nums.insert(counter_var.clone(), ValueType::Number(counter_val));
+            shuttle.set_var(counter_var.clone(), ValueType::Number(counter_val));
             op_count = 4;
 
             iter_count += 1f64;
@@ -2108,7 +2128,15 @@ pub(crate) mod opr_funcs {
         *result_value = outcome;
     }
     
-    pub fn define_routine(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn define_routine_sharing_variables(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        define_routine(result_value, operands, shuttle, false);
+    }
+    
+    pub fn define_routine_with_new_scope(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+        define_routine(result_value, operands, shuttle, true);
+    }
+
+    fn define_routine(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, in_new_variables_scope: bool) {
         if operands.len() < 2 {
             *result_value = ValueType::Empty;
             
@@ -2142,7 +2170,7 @@ pub(crate) mod opr_funcs {
             expressions.pop().expect("A one-element vector should support a pop() call.")
         };
 
-        shuttle.routines.insert(name.clone(), body);
+        shuttle.routines.insert(name.clone(), Routine{body, in_new_variables_scope,});
         *result_value = name;
     }
 
@@ -2154,7 +2182,10 @@ pub(crate) mod opr_funcs {
         }
 
         // Returns empty value.
-        let mut body = Expression::new('Ø', 0);
+        let mut found_routine = Routine{
+            body: Expression::new('Ø', 0),
+            in_new_variables_scope: true,
+        };
 
         for op_tuple in operands.iter_mut().enumerate() {
             match op_tuple {
@@ -2162,7 +2193,7 @@ pub(crate) mod opr_funcs {
                     let name = op.get_value();
 
                     if let Some(ref expr) = shuttle.routines.get(&name) {
-                        body = (*expr).clone();
+                        found_routine = (*expr).clone();
                     } else {
                         return;
                     }
@@ -2173,12 +2204,17 @@ pub(crate) mod opr_funcs {
             }
         }
 
-        // TODO: shuttle.nums should be a stack of hashmaps.
-        // Before the operate call, push an empty hashmap;
-        // after the call, pop it to throw it away.
-        body.operate(shuttle);
+        if found_routine.in_new_variables_scope {
+            shuttle.nums.push(HashMap::new());
+        }
 
-        *result_value = body.get_value();
+        found_routine.body.operate(shuttle);
+
+        if found_routine.in_new_variables_scope {
+            shuttle.nums.pop().expect("Popping a pushed Hashmap from Shuttle.nums should always succeed.");
+        }
+
+        *result_value = found_routine.body.get_value();
     }
 }
 
@@ -2656,14 +2692,10 @@ mod tests {
             let mut shuttle = Shuttle::new(&mut writer, &mut reader);
             exp.operate(&mut shuttle);
 
-            match shuttle.nums.get(&ValueType::Number(4000.3f64)) {
-                None => panic!("The numerical register assigned to has not been found back."),
-                Some(n) => {
-                    match n {
-                        ValueType::Number(num) => assert_eq!(500.1f64, *num),
-                        _ => panic!("The value found in shuttle.nums should be ValueType::Number."),
-                    }
-                },
+            match shuttle.get_var(&ValueType::Number(4000.3f64)) {
+                ValueType::Empty => panic!("The numerical register assigned to has not been found back."),
+                ValueType::Number(num) => assert_eq!(500.1f64, num),
+                _ => panic!("The value found in shuttle.nums should be ValueType::Number."),
             }
         }
 
@@ -2741,7 +2773,7 @@ mod tests {
     }
 
     mod exec {
-        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, ValueType, are_very_near};
+        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, are_very_near};
         use crate::input::{MockByString, StdinReader};
 
         #[test]
@@ -3765,7 +3797,7 @@ mod tests {
             // To be tested using the -- --ignored --nocapture arguments.
             let mut writer = std::io::stdout();
             let mut reader = StdinReader::new();
-            Interpreter::execute_opts("w[sEnter a number:] $0r w+[sYou entered: ]v0 w+[sDouble is: ]*v0 2".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+            Interpreter::execute_opts("w[sEnter a positive number:] $0r w+[sYou entered: ]v0 w+[sDouble is: ]*v0 2".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
         }
 
         #[test]
@@ -4077,6 +4109,16 @@ mod tests {
         #[test]
         fn x_routine_declaration_yields_name() {
             assert_eq!("tau".to_string(), Interpreter::execute("R#tau *p2".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_routine_sharing_variables() {
+            assert_eq!(0f64, Interpreter::execute("R`(#empty_vars $#end k $#start k Fv#start v#end 1 #count $v#count Ø) $(11 5 5 5 5 5) K(11 15) X#empty_vars tv15".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_routine_new_scope() {
+            assert_eq!(5f64, Interpreter::execute("R(#empty_vars $#end k $#start k Fv#start v#end 1 #count $v#count Ø) $(11 5 5 5 5 5) K(11 15) X#empty_vars v15".to_string()).unwrap().numeric_value);
         }
     }
 
