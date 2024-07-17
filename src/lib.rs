@@ -1,10 +1,5 @@
 // TODO: resolve TODO's in code.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
-// TODO: have the operator functions return more ProgramErrors for unexpected conditions
-//          This will require the ValueType to have a ValueType::Error(ProgramError) variant.
-//          During evaluation of its operands, Expression.operate() should stop if any of its
-//          operands has a ValueType::Error value, and break its evaluation loop.
-//          (Also to be implemented for the W, F and ? operators.)
 // TODO: implement all intended operators.
 // TODO: if struct Interpreter ends up having no internal state (no properties), simply delete it
 //          and make its associated methods crate-level functions.
@@ -25,7 +20,7 @@ use std::io::Write;
 // The first parameter should refer to an Expression's value property,
 // the second one to a Expression's operands property (operands are Expression objects),
 // the third one to the Shuttle containing other state.
-type OperatorFunc = &'static dyn Fn(&mut ValueType, &mut [Expression], &mut Shuttle);
+type OperatorFunc = &'static dyn Fn(char, &mut ValueType, &mut [Expression], &mut Shuttle) -> Result<(), ScriptError>;
 
 #[derive(PartialEq)]
 enum Atom {
@@ -47,12 +42,18 @@ impl fmt::Debug for Atom {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum ProgramError {
+pub enum ScriptError {
     DigitParsingFailure{position: usize, reason: String},
+    UnexpectedClosingParenthesis,
     UnexpectedClosingBracket{position: usize},
     UnknownOperator{position: usize, operator: char},
     UnclosedBracketsAtEnd,
     UnknownBracketContentTypeMarker{position: usize, marker: char},
+    InsufficientOperands(char),
+    UnknownConstant(String),
+    UnknownNamedOperator(String),
+    UnknownRoutine(String),
+    DivideByZero(char),
 }
 
 #[derive(Clone, Debug, PartialOrd)]
@@ -436,7 +437,7 @@ impl Expression {
         self.value.get_string_value(default)
     }
 
-    pub fn operate(&mut self, shuttle: &mut Shuttle) {
+    pub fn operate(&mut self, shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         /*
         #[cfg(test)]
         println!("operate {}", self.opr_mark);
@@ -448,11 +449,11 @@ impl Expression {
 
         if !defer_opd_evaluation {
             for op in &mut self.operands {
-                op.operate(shuttle);
+                op.operate(shuttle)?;
             }
         }
 
-        (self.operator)(&mut self.value, &mut self.operands, shuttle);
+        (self.operator)(self.opr_mark, &mut self.value, &mut self.operands, shuttle)?;
 
         let assignment_indexes = shuttle.assignment_indexes_stack.pop()
             .expect("fn operate should always find elements in shuttle.assignment_indexes_stack after execution of the operator.");
@@ -476,6 +477,8 @@ impl Expression {
         #[cfg(test)]
         println!("operate {} ==> {:?}", self.opr_mark, self.get_value());
         */
+
+        Ok(())
     }
 
     pub fn get_representation(&self) -> String {
@@ -667,7 +670,7 @@ impl Interpreter {
         Interpreter{}
     }
 
-    pub fn execute(program: String) -> Result<ExecutionOutcome, ProgramError> {
+    pub fn execute(program: String) -> Result<ExecutionOutcome, ScriptError> {
         let mut writer = Vec::<u8>::new();
         let mut reader = input::MockByString::new(Vec::<String>::new());
         Self::execute_opts(program, true, false, false, &mut writer, &mut reader)
@@ -680,9 +683,9 @@ impl Interpreter {
         show_after: bool,
         writer: &mut dyn Write,
         reader: &mut dyn input::StdinOrMock,
-    ) -> Result<ExecutionOutcome, ProgramError> {
+    ) -> Result<ExecutionOutcome, ScriptError> {
         let atoms = Self::split_atoms(&program)?;
-        let mut tree: Expression = Self::make_tree(atoms);
+        let mut tree: Expression = Self::make_tree(atoms)?;
         let mut shuttle = Shuttle::new(writer, reader);
 
         if show_before {
@@ -690,7 +693,7 @@ impl Interpreter {
         }
 
         if do_execute {
-            tree.operate(&mut shuttle);
+            tree.operate(&mut shuttle)?;
         }
 
         if show_after {
@@ -707,7 +710,7 @@ impl Interpreter {
 
     // Numeric overflows will cause number atoms to be
     // f64::INFINITY of f64::NEG_INFINITY.
-    fn split_atoms(program: &str) -> Result<Vec<Atom>, ProgramError> {
+    fn split_atoms(program: &str) -> Result<Vec<Atom>, ScriptError> {
         let mut result = Vec::<Atom>::new();
         let mut reading_number = false;
         let mut reading_simple_string = false;
@@ -775,7 +778,7 @@ impl Interpreter {
                     reading_number = true;
                     current_num.push(c);
                 } else if c == ']' {
-                    return Err(ProgramError::UnexpectedClosingBracket{position: pos});
+                    return Err(ScriptError::UnexpectedClosingBracket{position: pos});
                 } else if c == '#' {
                     if reading_simple_string {
                         current_string.push(c);
@@ -798,7 +801,7 @@ impl Interpreter {
                     if Self::is_known_operator(c) {
                         result.push(Atom::Operator(c));
                     } else {
-                        return Err(ProgramError::UnknownOperator{position: pos, operator: c});
+                        return Err(ScriptError::UnknownOperator{position: pos, operator: c});
                     }
                 }
             } else {
@@ -834,7 +837,7 @@ impl Interpreter {
                                             Some(ps) => ps + 1,
                                         };
 
-                                        return Err(ProgramError::UnknownBracketContentTypeMarker{position: marker_pos, marker: other});
+                                        return Err(ScriptError::UnknownBracketContentTypeMarker{position: marker_pos, marker: other});
                                     },
                                 }
                             }
@@ -852,7 +855,7 @@ impl Interpreter {
         }
 
         if bracket_nesting > 0 {
-            return Err(ProgramError::UnclosedBracketsAtEnd);
+            return Err(ScriptError::UnclosedBracketsAtEnd);
         }
 
         if reading_number {
@@ -864,7 +867,7 @@ impl Interpreter {
         Ok(result)
     }
 
-    fn make_tree(atoms: Vec<Atom>) -> Expression {
+    fn make_tree(atoms: Vec<Atom>) -> Result<Expression, ScriptError> {
         let mut exp_stack = Vec::<Expression>::new();
         let mut override_start_found = false;
         let mut needed_ops: usize;
@@ -934,13 +937,7 @@ impl Interpreter {
 
                                     if let Some(e) = exp_stack.pop() {
                                         if e.opr_mark == ')' {
-                                            // Unexpected, but we can't ignore it.
-                                            match new_exp.operands.last_mut() {
-                                                None =>  (),
-                                                Some(ref mut op) => op.is_last_of_override = true,
-                                            }
-
-                                            break;
+                                            return Err(ScriptError::UnexpectedClosingParenthesis);
                                         }
 
                                         new_exp.push_operand(e);
@@ -956,8 +953,15 @@ impl Interpreter {
             }
         }
 
+        // If the stack has any expression having opr_mark ')', return an error.
+        for exp in exp_stack.iter() {
+            if exp.opr_mark == ')' {
+                return Err(ScriptError::UnexpectedClosingParenthesis);
+            }
+        }
+
         // If the stack has more than one expression, put whatever remains on the stack as operands in a ; - expression.
-        match exp_stack.len() {
+        Ok(match exp_stack.len() {
             0 => Expression::new_number("0".to_string()),
             1 => exp_stack.pop().expect("Is should be possible to pop the single Expression from the expression stack."),
             _ => {
@@ -969,7 +973,7 @@ impl Interpreter {
 
                 result
             },
-        }
+        })
     }
 
     fn is_known_operator(op: char) -> bool {
@@ -1040,7 +1044,7 @@ pub mod input {
 
 pub(crate) mod opr_funcs {
     use std::collections::HashMap;
-    use super::{Expression, NO_VALUE, Routine, Shuttle, ValueType, are_near};
+    use super::{Expression, NO_VALUE, Routine, ScriptError, Shuttle, ValueType, are_near};
 
     fn has_any_string_operands(operands: &[Expression]) -> bool {
         let mut opd_count = 0usize;
@@ -1156,7 +1160,7 @@ pub(crate) mod opr_funcs {
         Ok(num)
     }
 
-    pub fn nop(result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn nop(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         // If still needed, parse the string representation to a number.
         // TODO : for now, invalid strings are parsed to NaN; later on, a ValueType::Error is
         // needed.
@@ -1169,18 +1173,28 @@ pub(crate) mod opr_funcs {
             },
             _ => (),
         }
+
+        Ok(())
     }
 
-    pub fn empty(result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn empty(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Empty;
+
+        Ok(())
     }
 
-    pub fn string_expr(_result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn string_expr(_opr_mark: char, _result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         // Don't do anything.
         // Meant for Expressions that contain a fixed string value from creation.
+
+        Ok(())
     }
     
-    pub fn add(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn add(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         if has_any_string_operands(operands) {
             let mut string_outcome = String::new();
 
@@ -1208,9 +1222,15 @@ pub(crate) mod opr_funcs {
 
             *result_value = ValueType::Number(num_outcome);
         }
+
+        Ok(())
     }
     
-    pub fn multiply(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn multiply(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = 0f64;
 
         for (count, op) in operands.iter().enumerate() {
@@ -1221,9 +1241,15 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Number(outcome);
+
+        Ok(())
     }
     
-    pub fn power(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn power(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = 0f64;
 
         for (count, op) in operands.iter().enumerate() {
@@ -1234,9 +1260,15 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Number(outcome);
+
+        Ok(())
     }
     
-    pub fn minus(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn minus(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = 0f64;
 
         for (count, op) in operands.iter().enumerate() {
@@ -1247,42 +1279,80 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Number(outcome);
+
+        Ok(())
     }
     
-    pub fn divide(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn divide(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = 0f64;
+        let mut num_val: f64;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => outcome += op.get_num_value(0f64),
-                _ => outcome /= op.get_num_value(1f64),
+                _ => {
+                    num_val = op.get_num_value(1f64);
+
+                    if num_val == 0f64 {
+                        return Err(ScriptError::DivideByZero(opr_mark));
+                    }
+
+                    outcome /= op.get_num_value(1f64);
+                },
             }
         }
 
         *result_value = ValueType::Number(outcome);
+
+        Ok(())
     }
     
-    pub fn modulo(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn modulo(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = 0f64;
+        let mut num_val: f64;
 
         for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => outcome += op.get_num_value(0f64),
-                _ => outcome %= op.get_num_value(1f64),
+                _ => {
+                    num_val = op.get_num_value(1f64);
+
+                    if num_val == 0f64 {
+                        return Err(ScriptError::DivideByZero(opr_mark));
+                    }
+
+                    outcome %= op.get_num_value(1f64);
+                },
             }
         }
 
         *result_value = ValueType::Number(outcome);
+
+        Ok(())
     }
 
-    pub fn combine(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn combine(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.last() {
             Some(e) => e.get_value(),
-            None => ValueType::Empty,
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
         };
+
+        Ok(())
     }
     
-    pub fn min(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn min(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = ValueType::Max;
         let mut current: ValueType;
 
@@ -1299,9 +1369,15 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = outcome;
+
+        Ok(())
     }
     
-    pub fn max(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn max(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = ValueType::Empty;
         let mut current: ValueType;
 
@@ -1314,30 +1390,36 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = outcome;
+
+        Ok(())
     }
 
-    pub fn unaryminus(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn unaryminus(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => ValueType::Number(- e.get_num_value(0f64)),
         };
+
+        Ok(())
     }
 
-    pub fn intgr(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn intgr(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(
             match operands.first() {
-                None => 0f64,
+                None => return Err(ScriptError::InsufficientOperands(opr_mark)),
                 Some(e) => {
                     e.get_num_value(0f64).trunc()
                 },
             }
         );
+
+        Ok(())
     }
 
-    pub fn ceiling(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn ceiling(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(
             match operands.first() {
-                None => 0f64,
+                None => return Err(ScriptError::InsufficientOperands(opr_mark)),
                 Some(e) => {
                     let num = e.get_num_value(0f64);
 
@@ -1349,112 +1431,136 @@ pub(crate) mod opr_funcs {
                 },
             }
         );
+
+        Ok(())
     }
 
-    pub fn abs(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn abs(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => ValueType::Number(e.get_num_value(0f64).abs()),
         };
+
+        Ok(())
     }
 
-    pub fn degrees(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn degrees(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).to_degrees())
             },
         };
+
+        Ok(())
     }
 
-    pub fn radians(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn radians(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).to_radians())
             },
         };
+
+        Ok(())
     }
 
-    pub fn sine(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn sine(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).sin())
             },
         };
+
+        Ok(())
     }
 
-    pub fn asin(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn asin(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).asin())
             },
         };
+
+        Ok(())
     }
 
-    pub fn cosine(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn cosine(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).cos())
             },
         };
+
+        Ok(())
     }
 
-    pub fn acos(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn acos(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).acos())
             },
         };
+
+        Ok(())
     }
 
-    pub fn tangent(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn tangent(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).tan())
             },
         };
+
+        Ok(())
     }
 
-    pub fn atan(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn atan(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).atan())
             },
         };
+
+        Ok(())
     }
 
-    pub fn log(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn log(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
             *result_value = ValueType::Number(0f64);
 
-            return;
+            return Err(ScriptError::InsufficientOperands(opr_mark));
         }
 
         let base = operands[0].get_num_value(0f64);
         let product = operands[1].get_num_value(0f64);
         *result_value = ValueType::Number(product.log(base));
+
+        Ok(())
     }
 
-    pub fn pi(result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn pi(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(std::f64::consts::PI);
+
+        Ok(())
     }
 
-    pub fn euler_const(result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn euler_const(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(std::f64::consts::E);
+
+        Ok(())
     }
 
-    pub fn constants(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn constants(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            *result_value = ValueType::Number(0f64);
-
-            return;
+            return Err(ScriptError::InsufficientOperands(opr_mark));
         }
 
         let const_index = operands[0].get_value();
@@ -1476,14 +1582,15 @@ pub(crate) mod opr_funcs {
                     },
                 }
             },
-            _ => ValueType::Empty,
+            _ => return Err(ScriptError::UnknownConstant(const_index.get_string_value("???".to_string()))),
         };
+
+        Ok(())
     }
 
-    pub fn assign_number_register(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        if operands.is_empty() {
-            *result_value = ValueType::Number(0f64);
-            return;
+    pub fn assign_number_register(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
         }
 
         let name_is_string = operands[0].get_value().get_type_as_num() == 2f64;
@@ -1530,14 +1637,16 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = reg_val;
+
+        Ok(())
     }
 
-    pub fn get_number_register(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        let index = if operands.is_empty() {
-            ValueType::Number(0f64)
-        } else {
-            operands[0].get_value()
-        };
+    pub fn get_number_register(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 1 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        let index = operands[0].get_value();
 
         /*
         #[cfg(test)]
@@ -1545,15 +1654,16 @@ pub(crate) mod opr_funcs {
         */
 
         *result_value = shuttle.get_var(&index);
+
+        Ok(())
     }
 
-    pub fn assignment_maker(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        let index = if !operands.is_empty() {
-            operands[0].get_value()
-        } else {
-            ValueType::Number(0f64)
-        };
+    pub fn assignment_maker(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
 
+        let index = operands[0].get_value();
         let stack_len = shuttle.assignment_indexes_stack.len();
 
         // Add the variable's index to the list of variables to be assigned to
@@ -1566,9 +1676,15 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = shuttle.get_var(&index);
+
+        Ok(())
     }
 
-    pub fn push_stack(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn push_stack(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = ValueType::Empty;
 
         for op in operands.iter() {
@@ -1577,20 +1693,30 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = outcome;
+
+        Ok(())
     }
 
-    pub fn pop_stack(result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn pop_stack(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match shuttle.stack.pop() {
             None => ValueType::Empty,
             Some(vt) => vt,
         };
+
+        Ok(())
     }
 
-    pub fn stack_depth(result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn stack_depth(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(shuttle.stack.len() as f64);
+
+        Ok(())
     }
     
-    pub fn equals(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn equals(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut are_equal = true;
         let mut is_numeric = true;
         let mut first = ValueType::Empty;
@@ -1623,9 +1749,15 @@ pub(crate) mod opr_funcs {
         } else {
             0f64
         });
+
+        Ok(())
     }
     
-    pub fn less(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn less(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = true;
         let mut first = ValueType::Empty;
         let mut current: ValueType;
@@ -1656,9 +1788,15 @@ pub(crate) mod opr_funcs {
         } else {
             0f64
         });
+
+        Ok(())
     }
     
-    pub fn greater(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn greater(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = true;
         let mut first = ValueType::Empty;
         let mut current: ValueType;
@@ -1689,9 +1827,15 @@ pub(crate) mod opr_funcs {
         } else {
             0f64
         });
+
+        Ok(())
     }
 
-    pub fn not(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn not(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = true;
 
         for op in operands {
@@ -1708,9 +1852,15 @@ pub(crate) mod opr_funcs {
         } else {
             0f64
         });
+
+        Ok(())
     }
 
-    pub fn and(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn and(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = true;
 
         for op in operands {
@@ -1727,9 +1877,15 @@ pub(crate) mod opr_funcs {
         } else {
             0f64
         });
+
+        Ok(())
     }
 
-    pub fn or(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn or(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = false;
 
         for op in operands {
@@ -1746,9 +1902,15 @@ pub(crate) mod opr_funcs {
         } else {
             0f64
         });
+
+        Ok(())
     }
 
-    pub fn xor(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn xor(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut trues = 0usize;
 
         for op in operands {
@@ -1773,9 +1935,15 @@ pub(crate) mod opr_funcs {
         } else {
             0f64
         });
+
+        Ok(())
     }
     
-    pub fn setting(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn setting(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut setting_name = ValueType::Empty;
         let mut setting_value = ValueType::Empty;
 
@@ -1794,31 +1962,40 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = setting_value;
+
+        Ok(())
     }
 
-    pub fn enumerated_opr(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn enumerated_opr(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         let default_outcome = ValueType::Number(0f64);
 
         if operands.is_empty() {
             *result_value = default_outcome;
 
-            return;
+            return Err(ScriptError::InsufficientOperands(opr_mark));
         }
 
         let opr_func = match operands[0].get_value() {
             ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
             ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
-            _ =>  {
+            unknown =>  {
                 *result_value = default_outcome;
 
-                return;
+                return Err(ScriptError::UnknownNamedOperator(
+                    unknown.get_string_value("???".to_string())));
             },
         };
 
-        (opr_func)(result_value, &mut operands[1..], shuttle);
+        (opr_func)(opr_mark, result_value, &mut operands[1..], shuttle)?;
+
+        Ok(())
     }
 
-    pub fn set_number_format(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn set_number_format(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => shuttle.number_format.set_fractal_digits(op.get_num_value(0f64)),
@@ -1829,9 +2006,15 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Empty;
+
+        Ok(())
     }
 
-    pub fn sign(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn sign(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut all_positive = true;
         let mut all_negative = true;
 
@@ -1855,9 +2038,15 @@ pub(crate) mod opr_funcs {
                 0f64
             }
         );
+
+        Ok(())
     }
 
-    pub fn get_unicode_chars(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn get_unicode_chars(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut result_string = String::new();
         let mut opd_val: f64;
 
@@ -1873,44 +2062,23 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Text(result_string);
+
+        Ok(())
     }
 
-    pub fn get_type(result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) {
+    pub fn get_type(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            *result_value = ValueType::Number(0f64);
-
-            return;
+            return Err(ScriptError::InsufficientOperands(opr_mark));
         }
 
         *result_value = ValueType::Number(operands[0].get_value().get_type_as_num());
+
+        Ok(())
     }
 
-    /*
-    pub fn change_base(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        match operands.first() {
-            None => (),
-            Some(e) => {
-                let num_val = e.get_num_value(0f64).trunc();
-
-                if (num_val > 1f64) && (num_val < f64::INFINITY) {
-                    match shuttle.alternative_count {
-                        1 => shuttle.number_format.set_base(num_val),
-                        _ => shuttle.input_base = num_val,
-                    }
-                }
-
-                *result_value = match shuttle.alternative_count {
-                    1 => ValueType::Number(shuttle.number_format.base),
-                    _ => ValueType::Number(shuttle.input_base),
-                }
-            },
-        };
-    }
-    */
-
-    pub fn input_base(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn input_base(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => {
                 let num_val = e.get_num_value(0f64).trunc();
 
@@ -1921,11 +2089,13 @@ pub(crate) mod opr_funcs {
                 ValueType::Number(shuttle.input_base)
             },
         };
+
+        Ok(())
     }
 
-    pub fn output_base(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn output_base(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => ValueType::Number(0f64),
+            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
             Some(e) => {
                 let num_val = e.get_num_value(0f64).trunc();
 
@@ -1936,16 +2106,20 @@ pub(crate) mod opr_funcs {
                 ValueType::Number(shuttle.number_format.base)
             },
         };
+
+        Ok(())
     }
     
-    pub fn write(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn write(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
+            /*
             let _ = shuttle.writer.write(b"(empty output)\n");
             let _ = shuttle.writer.flush();
             
             *result_value = ValueType::Text(String::new());
+            */
 
-            return;
+            return Err(ScriptError::InsufficientOperands(opr_mark));
         }
 
         for op in operands {
@@ -1965,9 +2139,11 @@ pub(crate) mod opr_funcs {
         
         // TODO: provide sensible value in result_value.
         *result_value = ValueType::Text(String::new());
+
+        Ok(())
     }
 
-    pub fn read(result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn read(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         let input_string = match shuttle.reader.read_line() {
             Some(s) => s.replace("\n", "").replace("\r", ""),
             None => String::new(),
@@ -1976,18 +2152,20 @@ pub(crate) mod opr_funcs {
         *result_value = match parse_number(&input_string, shuttle.input_base, false) {
             Ok(num) => ValueType::Number(num),
             Err(_) => ValueType::Text(input_string),
-        }
+        };
+
+        Ok(())
     }
 
-    pub fn preceding_nr_operands(result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn preceding_nr_operands(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(shuttle.preceding_nr_operands);
+
+        Ok(())
     }
 
-    pub fn exec_while(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        if operands.is_empty() {
-            *result_value = ValueType::Number(0f64);
-
-            return;
+    pub fn exec_while(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
         }
 
         let mut outcome = 0f64;
@@ -2009,7 +2187,7 @@ pub(crate) mod opr_funcs {
 
                 match op_count {
                     0 =>  {
-                        op.operate(shuttle);
+                        op.operate(shuttle)?;
 
                         if are_near(0f64, op.get_num_value(0f64), shuttle.orb) {
                                     break 'outer;
@@ -2017,7 +2195,7 @@ pub(crate) mod opr_funcs {
                     },
                     _ => {
                         iter_count += 1f64;
-                        op.operate(shuttle);
+                        op.operate(shuttle)?;
                         outcome = op.get_num_value(0f64);
                     },
                 }
@@ -2029,9 +2207,15 @@ pub(crate) mod opr_funcs {
         shuttle.preceding_nr_operands = iter_count;
 
         *result_value = ValueType::Number(outcome);
+
+        Ok(())
     }
     
-    pub fn exec_for(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn exec_for(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 5 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = 0f64;
         let mut counter_val = 0f64;
         let mut end_val = 0f64;
@@ -2042,12 +2226,12 @@ pub(crate) mod opr_funcs {
         if operands.len() < 5 {
             *result_value = ValueType::Number(outcome);
 
-            return;
+            return Err(ScriptError::InsufficientOperands(opr_mark));
         }
 
         for (op_count, op) in operands.iter_mut().enumerate() {
             if op_count <= 3 {
-                op.operate(shuttle);
+                op.operate(shuttle)?;
             }
 
             match op_count {
@@ -2081,7 +2265,7 @@ pub(crate) mod opr_funcs {
 
             while op_count < op_len {
                 op = &mut operands[op_count];
-                op.operate(shuttle);
+                op.operate(shuttle)?;
 
                 if op_count + 1 == op_len {
                     outcome = op.get_num_value(0f64);
@@ -2100,25 +2284,31 @@ pub(crate) mod opr_funcs {
         shuttle.preceding_nr_operands = iter_count;
 
         *result_value = ValueType::Number(outcome);
+
+        Ok(())
     }
 
-    pub fn exec_if(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn exec_if(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 3 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
         let mut outcome = ValueType::Empty;
         let mut use_second = true;
 
         for op_tuple in operands.iter_mut().enumerate() {
             match op_tuple {
                 (0, op) => {
-                    op.operate(shuttle);
+                    op.operate(shuttle)?;
                     use_second = !are_near(0f64, op.get_num_value(0f64), shuttle.orb);
                 },
                 (1, op) if use_second => {
-                    op.operate(shuttle);
+                    op.operate(shuttle)?;
                     outcome = op.get_value();
                 },
                 (1, _) => (),
                 (_, op) if !use_second => {
-                    op.operate(shuttle);
+                    op.operate(shuttle)?;
                     outcome = op.get_value();
                 }
                 _ => (),
@@ -2126,21 +2316,27 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = outcome;
+
+        Ok(())
     }
     
-    pub fn define_routine_sharing_variables(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        define_routine(result_value, operands, shuttle, false);
+    pub fn define_routine_sharing_variables(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        define_routine(opr_mark, result_value, operands, shuttle, false)?;
+
+        Ok(())
     }
     
-    pub fn define_routine_with_new_scope(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
-        define_routine(result_value, operands, shuttle, true);
+    pub fn define_routine_with_new_scope(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        define_routine(opr_mark, result_value, operands, shuttle, true)?;
+
+        Ok(())
     }
 
-    fn define_routine(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, in_new_variables_scope: bool) {
+    fn define_routine(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, in_new_variables_scope: bool) -> Result<(), ScriptError> {
         if operands.len() < 2 {
             *result_value = ValueType::Empty;
             
-            return;
+            return Err(ScriptError::InsufficientOperands(opr_mark));
         }
 
         let mut name = ValueType::Empty;
@@ -2149,7 +2345,7 @@ pub(crate) mod opr_funcs {
         for op_tuple in operands.iter_mut().enumerate() {
             match op_tuple {
                 (0, op) => {
-                    op.operate(shuttle);
+                    op.operate(shuttle)?;
                     name = op.get_value();
                 },
                 (_, op) => {
@@ -2172,13 +2368,15 @@ pub(crate) mod opr_funcs {
 
         shuttle.routines.insert(name.clone(), Routine{body, in_new_variables_scope,});
         *result_value = name;
+
+        Ok(())
     }
 
-    pub fn exec_routine(result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) {
+    pub fn exec_routine(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Empty;
 
         if operands.len() < 1 {
-            return;
+            return Err(ScriptError::InsufficientOperands(opr_mark));
         }
 
         // Returns empty value.
@@ -2195,7 +2393,8 @@ pub(crate) mod opr_funcs {
                     if let Some(ref expr) = shuttle.routines.get(&name) {
                         found_routine = (*expr).clone();
                     } else {
-                        return;
+                        return Err(ScriptError::UnknownRoutine(
+                            name.get_string_value("???".to_string())));
                     }
                 },
                 (_, op) => {
@@ -2208,13 +2407,15 @@ pub(crate) mod opr_funcs {
             shuttle.nums.push(HashMap::new());
         }
 
-        found_routine.body.operate(shuttle);
+        found_routine.body.operate(shuttle)?;
 
         if found_routine.in_new_variables_scope {
             shuttle.nums.pop().expect("Popping a pushed Hashmap from Shuttle.nums should always succeed.");
         }
 
         *result_value = found_routine.body.get_value();
+
+        Ok(())
     }
 }
 
@@ -2470,7 +2671,7 @@ mod tests {
         #[test]
         fn split_unknown_operator() {
             let result = Interpreter::split_atoms("'");
-            assert_eq!(Err(ProgramError::UnknownOperator{position: 1, operator: '\''}), result);
+            assert_eq!(Err(ScriptError::UnknownOperator{position: 1, operator: '\''}), result);
         }
 
         #[test]
@@ -2523,25 +2724,25 @@ mod tests {
         #[test]
         fn split_unknown_bracket_type() {
             let result = Interpreter::split_atoms("[xLaconic]");
-            assert_eq!(Err(ProgramError::UnknownBracketContentTypeMarker{position: 2, marker: 'x'}), result);
+            assert_eq!(Err(ScriptError::UnknownBracketContentTypeMarker{position: 2, marker: 'x'}), result);
         }
 
         #[test]
         fn split_unexpected_closing_bracket() {
             let result = Interpreter::split_atoms("[cLaconic]$2 174]v2");
-            assert_eq!(Err(ProgramError::UnexpectedClosingBracket{position: 17}), result);
+            assert_eq!(Err(ScriptError::UnexpectedClosingBracket{position: 17}), result);
         }
 
         #[test]
         fn split_unclosed_bracket() {
             let result = Interpreter::split_atoms("[cLaconic] [s $2 174 v2");
-            assert_eq!(Err(ProgramError::UnclosedBracketsAtEnd), result);
+            assert_eq!(Err(ScriptError::UnclosedBracketsAtEnd), result);
         }
 
         #[test]
         fn split_unclosed_bracket_nested() {
             let result = Interpreter::split_atoms("[c [cLaconic] $2 174 v2");
-            assert_eq!(Err(ProgramError::UnclosedBracketsAtEnd), result);
+            assert_eq!(Err(ScriptError::UnclosedBracketsAtEnd), result);
         }
 
         #[test]
@@ -2744,7 +2945,7 @@ mod tests {
             let mut reader = MockByString::new(Vec::<String>::new());
             let mut shuttle = Shuttle::new(&mut writer, &mut reader);
 
-            nop(&mut the_value, &mut ops, &mut shuttle);
+            nop('0', &mut the_value, &mut ops, &mut shuttle);
 
             assert!(ops.is_empty());
 
@@ -2764,8 +2965,8 @@ mod tests {
             let mut shuttle = Shuttle::new(&mut writer, &mut reader);
 
             // Have the golden ratio retrieved twice from the shuttle.
-            constants(&mut the_value, &mut ops, &mut shuttle);
-            constants(&mut the_value, &mut ops, &mut shuttle);
+            constants('c', &mut the_value, &mut ops, &mut shuttle);
+            constants('c', &mut the_value, &mut ops, &mut shuttle);
 
             // Verify that the calculation only happened once.
             assert_eq!(1u8, shuttle.golden_ratio_calculations);
@@ -2773,7 +2974,7 @@ mod tests {
     }
 
     mod exec {
-        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, are_very_near};
+        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, are_very_near, ScriptError};
         use crate::input::{MockByString, StdinReader};
 
         #[test]
@@ -2803,12 +3004,12 @@ mod tests {
 
         #[test]
         fn x_add_1_op() {
-            assert_eq!(111f64, Interpreter::execute("+111".to_string()).unwrap().numeric_value);
+            assert_eq!(Err(ScriptError::InsufficientOperands('+')), Interpreter::execute("+111".to_string()));
         }
 
         #[test]
         fn x_add_0_op() {
-            assert_eq!(0f64, Interpreter::execute("+".to_string()).unwrap().numeric_value);
+            assert_eq!(Err(ScriptError::InsufficientOperands('+')), Interpreter::execute("+".to_string()));
         }
 
         #[test]
@@ -2833,12 +3034,16 @@ mod tests {
 
         #[test]
         fn x_minus_1_op() {
-            assert_eq!(111f64, Interpreter::execute("-111".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('-')),
+                Interpreter::execute("-111".to_string()));
         }
 
         #[test]
         fn x_minus_0_op() {
-            assert_eq!(0f64, Interpreter::execute("-".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('-')),
+                Interpreter::execute("-".to_string()));
         }
 
         #[test]
@@ -2863,12 +3068,16 @@ mod tests {
 
         #[test]
         fn x_combine_0_op() {
-            assert_eq!(NO_VALUE.to_string(), Interpreter::execute(";".to_string()).unwrap().string_representation);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands(';')),
+                Interpreter::execute(";".to_string()));
         }
 
         #[test]
         fn x_override_to_1() {
-            assert_eq!(51f64, Interpreter::execute("+- 50 +(2) 3".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('+')),
+                Interpreter::execute("+- 50 +(2) 3".to_string()));
         }
         
         #[test]
@@ -2893,7 +3102,16 @@ mod tests {
 
         #[test]
         fn x_missing_start_of_override() {
-            assert_eq!(52f64, Interpreter::execute("+-50)2".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::UnexpectedClosingParenthesis),
+                Interpreter::execute("+-50 2) 3".to_string()));
+        }
+
+        #[test]
+        fn x_missing_start_of_override_after_expected_ops() {
+            assert_eq!(
+                Err(ScriptError::UnexpectedClosingParenthesis),
+                Interpreter::execute("+-50 2 3)".to_string()));
         }
 
         #[test]
@@ -2908,12 +3126,16 @@ mod tests {
 
         #[test]
         fn x_multiply_1_op() {
-            assert_eq!(111f64, Interpreter::execute("*111".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('*')),
+                Interpreter::execute("*111".to_string()));
         }
 
         #[test]
         fn x_multiply_0_op() {
-            assert_eq!(10f64, Interpreter::execute("+ 10 *".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('*')),
+                Interpreter::execute("+ 10 *".to_string()));
         }
 
         #[test]
@@ -2928,17 +3150,23 @@ mod tests {
 
         #[test]
         fn x_divide_1_op() {
-            assert_eq!(70f64, Interpreter::execute("/70".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('/')),
+                Interpreter::execute("/70".to_string()));
         }
 
         #[test]
         fn x_divide_0_op() {
-            assert_eq!(5f64, Interpreter::execute("+5 /".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('/')),
+                Interpreter::execute("+5 /".to_string()));
         }
 
         #[test]
         fn x_divide_by_zero() {
-            assert_eq!(f64::INFINITY, Interpreter::execute("/8 0".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::DivideByZero('/')),
+                Interpreter::execute("/8 0".to_string()));
         }
 
         #[test]
@@ -2958,22 +3186,30 @@ mod tests {
 
         #[test]
         fn x_modulo_1_op() {
-            assert_eq!(70f64, Interpreter::execute("%70".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('%')),
+                Interpreter::execute("%70".to_string()));
         }
 
         #[test]
         fn x_modulo_0_op() {
-            assert_eq!(0f64, Interpreter::execute("%".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('%')),
+                Interpreter::execute("%".to_string()));
         }
 
         #[test]
         fn x_power_0_op() {
-            assert_eq!(0f64, Interpreter::execute("^".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('^')),
+                Interpreter::execute("^".to_string()));
         }
 
         #[test]
         fn x_power_1_op() {
-            assert_eq!(49f64, Interpreter::execute("^49".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('^')),
+                Interpreter::execute("^49".to_string()));
         }
 
         #[test]
@@ -3018,7 +3254,9 @@ mod tests {
 
         #[test]
         fn x_unaryminus_0_op() {
-            assert_eq!(2f64, Interpreter::execute("+ 2 ~".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('~')),
+                Interpreter::execute("+ 2 ~".to_string()));
         }
 
         #[test]
@@ -3179,12 +3417,12 @@ mod tests {
 
         #[test]
         fn x_assign_to_neg_register() {
-            assert_eq!(7f64, Interpreter::execute("$~10 7) v~10".to_string()).unwrap().numeric_value);
+            assert_eq!(7f64, Interpreter::execute("$~10 7 v~10".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_get_num_reg() {
-            assert_eq!(90f64, Interpreter::execute("$/21 2 90 $(4) v/21 2".to_string()).unwrap().numeric_value);
+            assert_eq!(90f64, Interpreter::execute("$/21 2 90 $4 45 v/21 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -3305,7 +3543,7 @@ mod tests {
         #[test]
         fn x_less_mixed() {
             // v111 as uninitialized variable is VaueType::Empty.
-            assert_eq!(1f64, Interpreter::execute("<(v111 /~1 0 ~2036 2 6 /5 0 #Fruehling #Zambetas)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute("<(v111 ~2036 2 6 #Fruehling #Zambetas)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -3330,7 +3568,7 @@ mod tests {
 
         #[test]
         fn x_greater_mixed() {
-            assert_eq!(1f64, Interpreter::execute(">(#Zambetas #Fruehling /22 0 1_000_000.2 2024 ~85 /~3 0 v111)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute(">(#Zambetas #Fruehling 1_000_000.2 2024 ~85 v111)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -3389,8 +3627,10 @@ mod tests {
         }
 
         #[test]
-        fn x_and_0() {
-            assert_eq!(1f64, Interpreter::execute("&".to_string()).unwrap().numeric_value);
+        fn x_and_0_operands() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('&')),
+                Interpreter::execute("&".to_string()));
         }
 
         #[test]
@@ -3440,7 +3680,9 @@ mod tests {
 
         #[test]
         fn x_or_0() {
-            assert_eq!(0f64, Interpreter::execute("|".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('|')),
+                Interpreter::execute("|".to_string()));
         }
 
         #[test]
@@ -3490,7 +3732,9 @@ mod tests {
 
         #[test]
         fn x_xor_0() {
-            assert_eq!(0f64, Interpreter::execute("x".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('x')),
+                Interpreter::execute("x".to_string()));
         }
 
         #[test]
@@ -3580,7 +3824,9 @@ mod tests {
 
         #[test]
         fn x_for_4_op_asc() {
-            assert_eq!(0f64, Interpreter::execute("F(3 11 2 1)".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('F')),
+                Interpreter::execute("F(3 11 2 1)".to_string()));
         }
 
         #[test]
@@ -3610,12 +3856,16 @@ mod tests {
 
         #[test]
         fn x_if_0_op() {
-            assert_eq!(0f64, Interpreter::execute("?".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('?')),
+                Interpreter::execute("?".to_string()));
         }
 
         #[test]
         fn x_if_1_op() {
-            assert_eq!(0f64, Interpreter::execute("? 19".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('?')),
+                Interpreter::execute("? 19".to_string()));
         }
 
         #[test]
@@ -3650,12 +3900,16 @@ mod tests {
 
         #[test]
         fn x_enum_opr_unknown() {
-            assert_eq!(0f64, Interpreter::execute("o1.5 2".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::UnknownNamedOperator("1.5".to_string())),
+                Interpreter::execute("o1.5 2".to_string()));
         }
 
         #[test]
         fn x_sign_no_operands() {
-            assert_eq!(0f64, Interpreter::execute("s".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('s')),
+                Interpreter::execute("s".to_string()));
         }
 
         #[test]
@@ -3740,12 +3994,10 @@ mod tests {
 
         #[test]
         fn x_write_nothing() {
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            Interpreter::execute_opts("w".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('w')),
+                Interpreter::execute("w".to_string()));
 
-            assert_eq!(15, writer.len());
-            assert_eq!("(empty output)\n".to_string(), String::from_utf8(writer).unwrap());
         }
 
         #[test]
@@ -3862,7 +4114,9 @@ mod tests {
 
         #[test]
         fn x_log_no_2_args() {
-            assert_eq!(0f64, Interpreter::execute("l10".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('l')),
+                Interpreter::execute("l10".to_string()));
         }
 
         #[test]
@@ -3882,7 +4136,9 @@ mod tests {
 
         #[test]
         fn x_consts_unknown() {
-            assert_eq!(NO_VALUE.to_string(), Interpreter::execute("c~2".to_string()).unwrap().string_representation);
+            assert_eq!(
+                Err(ScriptError::UnknownConstant("-2".to_string())),
+                Interpreter::execute("c~2".to_string()));
         }
 
         #[test]
@@ -4083,12 +4339,16 @@ mod tests {
 
         #[test]
         fn x_routine_undeclared() {
-            assert_eq!(0f64, Interpreter::execute("tX#unknown".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::UnknownRoutine("unknown".to_string())),
+                Interpreter::execute("tX#unknown".to_string()));
         }
 
         #[test]
         fn x_routine_one_operand() {
-            assert_eq!(0f64, Interpreter::execute("R(#oneOp) X#oneOp".to_string()).unwrap().numeric_value);
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('R')),
+                Interpreter::execute("R(#oneOp) X#oneOp".to_string()));
         }
 
         #[test]
