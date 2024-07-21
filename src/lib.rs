@@ -9,6 +9,7 @@
 // TODO: have all operators have an acceptable behavior with less or more operands than standard.
 //      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
+// TODO: use giantity ?
 
 use std::collections::HashMap;
 use std::fmt;
@@ -907,7 +908,13 @@ impl Interpreter {
                         }
                         // ')' => override_end_found = true,
                         op_for_stack => {
-                            let mut new_exp = Expression::new(op_for_stack, alternative_marks_count);
+                            if "oO".contains(op_for_stack) {
+                                needed_ops += (2 * alternative_marks_count) as usize;
+                            }
+
+                            let mut new_exp =
+                                Expression::new(op_for_stack, alternative_marks_count);
+
                             alternative_marks_count = 0;
 
                             // The number of arguments for the : and ` operators can't be overridden.
@@ -1162,8 +1169,8 @@ pub(crate) mod opr_funcs {
 
     pub fn nop(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         // If still needed, parse the string representation to a number.
-        // TODO : for now, invalid strings are parsed to NaN; later on, a ValueType::Error is
-        // needed.
+        // TODO : for now, invalid strings are parsed to NaN; later on, a
+        // ScriptError::InvalidNumber is needed.
 
         match result_value {
             ValueType::Text(string_rep) => {
@@ -3935,6 +3942,11 @@ mod tests {
         #[test]
         fn x_enum_opr_override() {
             assert_eq!("fg".to_string(), Interpreter::execute("O(#uni 102 103)".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_enum_opr_backticks() {
+            assert_eq!("fgh".to_string(), Interpreter::execute("o`#uni 102 103 104".to_string()).unwrap().string_representation);
         }
 
         #[test]
