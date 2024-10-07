@@ -1080,6 +1080,7 @@ pub(crate) mod opr_funcs {
         string_rep_ext.push(' ');
 
         let mut num = 0f64;
+        let mut sign_factor = 1f64;
         let mut periods_found = 0u8;
         let mut first_frac = 0usize;
         let mut digit_value =  0u32;
@@ -1097,6 +1098,13 @@ pub(crate) mod opr_funcs {
         // Compose an array of u32 digit values.
         for (char_count, c) in string_rep_ext.to_uppercase().chars().enumerate() {
             match c {
+                '-' | '~' => {
+                    if char_count == 0 {
+                        sign_factor = -1f64;
+                    } else {
+                        return Err("Non-leading sign indicator".to_string());
+                    }
+                }
                 '.' => {
                     if using_multichar_digits && has_pending_digit {
                         digits.push(digit_value);
@@ -1164,7 +1172,7 @@ pub(crate) mod opr_funcs {
             }
         }
 
-        Ok(num)
+        Ok(num * sign_factor)
     }
 
     pub fn nop(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
@@ -2156,6 +2164,7 @@ pub(crate) mod opr_funcs {
             None => String::new(),
         };
         
+        // TODO: Err-values should result in a ScriptError Result of fn read.
         *result_value = match parse_number(&input_string, shuttle.input_base, false) {
             Ok(num) => ValueType::Number(num),
             Err(_) => ValueType::Text(input_string),
@@ -4035,6 +4044,31 @@ mod tests {
         }
 
         #[test]
+        fn x_read_neg_number_base10_minus() {
+            let mut writer = std::io::sink();
+            let mut reader = MockByString::new(vec!["-16".to_string()]);
+            assert_eq!(-14f64, Interpreter::execute_opts("w[sEnter a number:]+r2".to_string(), true, false, false, &mut writer, &mut reader).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_read_neg_number_base10_tilde() {
+            let mut writer = std::io::sink();
+            let mut reader = MockByString::new(vec!["~16".to_string()]);
+            assert_eq!(-14f64, Interpreter::execute_opts("w[sEnter a number:]+r2".to_string(), true, false, false, &mut writer, &mut reader).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_read_neg_number_base10_non_leading() {
+            let mut writer = std::io::sink();
+            let mut reader = MockByString::new(vec!["16-".to_string()]);
+            let outcome = Interpreter::execute_opts("w[sEnter a number:]+r 2".to_string(), true, false, false, &mut writer, &mut reader).unwrap().string_representation;
+
+            println!("Outcome: {:?}", outcome);
+
+            assert_eq!(2f64, Interpreter::execute_opts("w[sEnter a number:]+r2".to_string(), true, false, false, &mut writer, &mut reader).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_read_number_base16() {
             let mut writer = std::io::sink();
             let mut reader = MockByString::new(vec!["1F.3".to_string()]);
@@ -4061,7 +4095,7 @@ mod tests {
             // To be tested using the -- --ignored --nocapture arguments.
             let mut writer = std::io::stdout();
             let mut reader = StdinReader::new();
-            Interpreter::execute_opts("w[sEnter a positive number:] $0r w+[sYou entered: ]v0 w+[sDouble is: ]*v0 2".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+            Interpreter::execute_opts("w[sEnter a number:] $0r w+[sYou entered: ]v0 w+[sDouble is: ]*v0 2".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
         }
 
         #[test]
