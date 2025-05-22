@@ -32,16 +32,15 @@ fn main() {
     }
 
     if !script.is_empty() {
-        let mut writer = stdout();
-        let mut reader = laconic::input::StdinReader::new();
+        let writer = Box::new(stdout());
+        let reader = Box::new(laconic::input::StdinReader::new());
+        let mut interpreter = Interpreter::new(writer, reader);
 
-        match Interpreter::execute_opts(
+        match interpreter.execute_opts(
             script,
             do_execute,
             show_before,
-            show_after,
-            &mut writer,
-            &mut reader
+            show_after
         ) {
             Ok(outcome) => println!("{}", outcome.string_representation),
             Err(err) => println!("{:?}", err),

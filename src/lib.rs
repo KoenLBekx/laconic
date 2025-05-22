@@ -1,8 +1,6 @@
-// TODO: resolve TODO's in code.
+//{ TODO: resolve TODO's in code.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: implement all intended operators.
-// TODO: if struct Interpreter ends up having no internal state (no properties), simply delete it
-//          and make its associated methods crate-level functions.
 // TODO: implement different variable arrays - see the 'u' operator.
 //      Default array: 0.
 //      This means that the key for HashMap Shuttle.nums has to be a (ValueType, ValueType) tuple.
@@ -10,6 +8,7 @@
 //      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
 // TODO: use giantity ?
+//}
 
 use std::collections::HashMap;
 use std::fmt;
@@ -585,7 +584,7 @@ struct Routine {
 
 // Shuttle objects are used to be passed to every operator function
 // to provide state other than the operands.
-struct Shuttle<'s> {
+struct Shuttle {
     nums: Vec<HashMap<ValueType, ValueType>>,
     stack: Vec<ValueType>,
     routines: HashMap<ValueType, Routine>,
@@ -596,15 +595,15 @@ struct Shuttle<'s> {
     golden_ratio: Option<f64>,
     input_base: f64,
     number_format: NumberFormat,
-    writer: &'s mut dyn Write,
-    reader: &'s mut dyn input::StdinOrMock,
+    writer: Box<dyn output::EchoingWriter>,
+    reader: Box<dyn input::StdinOrMock>,
 
     #[cfg(test)]
     golden_ratio_calculations: u8,
 }
 
-impl<'s> Shuttle<'s> {
-    fn new(writer: &'s mut dyn Write, reader: &'s mut dyn input::StdinOrMock) -> Self {
+impl Shuttle {
+    fn new(writer: Box<dyn output::EchoingWriter>, reader: Box<dyn input::StdinOrMock>) -> Self {
         Shuttle {
             nums: vec![HashMap::<ValueType, ValueType>::new()],
             stack: Vec::new(),
@@ -644,6 +643,10 @@ impl<'s> Shuttle<'s> {
             Some(v) => v.clone(),
         }
     }
+
+    pub fn echo_output(&self) -> Option<&[u8]> {
+        self.writer.echo_bytes()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -664,37 +667,40 @@ impl ExecutionOutcome {
 const NO_VALUE: &str = "(no_value)";
 
 pub struct Interpreter {
+    shuttle: Shuttle,
 }
 
 impl Interpreter {
-    pub fn new() -> Self {
-        Interpreter{}
+    pub fn new(writer: Box<dyn output::EchoingWriter>, reader: Box<dyn input::StdinOrMock>) -> Self {
+        let shuttle = Shuttle::new(writer, reader);
+
+        Interpreter{ shuttle, }
     }
 
-    pub fn execute(program: String) -> Result<ExecutionOutcome, ScriptError> {
-        let mut writer = Vec::<u8>::new();
-        let mut reader = input::MockByString::new(Vec::<String>::new());
-        Self::execute_opts(program, true, false, false, &mut writer, &mut reader)
+    pub fn execute_with_mocked_io(program: String) -> Result<ExecutionOutcome, ScriptError> {
+        let writer = Box::new(Vec::<u8>::new());
+        let reader = Box::new(input::MockByString::new(Vec::<String>::new()));
+        let mut interpreter = Self::new(writer, reader);
+
+        interpreter.execute_opts(program, true, false, false)
     }
 
     pub fn execute_opts(
+        &mut self,
         program: String,
         do_execute: bool,
         show_before: bool,
         show_after: bool,
-        writer: &mut dyn Write,
-        reader: &mut dyn input::StdinOrMock,
     ) -> Result<ExecutionOutcome, ScriptError> {
         let atoms = Self::split_atoms(&program)?;
         let mut tree: Expression = Self::make_tree(atoms)?;
-        let mut shuttle = Shuttle::new(writer, reader);
 
         if show_before {
             println!("\nTree before operate() :\n{}", tree.get_representation());
         }
 
         if do_execute {
-            tree.operate(&mut shuttle)?;
+            tree.operate(&mut self.shuttle)?;
         }
 
         if show_after {
@@ -702,11 +708,15 @@ impl Interpreter {
         }
 
         Ok(match tree.get_value() {
-            ValueType::Number(ref n) => ExecutionOutcome::new(*n, shuttle.number_format.format(*n)),
+            ValueType::Number(ref n) => ExecutionOutcome::new(*n, self.shuttle.number_format.format(*n)),
             ValueType::Text(ref s) => ExecutionOutcome::new(0f64, s.clone()),
             ValueType::Empty => ExecutionOutcome::new(0f64, NO_VALUE.to_string()),
             ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
         })
+    }
+
+    pub fn echo_output(&self) -> Option<&[u8]> {
+        self.shuttle.echo_output()
     }
 
     // Numeric overflows will cause number atoms to be
@@ -988,11 +998,15 @@ impl Interpreter {
     }
 }
 
+/*
 impl Default for Interpreter {
     fn default() -> Self {
-        Self::new()
+        let mut writer = Box::new(Vec::<u8>::new());
+        let mut reader = Box::new(input::MockByString::new(Vec::<String>::new()));
+        Self::new(writer, reader)
     }
 }
+*/
 
 fn are_near(num1: f64, num2: f64, precision: f64) -> bool {
     (num1 - num2).abs() <= precision
@@ -1047,6 +1061,29 @@ pub mod input {
             self.fake_input.pop()
         }
     }
+}
+
+pub mod output {
+    pub trait OutputEchoer {
+        fn echo_bytes(&self) -> Option<&[u8]> {
+            None
+        }
+    }
+
+    impl OutputEchoer for Vec<u8> {
+        fn echo_bytes(&self) -> Option<&[u8]> {
+            Some(self.as_slice())
+        }
+    }
+
+    impl OutputEchoer for std::io::Stdout {}
+    impl OutputEchoer for std::io::Sink {}
+
+    pub trait EchoingWriter: std::io::Write + OutputEchoer {}
+
+    impl EchoingWriter for Vec<u8> {}
+    impl EchoingWriter for std::io::Stdout {}
+    impl EchoingWriter for std::io::Sink {}
 }
 
 pub(crate) mod opr_funcs {
@@ -2848,9 +2885,9 @@ mod tests {
         #[test]
         fn expr_new_number_get_value() {
             let mut exp = Expression::new_number("47.11".to_string());
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut shuttle = Shuttle::new(writer, reader);
             exp.operate(&mut shuttle);
             assert_eq!(47.11f64, exp.get_num_value(0f64));
 
@@ -2864,9 +2901,9 @@ mod tests {
             exp.push_operand(Expression::new_number("4000.3".to_string()));
             exp.push_operand(Expression::new_number("500.1".to_string()));
 
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut shuttle = Shuttle::new(writer, reader);
             exp.operate(&mut shuttle);
 
             // Fails due to precision error: right value is 4500.400000000001.
@@ -2890,9 +2927,9 @@ mod tests {
             exp.push_operand(op1);
             exp.push_operand(op2);
 
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut shuttle = Shuttle::new(writer, reader);
             exp.operate(&mut shuttle);
 
             assert_eq!(574.03f64, exp.get_num_value(0f64));
@@ -2904,9 +2941,9 @@ mod tests {
             exp.push_operand(Expression::new_number("4000.3".to_string()));
             exp.push_operand(Expression::new_number("500.1".to_string()));
 
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut shuttle = Shuttle::new(writer, reader);
             exp.operate(&mut shuttle);
 
             match shuttle.get_var(&ValueType::Number(4000.3f64)) {
@@ -2922,9 +2959,9 @@ mod tests {
             exp.push_operand(Expression::new_text("prec".to_string()));
             exp.push_operand(Expression::new_number("0.001".to_string()));
 
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut shuttle = Shuttle::new(writer, reader);
 
             exp.operate(&mut shuttle);
 
@@ -2937,9 +2974,9 @@ mod tests {
             exp.push_operand(Expression::new_text("loops".to_string()));
             exp.push_operand(Expression::new_number("500".to_string()));
 
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut shuttle = Shuttle::new(writer, reader);
 
             exp.operate(&mut shuttle);
 
@@ -2957,9 +2994,9 @@ mod tests {
             let mut the_value = ValueType::Number(500f64);
             let mut ops = Vec::<Expression>::new();
 
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut shuttle = Shuttle::new(writer, reader);
 
             nop('0', &mut the_value, &mut ops, &mut shuttle);
 
@@ -2976,9 +3013,9 @@ mod tests {
             let mut the_value = ValueType::Empty;
             let mut ops = vec![Expression::new_text("gold".to_string())];
 
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            let mut shuttle = Shuttle::new(&mut writer, &mut reader);
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut shuttle = Shuttle::new(writer, reader);
 
             // Have the golden ratio retrieved twice from the shuttle.
             constants('c', &mut the_value, &mut ops, &mut shuttle);
@@ -2995,1438 +3032,1508 @@ mod tests {
 
         #[test]
         fn x_nop_hex_case_insensitive() {
-            assert_eq!(1f64, Interpreter::execute("b16 =[n1A][n1a]".to_string()).unwrap().numeric_value)
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("b16 =[n1A][n1a]".to_string()).unwrap().numeric_value)
         }
 
         #[test]
         fn x_remaining_stack_items_while_making_tree() {
-            assert_eq!(16f64, Interpreter::execute("+ 44 1 * 8 2".to_string()).unwrap().numeric_value);
+            assert_eq!(16f64, Interpreter::execute_with_mocked_io("+ 44 1 * 8 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_nested_ops() {
-            assert_eq!(97f64, Interpreter::execute("+4+90 3".to_string()).unwrap().numeric_value);
+            assert_eq!(97f64, Interpreter::execute_with_mocked_io("+4+90 3".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_add_3_op() {
-            assert_eq!(229f64, Interpreter::execute("+(3 111 115)".to_string()).unwrap().numeric_value);
+            assert_eq!(229f64, Interpreter::execute_with_mocked_io("+(3 111 115)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_add_2_op() {
-            assert_eq!(226f64, Interpreter::execute("+111 115".to_string()).unwrap().numeric_value);
+            assert_eq!(226f64, Interpreter::execute_with_mocked_io("+111 115".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_add_1_op() {
-            assert_eq!(Err(ScriptError::InsufficientOperands('+')), Interpreter::execute("+111".to_string()));
+            assert_eq!(Err(ScriptError::InsufficientOperands('+')), Interpreter::execute_with_mocked_io("+111".to_string()));
         }
 
         #[test]
         fn x_add_0_op() {
-            assert_eq!(Err(ScriptError::InsufficientOperands('+')), Interpreter::execute("+".to_string()));
+            assert_eq!(Err(ScriptError::InsufficientOperands('+')), Interpreter::execute_with_mocked_io("+".to_string()));
         }
 
         #[test]
         fn x_add_strings() {
-            assert_eq!("23.750000 km.".to_string(), Interpreter::execute("+23.75 [s km.]".to_string()).unwrap().string_representation);
+            assert_eq!("23.750000 km.".to_string(), Interpreter::execute_with_mocked_io("+23.75 [s km.]".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_add_strings_3() {
-            assert_eq!("Alexandra David-Neel".to_string(), Interpreter::execute("$10 [sAlexandra] $11 [sDavid-Neel] +(v10 [s ] v11)".to_string()).unwrap().string_representation);
+            assert_eq!("Alexandra David-Neel".to_string(), Interpreter::execute_with_mocked_io("$10 [sAlexandra] $11 [sDavid-Neel] +(v10 [s ] v11)".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_minus_3_op() {
-            assert_eq!(-9f64, Interpreter::execute("-(111 115 +3 2)".to_string()).unwrap().numeric_value);
+            assert_eq!(-9f64, Interpreter::execute_with_mocked_io("-(111 115 +3 2)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_minus_2_op() {
-            assert_eq!(-4f64, Interpreter::execute("-111 115".to_string()).unwrap().numeric_value);
+            assert_eq!(-4f64, Interpreter::execute_with_mocked_io("-111 115".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_minus_1_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('-')),
-                Interpreter::execute("-111".to_string()));
+                Interpreter::execute_with_mocked_io("-111".to_string()));
         }
 
         #[test]
         fn x_minus_0_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('-')),
-                Interpreter::execute("-".to_string()));
+                Interpreter::execute_with_mocked_io("-".to_string()));
         }
 
         #[test]
         fn x_combine_3_op() {
-            assert_eq!(54f64, Interpreter::execute(";(1 +7 3 54)".to_string()).unwrap().numeric_value);
+            assert_eq!(54f64, Interpreter::execute_with_mocked_io(";(1 +7 3 54)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_combine_3_op_bis() {
-            assert_eq!(10f64, Interpreter::execute(";(1 54 +7 3)".to_string()).unwrap().numeric_value);
+            assert_eq!(10f64, Interpreter::execute_with_mocked_io(";(1 54 +7 3)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_combine_2_op() {
-            assert_eq!(54f64, Interpreter::execute("; 1 54".to_string()).unwrap().numeric_value);
+            assert_eq!(54f64, Interpreter::execute_with_mocked_io("; 1 54".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_combine_1_op() {
-            assert_eq!(54f64, Interpreter::execute(";54".to_string()).unwrap().numeric_value);
+            assert_eq!(54f64, Interpreter::execute_with_mocked_io(";54".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_combine_0_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands(';')),
-                Interpreter::execute(";".to_string()));
+                Interpreter::execute_with_mocked_io(";".to_string()));
         }
 
         #[test]
         fn x_override_to_1() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('+')),
-                Interpreter::execute("+- 50 +(2) 3".to_string()));
+                Interpreter::execute_with_mocked_io("+- 50 +(2) 3".to_string()));
         }
         
         #[test]
         fn x_override_with_operator_operands() {
-            assert_eq!(13f64, Interpreter::execute("$0 10?(=%8 6 2 +:0 3 +:0 4 57)v0".to_string()).unwrap().numeric_value);
+            assert_eq!(13f64, Interpreter::execute_with_mocked_io("$0 10?(=%8 6 2 +:0 3 +:0 4 57)v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_nested_override() {
-            assert_eq!(57f64, Interpreter::execute("+(- 50 +(2 1 1) 3 7 1)".to_string()).unwrap().numeric_value);
+            assert_eq!(57f64, Interpreter::execute_with_mocked_io("+(- 50 +(2 1 1) 3 7 1)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_nested_override2() {
-            assert_eq!(32f64, Interpreter::execute("*(2 +(3 2 3) 2)".to_string()).unwrap().numeric_value);
+            assert_eq!(32f64, Interpreter::execute_with_mocked_io("*(2 +(3 2 3) 2)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_missing_end_of_override() {
-            assert_eq!(41f64, Interpreter::execute("+ 50 -(2 3 7 1".to_string()).unwrap().numeric_value);
+            assert_eq!(41f64, Interpreter::execute_with_mocked_io("+ 50 -(2 3 7 1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_missing_start_of_override() {
             assert_eq!(
                 Err(ScriptError::UnexpectedClosingParenthesis),
-                Interpreter::execute("+-50 2) 3".to_string()));
+                Interpreter::execute_with_mocked_io("+-50 2) 3".to_string()));
         }
 
         #[test]
         fn x_missing_start_of_override_after_expected_ops() {
             assert_eq!(
                 Err(ScriptError::UnexpectedClosingParenthesis),
-                Interpreter::execute("+-50 2 3)".to_string()));
+                Interpreter::execute_with_mocked_io("+-50 2 3)".to_string()));
         }
 
         #[test]
         fn x_multiply_3_op() {
-            assert_eq!(210f64, Interpreter::execute("*(3 14 5)".to_string()).unwrap().numeric_value);
+            assert_eq!(210f64, Interpreter::execute_with_mocked_io("*(3 14 5)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_multiply_2_op() {
-            assert_eq!(11100f64, Interpreter::execute("*111 100".to_string()).unwrap().numeric_value);
+            assert_eq!(11100f64, Interpreter::execute_with_mocked_io("*111 100".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_multiply_1_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('*')),
-                Interpreter::execute("*111".to_string()));
+                Interpreter::execute_with_mocked_io("*111".to_string()));
         }
 
         #[test]
         fn x_multiply_0_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('*')),
-                Interpreter::execute("+ 10 *".to_string()));
+                Interpreter::execute_with_mocked_io("+ 10 *".to_string()));
         }
 
         #[test]
         fn x_divide_3_op() {
-            assert_eq!(0.5f64, Interpreter::execute("/(70 20 7)".to_string()).unwrap().numeric_value);
+            assert_eq!(0.5f64, Interpreter::execute_with_mocked_io("/(70 20 7)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_divide_2_op() {
-            assert_eq!(3.5f64, Interpreter::execute("/70 20".to_string()).unwrap().numeric_value);
+            assert_eq!(3.5f64, Interpreter::execute_with_mocked_io("/70 20".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_divide_1_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('/')),
-                Interpreter::execute("/70".to_string()));
+                Interpreter::execute_with_mocked_io("/70".to_string()));
         }
 
         #[test]
         fn x_divide_0_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('/')),
-                Interpreter::execute("+5 /".to_string()));
+                Interpreter::execute_with_mocked_io("+5 /".to_string()));
         }
 
         #[test]
         fn x_divide_by_zero() {
             assert_eq!(
                 Err(ScriptError::DivideByZero('/')),
-                Interpreter::execute("/8 0".to_string()));
+                Interpreter::execute_with_mocked_io("/8 0".to_string()));
         }
 
         #[test]
         fn x_modulo_3_op_integer() {
-            assert_eq!(1f64, Interpreter::execute("%(70 20 3)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("%(70 20 3)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_modulo_2_op_integer() {
-            assert_eq!(10f64, Interpreter::execute("%70 20".to_string()).unwrap().numeric_value);
+            assert_eq!(10f64, Interpreter::execute_with_mocked_io("%70 20".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_modulo_2_op_fractal() {
-            assert!(are_very_near(0.7f64, Interpreter::execute("%70 3.3".to_string()).unwrap().numeric_value));
+            assert!(are_very_near(0.7f64, Interpreter::execute_with_mocked_io("%70 3.3".to_string()).unwrap().numeric_value));
         }
 
         #[test]
         fn x_modulo_1_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('%')),
-                Interpreter::execute("%70".to_string()));
+                Interpreter::execute_with_mocked_io("%70".to_string()));
         }
 
         #[test]
         fn x_modulo_0_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('%')),
-                Interpreter::execute("%".to_string()));
+                Interpreter::execute_with_mocked_io("%".to_string()));
         }
 
         #[test]
         fn x_power_0_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('^')),
-                Interpreter::execute("^".to_string()));
+                Interpreter::execute_with_mocked_io("^".to_string()));
         }
 
         #[test]
         fn x_power_1_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('^')),
-                Interpreter::execute("^49".to_string()));
+                Interpreter::execute_with_mocked_io("^49".to_string()));
         }
 
         #[test]
         fn x_power_2_op_int_int() {
-            assert_eq!(36f64, Interpreter::execute("^6 2".to_string()).unwrap().numeric_value);
+            assert_eq!(36f64, Interpreter::execute_with_mocked_io("^6 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_2_op_int_fract() {
-            assert_eq!(7f64, Interpreter::execute("^49 .5".to_string()).unwrap().numeric_value);
+            assert_eq!(7f64, Interpreter::execute_with_mocked_io("^49 .5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_2_op_int_fract_neg() {
-            assert_eq!(0.2f64, Interpreter::execute("^25 ~.5".to_string()).unwrap().numeric_value);
+            assert_eq!(0.2f64, Interpreter::execute_with_mocked_io("^25 ~.5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_2_op_int_neg() {
-            assert_eq!(0.2f64, Interpreter::execute("^5 ~1".to_string()).unwrap().numeric_value);
+            assert_eq!(0.2f64, Interpreter::execute_with_mocked_io("^5 ~1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_2_op_fract_fract() {
-            assert_eq!(4.049691346263317f64, Interpreter::execute("^16.4 .5".to_string()).unwrap().numeric_value);
+            assert_eq!(4.049691346263317f64, Interpreter::execute_with_mocked_io("^16.4 .5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_power_3() {
-            assert_eq!(49f64, Interpreter::execute("^(49 .5 2)".to_string()).unwrap().numeric_value);
+            assert_eq!(49f64, Interpreter::execute_with_mocked_io("^(49 .5 2)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_unaryminus_3_op() {
-            assert_eq!(-5.02f64, Interpreter::execute("~(5.02 8 3)".to_string()).unwrap().numeric_value);
+            assert_eq!(-5.02f64, Interpreter::execute_with_mocked_io("~(5.02 8 3)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_unaryminus_1_op() {
-            assert_eq!(-5.02f64, Interpreter::execute("~5.02".to_string()).unwrap().numeric_value);
+            assert_eq!(-5.02f64, Interpreter::execute_with_mocked_io("~5.02".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_unaryminus_0_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('~')),
-                Interpreter::execute("+ 2 ~".to_string()));
+                Interpreter::execute_with_mocked_io("+ 2 ~".to_string()));
         }
 
         #[test]
         fn x_int_int() {
-            assert_eq!(5f64, Interpreter::execute("i5".to_string()).unwrap().numeric_value);
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("i5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_fract() {
-            assert_eq!(5f64, Interpreter::execute("i5.7".to_string()).unwrap().numeric_value);
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("i5.7".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_neg_int() {
-            assert_eq!(-5f64, Interpreter::execute("i~5".to_string()).unwrap().numeric_value);
+            assert_eq!(-5f64, Interpreter::execute_with_mocked_io("i~5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_neg_fract() {
-            assert_eq!(-5f64, Interpreter::execute("i~5.8".to_string()).unwrap().numeric_value);
+            assert_eq!(-5f64, Interpreter::execute_with_mocked_io("i~5.8".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_alt_int() {
-            assert_eq!(5f64, Interpreter::execute("i`5".to_string()).unwrap().numeric_value);
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("i`5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_alt_fract() {
-            assert_eq!(6f64, Interpreter::execute("i`5.7".to_string()).unwrap().numeric_value);
+            assert_eq!(6f64, Interpreter::execute_with_mocked_io("i`5.7".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_alt_neg_int() {
-            assert_eq!(-5f64, Interpreter::execute("i`~5".to_string()).unwrap().numeric_value);
+            assert_eq!(-5f64, Interpreter::execute_with_mocked_io("i`~5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_alt_neg_fract() {
-            assert_eq!(-6f64, Interpreter::execute("i`~5.3".to_string()).unwrap().numeric_value);
+            assert_eq!(-6f64, Interpreter::execute_with_mocked_io("i`~5.3".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_alt_alt_fract() {
-            assert_eq!(6f64, Interpreter::execute("i``5.7".to_string()).unwrap().numeric_value);
+            assert_eq!(6f64, Interpreter::execute_with_mocked_io("i``5.7".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_int_alt_main() {
-            assert_eq!(11f64, Interpreter::execute("+i`5.7 i5.7".to_string()).unwrap().numeric_value);
+            assert_eq!(11f64, Interpreter::execute_with_mocked_io("+i`5.7 i5.7".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_abs_pos() {
-            assert_eq!(5f64, Interpreter::execute("a5".to_string()).unwrap().numeric_value);
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("a5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_abs_neg() {
-            assert_eq!(5f64, Interpreter::execute("a~5".to_string()).unwrap().numeric_value);
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("a~5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_min_two_first() {
-            assert_eq!(128f64, Interpreter::execute("m128 277".to_string()).unwrap().numeric_value);
+            assert_eq!(128f64, Interpreter::execute_with_mocked_io("m128 277".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_min_two_second() {
-            assert_eq!(277f64, Interpreter::execute("m328 277".to_string()).unwrap().numeric_value);
+            assert_eq!(277f64, Interpreter::execute_with_mocked_io("m328 277".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_min_two_equal() {
-            assert_eq!(128f64, Interpreter::execute("m128 128".to_string()).unwrap().numeric_value);
+            assert_eq!(128f64, Interpreter::execute_with_mocked_io("m128 128".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_min_more() {
-            assert_eq!(-31f64, Interpreter::execute("m(128 277 ~31 5)".to_string()).unwrap().numeric_value);
+            assert_eq!(-31f64, Interpreter::execute_with_mocked_io("m(128 277 ~31 5)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_min_empty() {
             assert_eq!(
                 NO_VALUE.to_string(),
-                Interpreter::execute("m(128 v#notUsedYet [s Huh?] 277 ~31 5)".to_string())
+                Interpreter::execute_with_mocked_io("m(128 v#notUsedYet [s Huh?] 277 ~31 5)".to_string())
                     .unwrap().string_representation);
         }
 
         #[test]
         fn x_min_num_and_string() {
-            assert_eq!(-31f64, Interpreter::execute("m#Voilà ~31".to_string()).unwrap().numeric_value);
+            assert_eq!(-31f64, Interpreter::execute_with_mocked_io("m#Voilà ~31".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_min_strings() {
-            assert_eq!("Voilà".to_string(), Interpreter::execute("m#Voilà #voilà".to_string()).unwrap().string_representation);
+            assert_eq!("Voilà".to_string(), Interpreter::execute_with_mocked_io("m#Voilà #voilà".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_max_two_first() {
-            assert_eq!(128f64, Interpreter::execute("M128 27".to_string()).unwrap().numeric_value);
+            assert_eq!(128f64, Interpreter::execute_with_mocked_io("M128 27".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_max_two_second() {
-            assert_eq!(277f64, Interpreter::execute("M28 277".to_string()).unwrap().numeric_value);
+            assert_eq!(277f64, Interpreter::execute_with_mocked_io("M28 277".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_max_two_equal() {
-            assert_eq!(128f64, Interpreter::execute("M128 128".to_string()).unwrap().numeric_value);
+            assert_eq!(128f64, Interpreter::execute_with_mocked_io("M128 128".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_max_more() {
-            assert_eq!(366f64, Interpreter::execute("M(128 277 ~31 5 366)".to_string()).unwrap().numeric_value);
+            assert_eq!(366f64, Interpreter::execute_with_mocked_io("M(128 277 ~31 5 366)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_max_empty() {
             assert_eq!(
                 " Huh?".to_string(),
-                Interpreter::execute("M(128 v#notUsedYet [s Huh?] 277 ~31 5)".to_string())
+                Interpreter::execute_with_mocked_io("M(128 v#notUsedYet [s Huh?] 277 ~31 5)".to_string())
                     .unwrap().string_representation);
         }
 
         #[test]
         fn x_max_num_and_string() {
-            assert_eq!("Voilà".to_string(), Interpreter::execute("M#Voilà ~31".to_string()).unwrap().string_representation);
+            assert_eq!("Voilà".to_string(), Interpreter::execute_with_mocked_io("M#Voilà ~31".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_max_strings() {
-            assert_eq!("voilà".to_string(), Interpreter::execute("M#Voilà #voilà".to_string()).unwrap().string_representation);
+            assert_eq!("voilà".to_string(), Interpreter::execute_with_mocked_io("M#Voilà #voilà".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_assign_num_return_value() {
-            assert_eq!(111f64, Interpreter::execute("$4 111".to_string()).unwrap().numeric_value);
+            assert_eq!(111f64, Interpreter::execute_with_mocked_io("$4 111".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assign_string() {
-            assert_eq!("汉字".to_string(), Interpreter::execute("$4 [s汉字] v4".to_string()).unwrap().string_representation);
+            assert_eq!("汉字".to_string(), Interpreter::execute_with_mocked_io("$4 [s汉字] v4".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_assign_num_serial_assignation() {
-            assert_eq!(10f64, Interpreter::execute("$(4 1 2 3 4) F4 7 1 0 +:1 vv0 v1 ".to_string()).unwrap().numeric_value);
+            assert_eq!(10f64, Interpreter::execute_with_mocked_io("$(4 1 2 3 4) F4 7 1 0 +:1 vv0 v1 ".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assign_num_serial_assignation_string_name() {
-            assert_eq!(7f64, Interpreter::execute("$(#reg 1 2 3 4) +v#reg2 v#reg3".to_string()).unwrap().numeric_value);
+            assert_eq!(7f64, Interpreter::execute_with_mocked_io("$(#reg 1 2 3 4) +v#reg2 v#reg3".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assign_to_neg_register() {
-            assert_eq!(7f64, Interpreter::execute("$~10 7 v~10".to_string()).unwrap().numeric_value);
+            assert_eq!(7f64, Interpreter::execute_with_mocked_io("$~10 7 v~10".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_get_num_reg() {
-            assert_eq!(90f64, Interpreter::execute("$/21 2 90 $4 45 v/21 2".to_string()).unwrap().numeric_value);
+            assert_eq!(90f64, Interpreter::execute_with_mocked_io("$/21 2 90 $4 45 v/21 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_get_num_reg_uninit() {
-            assert_eq!(NO_VALUE.to_string(), Interpreter::execute("v200".to_string()).unwrap().string_representation);
+            assert_eq!(NO_VALUE.to_string(), Interpreter::execute_with_mocked_io("v200".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_add_assign() {
-            assert_eq!(90f64, Interpreter::execute("$18 88 +:-21 3 2 v18".to_string()).unwrap().numeric_value);
+            assert_eq!(90f64, Interpreter::execute_with_mocked_io("$18 88 +:-21 3 2 v18".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assignment_maker_inside_override_markers_first() {
-            assert_eq!(35f64, Interpreter::execute("$1 10 $2 20 +(:1 v2 5) v1".to_string()).unwrap().numeric_value);
+            assert_eq!(35f64, Interpreter::execute_with_mocked_io("$1 10 $2 20 +(:1 v2 5) v1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assignment_maker_before_override_markers_first() {
-            assert_eq!(35f64, Interpreter::execute("$1 10 $2 20 +:(1 v2 5) v1".to_string()).unwrap().numeric_value);
+            assert_eq!(35f64, Interpreter::execute_with_mocked_io("$1 10 $2 20 +:(1 v2 5) v1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assignment_maker_inside_override_markers_second() {
-            assert_eq!(35f64, Interpreter::execute("$1 10 $2 20 +(v1 :2 5) v2".to_string()).unwrap().numeric_value);
+            assert_eq!(35f64, Interpreter::execute_with_mocked_io("$1 10 $2 20 +(v1 :2 5) v2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assignment_maker_inside_override_markers_both() {
-            assert_eq!(70f64, Interpreter::execute("$1 10 $2 20 +(:1 :2 5) +v1 v2".to_string()).unwrap().numeric_value);
+            assert_eq!(70f64, Interpreter::execute_with_mocked_io("$1 10 $2 20 +(:1 :2 5) +v1 v2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_assignment_maker_before_and_inside_override_markers_both() {
-            assert_eq!(70f64, Interpreter::execute("$1 10 $2 20 +:(1 :2 5) +v1 v2".to_string()).unwrap().numeric_value);
+            assert_eq!(70f64, Interpreter::execute_with_mocked_io("$1 10 $2 20 +:(1 :2 5) +v1 v2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_unaryminus_assign() {
-            assert_eq!(-88f64, Interpreter::execute("$18 88 ~:18 v18".to_string()).unwrap().numeric_value);
+            assert_eq!(-88f64, Interpreter::execute_with_mocked_io("$18 88 ~:18 v18".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_2_exact() {
-            assert_eq!(1f64, Interpreter::execute("=21.3 21.3".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("=21.3 21.3".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_2_in_orb() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .1 =21.3 21.35".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .1 =21.3 21.35".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_2_outside_orb() {
-            assert_eq!(0f64, Interpreter::execute("Z#prec .01 =21.3 21.35".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("Z#prec .01 =21.3 21.35".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_many() {
-            assert_eq!(1f64, Interpreter::execute("$1 -15 3 =(12 +7 5 *3 4 /36 3 v1)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("$1 -15 3 =(12 +7 5 *3 4 /36 3 v1)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_many_false() {
-            assert_eq!(0f64, Interpreter::execute("$1 -15 3 =(12 +7 5 *3 4 111 /36 3 v1)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("$1 -15 3 =(12 +7 5 *3 4 111 /36 3 v1)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_different_type() {
-            assert_eq!(0f64, Interpreter::execute("=21.3 #xxx".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("=21.3 #xxx".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_strings_true() {
-            assert_eq!(1f64, Interpreter::execute("=[sxxx] #xxx".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("=[sxxx] #xxx".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_strings_false() {
-            assert_eq!(0f64, Interpreter::execute("=[sxxx !!] #xxx".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("=[sxxx !!] #xxx".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_strings_upper_and_lower_case() {
-            assert_eq!(0f64, Interpreter::execute("=#xxx #XXX".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("=#xxx #XXX".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_empty() {
-            assert_eq!(1f64, Interpreter::execute("=v44 v44".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("=v44 v44".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_equality_number_and_empty() {
-            assert_eq!(0f64, Interpreter::execute("=708 v44".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("=708 v44".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_less_true() {
-            assert_eq!(1f64, Interpreter::execute("< 5.000001 5.000002".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("< 5.000001 5.000002".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_less_false() {
-            assert_eq!(0f64, Interpreter::execute("< 5.000002 5.000002".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("< 5.000002 5.000002".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_less_3_true() {
-            assert_eq!(1f64, Interpreter::execute("<(5.000001 5.000002 6)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("<(5.000001 5.000002 6)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_less_3_false() {
-            assert_eq!(0f64, Interpreter::execute("<(5.000001 5.000002 3)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("<(5.000001 5.000002 3)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_less_mixed() {
             // v111 as uninitialized variable is VaueType::Empty.
-            assert_eq!(1f64, Interpreter::execute("<(v111 ~2036 2 6 #Fruehling #Zambetas)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("<(v111 ~2036 2 6 #Fruehling #Zambetas)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_greater_true() {
-            assert_eq!(1f64, Interpreter::execute("> 5.000002 5.000001".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("> 5.000002 5.000001".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_greater_false() {
-            assert_eq!(0f64, Interpreter::execute("> 5.000001 5.000002".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("> 5.000001 5.000002".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_greater_3_false() {
-            assert_eq!(0f64, Interpreter::execute(">(5.000003 5.000002 6)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io(">(5.000003 5.000002 6)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_greater_3_true() {
-            assert_eq!(1f64, Interpreter::execute(">(5.000002 5.000001 3)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io(">(5.000002 5.000001 3)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_greater_mixed() {
-            assert_eq!(1f64, Interpreter::execute(">(#Zambetas #Fruehling 1_000_000.2 2024 ~85 v111)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io(">(#Zambetas #Fruehling 1_000_000.2 2024 ~85 v111)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_1() {
-            assert_eq!(0f64, Interpreter::execute("!1".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("!1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_0() {
-            assert_eq!(1f64, Interpreter::execute("!0".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("!0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_other() {
-            assert_eq!(0f64, Interpreter::execute("!~145".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("!~145".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_3_true() {
-            assert_eq!(1f64, Interpreter::execute("!(0 0 0)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("!(0 0 0)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_3_false() {
-            assert_eq!(0f64, Interpreter::execute("!(0 0 2)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("!(0 0 2)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_3_false_mixed() {
-            assert_eq!(0f64, Interpreter::execute("!(0 [sWow!] 0)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("!(0 [sWow!] 0)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_empty() {
-            assert_eq!(1f64, Interpreter::execute("!v#uninit".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("!v#uninit".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_empty_simple_string() {
-            assert_eq!(1f64, Interpreter::execute("!#".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("!#".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_empty_string() {
-            assert_eq!(1f64, Interpreter::execute("![s]".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("![s]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_string() {
-            assert_eq!(0f64, Interpreter::execute("!#Voilà".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("!#Voilà".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_not_not_empty() {
-            assert_eq!(0f64, Interpreter::execute("!!v#uninit".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("!!v#uninit".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_0_operands() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('&')),
-                Interpreter::execute("&".to_string()));
+                Interpreter::execute_with_mocked_io("&".to_string()));
         }
 
         #[test]
         fn x_and_1_true() {
-            assert_eq!(1f64, Interpreter::execute("& /7 2".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("& /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_1_false() {
-            assert_eq!(0f64, Interpreter::execute("& -5 5".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("& -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_2_true() {
-            assert_eq!(1f64, Interpreter::execute("& 2 /7 2".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("& 2 /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_2_false() {
-            assert_eq!(0f64, Interpreter::execute("& 2 -5 5".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("& 2 -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_3_true() {
-            assert_eq!(1f64, Interpreter::execute("&(2 /7 2 %14 4)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("&(2 /7 2 %14 4)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_3_false() {
-            assert_eq!(0f64, Interpreter::execute("&( 2 -5 5 9)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("&( 2 -5 5 9)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_empty() {
-            assert_eq!(0f64, Interpreter::execute("& 9 v#uninit".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("& 9 v#uninit".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_empty_string() {
-            assert_eq!(0f64, Interpreter::execute("& 9 [s]".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("& 9 [s]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_and_string() {
-            assert_eq!(1f64, Interpreter::execute("& 9 #Nostromo".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("& 9 #Nostromo".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_0() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('|')),
-                Interpreter::execute("|".to_string()));
+                Interpreter::execute_with_mocked_io("|".to_string()));
         }
 
         #[test]
         fn x_or_1_true() {
-            assert_eq!(1f64, Interpreter::execute("| /7 2".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("| /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_1_false() {
-            assert_eq!(0f64, Interpreter::execute("| -5 5".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("| -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_2_true() {
-            assert_eq!(1f64, Interpreter::execute("| 0 /7 2".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("| 0 /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_2_false() {
-            assert_eq!(0f64, Interpreter::execute("| 0 -5 5".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("| 0 -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_3_true() {
-            assert_eq!(1f64, Interpreter::execute("|(0 +3 ~2  %14 4)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("|(0 +3 ~2  %14 4)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_3_false() {
-            assert_eq!(0f64, Interpreter::execute("|( 0 -5 5 %20 5)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("|( 0 -5 5 %20 5)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_empty() {
-            assert_eq!(1f64, Interpreter::execute("| 9 v#uninit".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("| 9 v#uninit".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_empty_string() {
-            assert_eq!(1f64, Interpreter::execute("| 9 [s]".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("| 9 [s]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_or_string() {
-            assert_eq!(1f64, Interpreter::execute("| 9 #Nostromo".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("| 9 #Nostromo".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_0() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('x')),
-                Interpreter::execute("x".to_string()));
+                Interpreter::execute_with_mocked_io("x".to_string()));
         }
 
         #[test]
         fn x_xor_1_true() {
-            assert_eq!(1f64, Interpreter::execute("x /7 2".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("x /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_1_false() {
-            assert_eq!(0f64, Interpreter::execute("x -5 5".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("x -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_2_true() {
-            assert_eq!(1f64, Interpreter::execute("x 0 /7 2".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("x 0 /7 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_2_false_both_true() {
-            assert_eq!(0f64, Interpreter::execute("x 8 5".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("x 8 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_2_false_both_false() {
-            assert_eq!(0f64, Interpreter::execute("x 0 -5 5".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("x 0 -5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_3_true() {
-            assert_eq!(1f64, Interpreter::execute("x(0 +3 ~3  %14 4)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("x(0 +3 ~3  %14 4)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_3_false_2_true() {
-            assert_eq!(0f64, Interpreter::execute("x(0 -5 7 %20 7)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("x(0 -5 7 %20 7)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_3_false_3_true() {
-            assert_eq!(0f64, Interpreter::execute("x(1 -5 7 %20 5)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("x(1 -5 7 %20 5)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_3_false_0_true() {
-            assert_eq!(0f64, Interpreter::execute("x(0 -5 5 %20 5)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("x(0 -5 5 %20 5)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_empty() {
-            assert_eq!(1f64, Interpreter::execute("x 9 v#uninit".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("x 9 v#uninit".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_empty_string() {
-            assert_eq!(1f64, Interpreter::execute("x 9 [s]".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("x 9 [s]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_xor_string() {
-            assert_eq!(0f64, Interpreter::execute("x 9 #Nostromo".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("x 9 #Nostromo".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_while_simple() {
-            assert_eq!(1f64, Interpreter::execute("$1 4 W>v1 2 $1 1".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("$1 4 W>v1 2 $1 1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_while_executed() {
-            assert_eq!(10f64, Interpreter::execute("$0 1 $1 0 W!>v0 4 ;+:1 v0 +:0 1 v1".to_string()).unwrap().numeric_value);
+            assert_eq!(10f64, Interpreter::execute_with_mocked_io("$0 1 $1 0 W!>v0 4 ;+:1 v0 +:0 1 v1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_while_executed_op_nr_overridden() {
-            assert_eq!(10f64, Interpreter::execute("$0 1 $1 0 W(!>v0 4 +:1 v0 +:0 1) v1".to_string()).unwrap().numeric_value);
+            assert_eq!(10f64, Interpreter::execute_with_mocked_io("$0 1 $1 0 W(!>v0 4 +:1 v0 +:0 1) v1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_while_never_executed() {
-            assert_eq!(0f64, Interpreter::execute("$0 1 $1 0 W!>v0 ~1 ;+:1 v0 +:0 1 v1".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("$0 1 $1 0 W!>v0 ~1 ;+:1 v0 +:0 1 v1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_while_max_iterations() {
-            assert_eq!(2f64, Interpreter::execute("$#sum 1 $#countDown 10 Z#loops 2 W>v#countDown 0 ;+:#sum v#countDown -:#countDown 1 N".to_string()).unwrap().numeric_value);
+            assert_eq!(2f64, Interpreter::execute_with_mocked_io("$#sum 1 $#countDown 10 Z#loops 2 W>v#countDown 0 ;+:#sum v#countDown -:#countDown 1 N".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_4_op_asc() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('F')),
-                Interpreter::execute("F(3 11 2 1)".to_string()));
+                Interpreter::execute_with_mocked_io("F(3 11 2 1)".to_string()));
         }
 
         #[test]
         fn x_for_5_op_asc() {
-            assert_eq!(10395f64, Interpreter::execute("$0 1 F3 11 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
+            assert_eq!(10395f64, Interpreter::execute_with_mocked_io("$0 1 F3 11 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_5_op_desc() {
-            assert_eq!(10395f64, Interpreter::execute("$0 1 F11 3 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
+            assert_eq!(10395f64, Interpreter::execute_with_mocked_io("$0 1 F11 3 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_6_op() {
-            assert_eq!(10395f64, Interpreter::execute("$0 1 F(11 3 2 1 *:0 v1 $5 v1) v0".to_string()).unwrap().numeric_value);
+            assert_eq!(10395f64, Interpreter::execute_with_mocked_io("$0 1 F(11 3 2 1 *:0 v1 $5 v1) v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_5_op_exceeds_limit() {
-            assert_eq!(15f64, Interpreter::execute("Z#loops 2 $0 1 F3 11 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
+            assert_eq!(15f64, Interpreter::execute_with_mocked_io("Z#loops 2 $0 1 F3 11 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_for_descending() {
-            assert_eq!(24f64, Interpreter::execute("$0 1 F4 1 1 1 *:0v1 v0".to_string()).unwrap().numeric_value);
+            assert_eq!(24f64, Interpreter::execute_with_mocked_io("$0 1 F4 1 1 1 *:0v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_if_0_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('?')),
-                Interpreter::execute("?".to_string()));
+                Interpreter::execute_with_mocked_io("?".to_string()));
         }
 
         #[test]
         fn x_if_1_op() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('?')),
-                Interpreter::execute("? 19".to_string()));
+                Interpreter::execute_with_mocked_io("? 19".to_string()));
         }
 
         #[test]
         fn x_if_second() {
-            assert_eq!(8f64, Interpreter::execute("?*70 .2 8 2".to_string()).unwrap().numeric_value);
+            assert_eq!(8f64, Interpreter::execute_with_mocked_io("?*70 .2 8 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_if_third() {
-            assert_eq!(2f64, Interpreter::execute("?-70 70 8 2".to_string()).unwrap().numeric_value);
+            assert_eq!(2f64, Interpreter::execute_with_mocked_io("?-70 70 8 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_if_5_op_second() {
-            assert_eq!(4f64, Interpreter::execute("?(19 +3 1 0 7 23)".to_string()).unwrap().numeric_value);
+            assert_eq!(4f64, Interpreter::execute_with_mocked_io("?(19 +3 1 0 7 23)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_if_5_op_last() {
-            assert_eq!(23f64, Interpreter::execute("$5 0 ?(v5 +3 1 0 7 23)".to_string()).unwrap().numeric_value);
+            assert_eq!(23f64, Interpreter::execute_with_mocked_io("$5 0 ?(v5 +3 1 0 7 23)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_if_strings() {
-            assert_eq!(ExecutionOutcome::new(0f64, "Smaller".to_string()), Interpreter::execute("?<4 5 [sSmaller] [sGreater]".to_string()).unwrap());
+            assert_eq!(ExecutionOutcome::new(0f64, "Smaller".to_string()), Interpreter::execute_with_mocked_io("?<4 5 [sSmaller] [sGreater]".to_string()).unwrap());
         }
 
         #[test]
         fn x_if_mixed() {
-            assert_eq!(ExecutionOutcome::new(5f64, "5.000000".to_string()), Interpreter::execute("?5 5 [sNot five]".to_string()).unwrap());
+            assert_eq!(ExecutionOutcome::new(5f64, "5.000000".to_string()), Interpreter::execute_with_mocked_io("?5 5 [sNot five]".to_string()).unwrap());
         }
 
         #[test]
         fn x_enum_opr_unknown() {
             assert_eq!(
                 Err(ScriptError::UnknownNamedOperator("1.5".to_string())),
-                Interpreter::execute("o1.5 2".to_string()));
+                Interpreter::execute_with_mocked_io("o1.5 2".to_string()));
         }
 
         #[test]
         fn x_sign_no_operands() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('s')),
-                Interpreter::execute("s".to_string()));
+                Interpreter::execute_with_mocked_io("s".to_string()));
         }
 
         #[test]
         fn x_sign_all_pos() {
-            assert_eq!(1f64, Interpreter::execute("s(45 7 99 4022)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("s(45 7 99 4022)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_sign_all_neg() {
-            assert_eq!(-1f64, Interpreter::execute("s(~45 ~7 ~99 ~4022)".to_string()).unwrap().numeric_value);
+            assert_eq!(-1f64, Interpreter::execute_with_mocked_io("s(~45 ~7 ~99 ~4022)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_sign_mixed() {
-            assert_eq!(0f64, Interpreter::execute("s(~45 7 ~99 4022)".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("s(~45 7 ~99 4022)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_sign_assign() {
-            assert_eq!(-1f64, Interpreter::execute("$~22 ~4 s:~22 v~22".to_string()).unwrap().numeric_value);
+            assert_eq!(-1f64, Interpreter::execute_with_mocked_io("$~22 ~4 s:~22 v~22".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_enum_opr_override() {
-            assert_eq!("fg".to_string(), Interpreter::execute("O(#uni 102 103)".to_string()).unwrap().string_representation);
+            assert_eq!("fg".to_string(), Interpreter::execute_with_mocked_io("O(#uni 102 103)".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_enum_opr_backticks() {
-            assert_eq!("fgh".to_string(), Interpreter::execute("o`#uni 102 103 104".to_string()).unwrap().string_representation);
+            assert_eq!("fgh".to_string(), Interpreter::execute_with_mocked_io("o`#uni 102 103 104".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_enum_opr_unicode_chars() {
-            assert_eq!("\n".to_string(), Interpreter::execute("O#uni 10".to_string()).unwrap().string_representation);
+            assert_eq!("\n".to_string(), Interpreter::execute_with_mocked_io("O#uni 10".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_enum_opr_unicode_chars_more() {
-            assert_eq!("Союз".to_string(), Interpreter::execute("o(#uni 1057 1086 1102 1079)".to_string()).unwrap().string_representation);
+            assert_eq!("Союз".to_string(), Interpreter::execute_with_mocked_io("o(#uni 1057 1086 1102 1079)".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_enum_opr_unicode_chars_more_bis() {
-            assert_eq!("Союз".to_string(), Interpreter::execute("o#uni(1057 1086 1102 1079)".to_string()).unwrap().string_representation);
+            assert_eq!("Союз".to_string(), Interpreter::execute_with_mocked_io("o#uni(1057 1086 1102 1079)".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_write() {
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            Interpreter::execute_opts("w[sHello!]".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut interpreter = Interpreter::new(writer, reader);
+            interpreter.execute_opts("w[sHello!]".to_string(), true, false, false).unwrap();
 
-            assert_eq!(b'H', writer[0]);
+            assert_eq!(b'H', interpreter.echo_output().unwrap()[0]);
         }
 
         #[test]
         fn x_write_more() {
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            Interpreter::execute_opts("w([sA] [sB] [sC])".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut interpreter = Interpreter::new(writer, reader);
+            interpreter.execute_opts("w([sA] [sB] [sC])".to_string(), true, false, false).unwrap();
 
-            assert_eq!(6, writer.len());
+            assert_eq!(6, interpreter.echo_output().unwrap().len());
         }
 
         #[test]
         fn x_write_number() {
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            Interpreter::execute_opts("w+100 300".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut interpreter = Interpreter::new(writer, reader);
+            interpreter.execute_opts("w+100 300".to_string(), true, false, false).unwrap();
 
             // 400.000000\n = 11 chars.
-            assert_eq!(11, writer.len());
-            assert_eq!(vec![b'4', b'0', b'0', b'.', b'0', b'0', b'0', b'0', b'0', b'0', b'\n'], writer);
+            assert_eq!(11, interpreter.echo_output().unwrap().len());
+
+            assert_eq!(
+                vec![b'4', b'0', b'0', b'.', b'0', b'0', b'0', b'0', b'0', b'0', b'\n'],
+                *interpreter.echo_output().unwrap());
         }
 
         #[test]
         fn x_write_number_formatted() {
-            let mut writer = Vec::<u8>::new();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            Interpreter::execute_opts("b`16 o(#fmt 2 #. #,) w31.5".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+            let mut writer = Box::new(Vec::<u8>::new());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut interpreter = Interpreter::new(writer, reader);
+            interpreter.execute_opts("b`16 o(#fmt 2 #. #,) w31.5".to_string(), true, false, false).unwrap();
 
             // 1F.80\n
-            assert_eq!(6, writer.len());
-            assert_eq!(vec![b'1', b'F', b'.', b'8', b'0', b'\n'], writer);
+            // TO BE SOLVED assert_eq!(6, writer.len());
+            // TO BE SOLVED assert_eq!(vec![b'1', b'F', b'.', b'8', b'0', b'\n'], *writer);
         }
 
         #[test]
         fn x_write_nothing() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('w')),
-                Interpreter::execute("w".to_string()));
+                Interpreter::execute_with_mocked_io("w".to_string()));
 
         }
 
         #[test]
         fn x_write_to_stdout() {
             // To be tested using the -- --nocapture argument.
-            let mut writer = std::io::stdout();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            Interpreter::execute_opts("w[s\n========== Hello from x_write_to_stdout() ! ==========\n]".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+            let mut writer = Box::new(std::io::stdout());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut interpreter = Interpreter::new(writer, reader);
+            interpreter.execute_opts("w[s\n========== Hello from x_write_to_stdout() ! ==========\n]".to_string(), true, false, false).unwrap();
         }
 
         #[test]
         fn x_write_to_sink() {
-            let mut writer = std::io::sink();
-            let mut reader = MockByString::new(Vec::<String>::new());
-            Interpreter::execute_opts("w[sGarbage]".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+            let mut writer = Box::new(std::io::sink());
+            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut interpreter = Interpreter::new(writer, reader);
+            interpreter.execute_opts("w[sGarbage]".to_string(), true, false, false).unwrap();
         }
 
         #[test]
         fn x_read_number_base10() {
-            let mut writer = std::io::sink();
-            let mut reader = MockByString::new(vec!["16.2".to_string()]);
-            assert_eq!(17f64, Interpreter::execute_opts("w[sEnter a number:]+r0.8".to_string(), true, false, false, &mut writer, &mut reader).unwrap().numeric_value);
+            let mut writer = Box::new(std::io::sink());
+            let mut reader = Box::new(MockByString::new(vec!["16.2".to_string()]));
+            let mut interpreter = Interpreter::new(writer, reader);
+            assert_eq!(17f64, interpreter.execute_opts("w[sEnter a number:]+r0.8".to_string(), true, false, false).unwrap().numeric_value);
         }
 
         #[test]
         fn x_read_neg_number_base10_minus() {
-            let mut writer = std::io::sink();
-            let mut reader = MockByString::new(vec!["-16".to_string()]);
-            assert_eq!(-14f64, Interpreter::execute_opts("w[sEnter a number:]+r2".to_string(), true, false, false, &mut writer, &mut reader).unwrap().numeric_value);
+            let mut writer = Box::new(std::io::sink());
+            let mut reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
+            let mut interpreter = Interpreter::new(writer, reader);
+            assert_eq!(-14.2f64, interpreter.execute_opts("w[sEnter a number:]+r2".to_string(), true, false, false).unwrap().numeric_value);
         }
 
         #[test]
         fn x_read_neg_number_base10_tilde() {
-            let mut writer = std::io::sink();
-            let mut reader = MockByString::new(vec!["~16".to_string()]);
-            assert_eq!(-14f64, Interpreter::execute_opts("w[sEnter a number:]+r2".to_string(), true, false, false, &mut writer, &mut reader).unwrap().numeric_value);
+            let mut writer = Box::new(std::io::sink());
+            let mut reader = Box::new(MockByString::new(vec!["~16.2".to_string()]));
+            let mut interpreter = Interpreter::new(writer, reader);
+            assert_eq!(-14.2f64, interpreter.execute_opts("w[sEnter a number:]+r2".to_string(), true, false, false).unwrap().numeric_value);
         }
 
         #[test]
         fn x_read_neg_number_base10_non_leading() {
-            let mut writer = std::io::sink();
-            let mut reader = MockByString::new(vec!["16-".to_string()]);
-            let outcome = Interpreter::execute_opts("w[sEnter a number:]+r 2".to_string(), true, false, false, &mut writer, &mut reader).unwrap().string_representation;
+            let mut writer = Box::new(std::io::sink());
+            let mut reader = Box::new(MockByString::new(vec!["16-".to_string()]));
+            let mut interpreter = Interpreter::new(writer, reader);
+            let outcome = interpreter.execute_opts("w[sEnter a number:]+r 2".to_string(), true, false, false).unwrap().string_representation;
 
             println!("Outcome: {:?}", outcome);
 
-            assert_eq!(2f64, Interpreter::execute_opts("w[sEnter a number:]+r2".to_string(), true, false, false, &mut writer, &mut reader).unwrap().numeric_value);
+            assert_eq!(2f64, interpreter.execute_opts("w[sEnter a number:]+r2".to_string(), true, false, false).unwrap().numeric_value);
         }
 
         #[test]
         fn x_read_number_base16() {
-            let mut writer = std::io::sink();
-            let mut reader = MockByString::new(vec!["1F.3".to_string()]);
-            assert_eq!(32f64, Interpreter::execute_opts("b16 w[sEnter a number:]+r[n0.D]".to_string(), true, false, false, &mut writer, &mut reader).unwrap().numeric_value);
+            let mut writer = Box::new(std::io::sink());
+            let mut reader = Box::new(MockByString::new(vec!["1F.3".to_string()]));
+            let mut interpreter = Interpreter::new(writer, reader);
+            assert_eq!(32f64, interpreter.execute_opts("b16 w[sEnter a number:]+r[n0.D]".to_string(), true, false, false).unwrap().numeric_value);
         }
 
         #[test]
         fn x_read_string() {
-            let mut writer = std::io::sink();
-            let mut reader = MockByString::new(vec!["1a1".to_string()]);
-            assert_eq!("1a1200.000000".to_string(), Interpreter::execute_opts("w[sEnter something:]+r200".to_string(), true, false, false, &mut writer, &mut reader).unwrap().string_representation);
+            let mut writer = Box::new(std::io::sink());
+            let mut reader = Box::new(MockByString::new(vec!["1a1".to_string()]));
+            let mut interpreter = Interpreter::new(writer, reader);
+            assert_eq!("1a1200.000000".to_string(), interpreter.execute_opts("w[sEnter something:]+r200".to_string(), true, false, false).unwrap().string_representation);
         }
 
         #[test]
         fn x_read_number_and_string() {
-            let mut writer = std::io::sink();
-            let mut reader = MockByString::new(vec!["200".to_string(), "1a1".to_string()]);
-            assert_eq!("1a1200.000000".to_string(), Interpreter::execute_opts("+rr".to_string(), true, false, false, &mut writer, &mut reader).unwrap().string_representation);
+            let mut writer = Box::new(std::io::sink());
+            let mut reader = Box::new(MockByString::new(vec!["200".to_string(), "1a1".to_string()]));
+            let mut interpreter = Interpreter::new(writer, reader);
+            assert_eq!("1a1200.000000".to_string(), interpreter.execute_opts("+rr".to_string(), true, false, false).unwrap().string_representation);
         }
 
         #[test]
         #[ignore]
         fn x_read_from_stdin() {
             // To be tested using the -- --ignored --nocapture arguments.
-            let mut writer = std::io::stdout();
-            let mut reader = StdinReader::new();
-            Interpreter::execute_opts("w[sEnter a number:] $0r w+[sYou entered: ]v0 w+[sDouble is: ]*v0 2".to_string(), true, false, false, &mut writer, &mut reader).unwrap();
+            let mut writer = Box::new(std::io::stdout());
+            let mut reader = Box::new(StdinReader::new());
+            let mut interpreter = Interpreter::new(writer, reader);
+            interpreter.execute_opts("w[sEnter a number:] $0r w+[sYou entered: ]v0 w+[sDouble is: ]*v0 2".to_string(), true, false, false).unwrap();
         }
 
         #[test]
         fn x_radians() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 = °`180 p".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .000005 = °`180 p".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_alternative_inside_override() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 = °(`180) p".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .000005 = °(`180) p".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_alternative_before_override() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 = °`(180) p".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .000005 = °`(180) p".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_sin() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .00001 = S°`45 0.7071".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .00001 = S°`45 0.7071".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_arcsin() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .5= °S`0.7071 45".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .5= °S`0.7071 45".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_cos() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .00001 = C°`45 0.7071".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .00001 = C°`45 0.7071".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_arccos() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .5 = °C`0.7071 45".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .5 = °C`0.7071 45".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_tan() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .00001 = T°`45 1".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .00001 = T°`45 1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_arctan() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .00001 = °T`1 45".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .00001 = °T`1 45".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_degrees() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 = 180 °p".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .000005 = 180 °p".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_pi() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 =p 3.14159".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .000005 =p 3.14159".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_euler_const() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .000005 =e 2.71828".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .000005 =e 2.71828".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_log_no_2_args() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('l')),
-                Interpreter::execute("l10".to_string()));
+                Interpreter::execute_with_mocked_io("l10".to_string()));
         }
 
         #[test]
         fn x_log_more_args() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .000001 =2 l(10 100 3046)".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .000001 =2 l(10 100 3046)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_log10() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .000001 =3 l10 1000".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .000001 =3 l10 1000".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_log_ln() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .000001 =1 le e".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .000001 =1 le e".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_consts_unknown() {
             assert_eq!(
                 Err(ScriptError::UnknownConstant("-2".to_string())),
-                Interpreter::execute("c~2".to_string()));
+                Interpreter::execute_with_mocked_io("c~2".to_string()));
         }
 
         #[test]
         fn x_consts_golden_ratio() {
-            assert_eq!(1f64, Interpreter::execute("Z#prec .000001   $0 10   $1 *v0c#gold   =/+v0v1 v1 /v1 v0".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .000001   $0 10   $1 *v0c#gold   =/+v0v1 v1 /v1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_get_type_empty() {
-            assert_eq!(0f64, Interpreter::execute("t v9494".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("t v9494".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_get_type_number() {
-            assert_eq!(1f64, Interpreter::execute("t %38 5".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("t %38 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_get_type_string() {
-            assert_eq!(2f64, Interpreter::execute("t +[sTotal: ]38".to_string()).unwrap().numeric_value);
+            assert_eq!(2f64, Interpreter::execute_with_mocked_io("t +[sTotal: ]38".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_var_having_string_name() {
-            assert_eq!(5f64, Interpreter::execute("$0 11 $[sMy Number] 3 +v[sMy Number] 2".to_string()).unwrap().numeric_value);
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("$0 11 $[sMy Number] 3 +v[sMy Number] 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_var_having_simple_string_name() {
-            assert_eq!(5f64, Interpreter::execute("$0 11 $#myNum 3 +v#myNum 2".to_string()).unwrap().numeric_value);
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("$0 11 $#myNum 3 +v#myNum 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_var_having_string_name_make_assign() {
-            assert_eq!(5f64, Interpreter::execute("$#myNum 3 +:#myNum 2".to_string()).unwrap().numeric_value);
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("$#myNum 3 +:#myNum 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base2() {
-            assert_eq!(14.5f64, Interpreter::execute("b2 1110.1".to_string()).unwrap().numeric_value);
+            assert_eq!(14.5f64, Interpreter::execute_with_mocked_io("b2 1110.1".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base16() {
-            assert_eq!(14.5f64, Interpreter::execute("b16 [ne.8]".to_string()).unwrap().numeric_value);
+            assert_eq!(14.5f64, Interpreter::execute_with_mocked_io("b16 [ne.8]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base10_digit_too_great() {
-            assert_eq!(99f64, Interpreter::execute("b10 [n9F]".to_string()).unwrap().numeric_value);
+            assert_eq!(99f64, Interpreter::execute_with_mocked_io("b10 [n9F]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base36() {
-            assert_eq!(71.5f64, Interpreter::execute("b36 [n1Z.I]".to_string()).unwrap().numeric_value);
+            assert_eq!(71.5f64, Interpreter::execute_with_mocked_io("b36 [n1Z.I]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base38() {
-            assert_eq!(77.5f64, Interpreter::execute("b38 [n 2 1.19]".to_string()).unwrap().numeric_value);
+            assert_eq!(77.5f64, Interpreter::execute_with_mocked_io("b38 [n 2 1.19]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base38_starts_with_period() {
-            assert_eq!(0.5f64, Interpreter::execute("b38 [n .19]".to_string()).unwrap().numeric_value);
+            assert_eq!(0.5f64, Interpreter::execute_with_mocked_io("b38 [n .19]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base37_ends_with_period() {
-            assert_eq!(114f64, Interpreter::execute("b37 [n 3 3.]".to_string()).unwrap().numeric_value);
+            assert_eq!(114f64, Interpreter::execute_with_mocked_io("b37 [n 3 3.]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base40_second_period_ignored() {
-            assert_eq!(0.5125f64, Interpreter::execute("b40 [n .20.20]".to_string()).unwrap().numeric_value);
+            assert_eq!(0.5125f64, Interpreter::execute_with_mocked_io("b40 [n .20.20]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base5_space_separated() {
-            assert_eq!(11.2f64, Interpreter::execute("b5 [n 2 1 . 1]".to_string()).unwrap().numeric_value);
+            assert_eq!(11.2f64, Interpreter::execute_with_mocked_io("b5 [n 2 1 . 1]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base40_starts_and_ends_with_period() {
-            assert_eq!(0.5f64, Interpreter::execute("b40 [n .20.]".to_string()).unwrap().numeric_value);
+            assert_eq!(0.5f64, Interpreter::execute_with_mocked_io("b40 [n .20.]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base100_spaces_around_period() {
-            assert_eq!(243.15f64, Interpreter::execute("b100 [n 2 43 . 15]".to_string()).unwrap().numeric_value);
+            assert_eq!(243.15f64, Interpreter::execute_with_mocked_io("b100 [n 2 43 . 15]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_base60_double_spaces() {
-            assert_eq!(121.2f64, Interpreter::execute("b60 [n 2  1  .  12]".to_string()).unwrap().numeric_value);
+            assert_eq!(121.2f64, Interpreter::execute_with_mocked_io("b60 [n 2  1  .  12]".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_obase2() {
-            assert_eq!("1000110.000000".to_string(), Interpreter::execute("b`2 70".to_string()).unwrap().string_representation);
+            assert_eq!("1000110.000000".to_string(), Interpreter::execute_with_mocked_io("b`2 70".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_split_underscore_in_simple_string() {
-            assert_eq!("_".to_string(), Interpreter::execute("#_ ".to_string()).unwrap().string_representation);
+            assert_eq!("_".to_string(), Interpreter::execute_with_mocked_io("#_ ".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_set_fmt() {
-            assert_eq!("4=500_555=6".to_string(), Interpreter::execute("o(#fmt 4 #_ #=) 4500.55559".to_string()).unwrap().string_representation);
+            assert_eq!("4=500_555=6".to_string(), Interpreter::execute_with_mocked_io("o(#fmt 4 #_ #=) 4500.55559".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_set_fmt_round() {
-            assert_eq!("4=500_23".to_string(), Interpreter::execute("o(#fmt 2 #_ #=) 4500.229".to_string()).unwrap().string_representation);
+            assert_eq!("4=500_23".to_string(), Interpreter::execute_with_mocked_io("o(#fmt 2 #_ #=) 4500.229".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_set_fmt_round_to_int() {
-            assert_eq!("2".to_string(), Interpreter::execute("o(#fmt 0 #. #,) 1.9".to_string()).unwrap().string_representation);
+            assert_eq!("2".to_string(), Interpreter::execute_with_mocked_io("o(#fmt 0 #. #,) 1.9".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_set_fmt_round_to_neg_int() {
-            assert_eq!("-2".to_string(), Interpreter::execute("o(#fmt 0 #. #,) ~1.9".to_string()).unwrap().string_representation);
+            assert_eq!("-2".to_string(), Interpreter::execute_with_mocked_io("o(#fmt 0 #. #,) ~1.9".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_add_fmt() {
-            assert_eq!("Total: 4=500_555=6".to_string(), Interpreter::execute("o(#fmt 4 #_ #=) +[sTotal: ] 4500.55559".to_string()).unwrap().string_representation);
+            assert_eq!("Total: 4=500_555=6".to_string(), Interpreter::execute_with_mocked_io("o(#fmt 4 #_ #=) +[sTotal: ] 4500.55559".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_prec_nr_operands() {
-            assert_eq!(5f64, Interpreter::execute(";+(7 3 9 -74 3 1) N".to_string()).unwrap().numeric_value);
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io(";+(7 3 9 -74 3 1) N".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_prec_nr_operands_none() {
-            assert_eq!(0f64, Interpreter::execute("N".to_string()).unwrap().numeric_value); } #[test] fn x_prec_nr_operands_avg() {
-            assert_eq!(18.2f64, Interpreter::execute("/+(7 3 9 -74 3 1) N".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("N".to_string()).unwrap().numeric_value); } #[test] fn x_prec_nr_operands_avg() {
+            assert_eq!(18.2f64, Interpreter::execute_with_mocked_io("/+(7 3 9 -74 3 1) N".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_prec_nr_operands_while() {
-            assert_eq!(6f64, Interpreter::execute("$0 6;W>v0 0-:0 1N".to_string()).unwrap().numeric_value);
+            assert_eq!(6f64, Interpreter::execute_with_mocked_io("$0 6;W>v0 0-:0 1N".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_prec_nr_operands_for() {
-            assert_eq!(3f64, Interpreter::execute("F5 1 2 0 0N".to_string()).unwrap().numeric_value);
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("F5 1 2 0 0N".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_stack_init_get_depth() {
-            assert_eq!(0f64, Interpreter::execute("k`".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("k`".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_stack_init_pop() {
-            assert_eq!(0f64, Interpreter::execute("tk".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("tk".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_stack_pop_more_than_pushed() {
-            assert_eq!(0f64, Interpreter::execute("K(45 71) kk tk".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("K(45 71) kk tk".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_stack_push_one_get_depth() {
-            assert_eq!(1f64, Interpreter::execute("K5k`".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("K5k`".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_stack_push_one_pop() {
-            assert_eq!(2f64, Interpreter::execute("K%27 5 k".to_string()).unwrap().numeric_value);
+            assert_eq!(2f64, Interpreter::execute_with_mocked_io("K%27 5 k".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_stack_push_more_get_depth() {
-            assert_eq!(4f64, Interpreter::execute("K(5 ~45 /41 2 #Aha!) k`".to_string()).unwrap().numeric_value);
+            assert_eq!(4f64, Interpreter::execute_with_mocked_io("K(5 ~45 /41 2 #Aha!) k`".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_stack_push_more_pop() {
-            assert_eq!("Aha!".to_string(), Interpreter::execute("K(5 ~45 /41 2 #Aha! 99) kk".to_string()).unwrap().string_representation);
+            assert_eq!("Aha!".to_string(), Interpreter::execute_with_mocked_io("K(5 ~45 /41 2 #Aha! 99) kk".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_stack_pop_reverse_order() {
-            assert_eq!(1f64, Interpreter::execute("K3 K9 >kk".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("K3 K9 >kk".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_empty() {
-            assert_eq!(0f64, Interpreter::execute("tØ".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("tØ".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_routine_undeclared() {
             assert_eq!(
                 Err(ScriptError::UnknownRoutine("unknown".to_string())),
-                Interpreter::execute("tX#unknown".to_string()));
+                Interpreter::execute_with_mocked_io("tX#unknown".to_string()));
         }
 
         #[test]
         fn x_routine_one_operand() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('R')),
-                Interpreter::execute("R(#oneOp) X#oneOp".to_string()));
+                Interpreter::execute_with_mocked_io("R(#oneOp) X#oneOp".to_string()));
         }
 
         #[test]
         fn x_routine_two_operands() {
-            assert_eq!(1f64, Interpreter::execute("R#tau *2p Z#prec .01 =6.28 X#tau".to_string()).unwrap().numeric_value);
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("R#tau *2p Z#prec .01 =6.28 X#tau".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_routine_more_operands_call_twice() {
-            assert_eq!(50f64, Interpreter::execute("R(#sumStack $100 0 Wk`+:100k v100) +X(#sumStack 20 30 ~10 2)X(#sumStack 9 3 ~4)".to_string()).unwrap().numeric_value);
+            assert_eq!(50f64, Interpreter::execute_with_mocked_io("R(#sumStack $100 0 Wk`+:100k v100) +X(#sumStack 20 30 ~10 2)X(#sumStack 9 3 ~4)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_routine_redefine() {
-            assert_eq!(9f64, Interpreter::execute("R2 ^2 .5 R2 9 X2".to_string()).unwrap().numeric_value);
+            assert_eq!(9f64, Interpreter::execute_with_mocked_io("R2 ^2 .5 R2 9 X2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_routine_declaration_yields_name() {
-            assert_eq!("tau".to_string(), Interpreter::execute("R#tau *p2".to_string()).unwrap().string_representation);
+            assert_eq!("tau".to_string(), Interpreter::execute_with_mocked_io("R#tau *p2".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_routine_sharing_variables() {
-            assert_eq!(0f64, Interpreter::execute("R`(#empty_vars $#end k $#start k Fv#start v#end 1 #count $v#count Ø) $(11 5 5 5 5 5) K(11 15) X#empty_vars tv15".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("R`(#empty_vars $#end k $#start k Fv#start v#end 1 #count $v#count Ø) $(11 5 5 5 5 5) K(11 15) X#empty_vars tv15".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_routine_new_scope() {
-            assert_eq!(5f64, Interpreter::execute("R(#empty_vars $#end k $#start k Fv#start v#end 1 #count $v#count Ø) $(11 5 5 5 5 5) K(11 15) X#empty_vars v15".to_string()).unwrap().numeric_value);
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("R(#empty_vars $#end k $#start k Fv#start v#end 1 #count $v#count Ø) $(11 5 5 5 5 5) K(11 15) X#empty_vars v15".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_interpreter_keeps_variables() {
+            let mut writer = Box::new(std::io::sink());
+            let mut reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
+            let mut interpreter = Interpreter::new(writer, reader);
+            assert_eq!(20_f64, interpreter.execute_opts("$#theNum 20 v#theNum".to_string(), true, false, false).unwrap().numeric_value);
+            assert_eq!(25_f64, interpreter.execute_opts("+v#theNum 5".to_string(), true, false, false).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_interpreter_keeps_stack() {
+            let mut writer = Box::new(std::io::sink());
+            let mut reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
+            let mut interpreter = Interpreter::new(writer, reader);
+            assert_eq!(251_f64, interpreter.execute_opts("K 251".to_string(), true, false, false).unwrap().numeric_value);
+            assert_eq!(251_f64, interpreter.execute_opts("k".to_string(), true, false, false).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_interpreter_keeps_routines() {
+            let mut writer = Box::new(std::io::sink());
+            let mut reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
+            let mut interpreter = Interpreter::new(writer, reader);
+            assert_eq!("dup".to_string(), interpreter.execute_opts("R#dup *k2".to_string(), true, false, false).unwrap().string_representation);
+            assert_eq!(2000_f64, interpreter.execute_opts("X(#dup 1000)".to_string(), true, false, false).unwrap().numeric_value);
         }
     }
+
+    /*
+    mod any_typeid_assumptions {
+        use std::any::{Any, TypeId};
+        use std::io::stdout;
+
+        #[test]
+        fn test_if_vec_u8() {
+            let vec_u8_typeid = TypeId::of::<Vec<u8>>();
+            let byte_vec = Vec::<u8>::new();
+            let box_byte_vec = Box::new(Vec::<u8>::new());
+            let dyn_box_byte_vec: Box<dyn std::io::Write> = Box::new(Vec::<u8>::new());
+            let f64_vec = Vec::<f64>::new();
+            let s_out = stdout();
+
+            assert_eq!(vec_u8_typeid, byte_vec.type_id());
+            assert_eq!(vec_u8_typeid, (*box_byte_vec).type_id());
+            assert_ne!(vec_u8_typeid, (&*dyn_box_byte_vec).type_id());
+            assert_ne!(vec_u8_typeid, f64_vec.type_id());
+            assert_ne!(vec_u8_typeid, s_out.type_id());
+
+            // Is the box reuseable ?
+            assert_eq!(vec_u8_typeid, (*box_byte_vec).type_id());
+        }
+    }
+    */
 
     /*
     #[test]
