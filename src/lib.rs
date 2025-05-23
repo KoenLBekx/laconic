@@ -7,13 +7,13 @@
 // TODO: have all operators have an acceptable behavior with less or more operands than standard.
 //      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
+// TODO: remove our outcomment code reported as never used by the compiler.
 // TODO: use giantity ?
 //}
 
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::io::Write;
 
 // Static lifetime: justified, because the functions referenced
 // are compiled into the application and live as long as it runs.
@@ -2030,6 +2030,7 @@ pub(crate) mod opr_funcs {
         let opr_func = match operands[0].get_value() {
             ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
             ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
+            ValueType::Text(name) if name == "version".to_string() => get_version,
             unknown =>  {
                 *result_value = default_outcome;
 
@@ -2039,6 +2040,25 @@ pub(crate) mod opr_funcs {
         };
 
         (opr_func)(opr_mark, result_value, &mut operands[1..], shuttle)?;
+
+        Ok(())
+    }
+
+    pub fn get_version(_opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+        let version_nums: Vec<&str> = VERSION.split('.').collect();
+
+        *result_value = if operands.len() == 0 {
+            ValueType::Text(VERSION.to_string())
+        } else {
+            match operands[0].get_num_value(0_f64) {
+                0_f64 => ValueType::Text(VERSION.to_string()),
+                1_f64 => ValueType::Text(version_nums.get(0).unwrap_or(&"0").to_string()),
+                2_f64 => ValueType::Text(version_nums.get(1).unwrap_or(&"0").to_string()),
+                3_f64 => ValueType::Text(version_nums.get(2).unwrap_or(&"0").to_string()),
+                _ => ValueType::Text(VERSION.to_string()),
+            }
+        };
 
         Ok(())
     }
@@ -2885,10 +2905,10 @@ mod tests {
         #[test]
         fn expr_new_number_get_value() {
             let mut exp = Expression::new_number("47.11".to_string());
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut shuttle = Shuttle::new(writer, reader);
-            exp.operate(&mut shuttle);
+            let _ = exp.operate(&mut shuttle);
             assert_eq!(47.11f64, exp.get_num_value(0f64));
 
             // Check if we can get the value a second time.
@@ -2901,10 +2921,10 @@ mod tests {
             exp.push_operand(Expression::new_number("4000.3".to_string()));
             exp.push_operand(Expression::new_number("500.1".to_string()));
 
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut shuttle = Shuttle::new(writer, reader);
-            exp.operate(&mut shuttle);
+            let _ = exp.operate(&mut shuttle);
 
             // Fails due to precision error: right value is 4500.400000000001.
             // assert_eq!(4500.4f64, exp.get_num_value(0f64));
@@ -2927,10 +2947,10 @@ mod tests {
             exp.push_operand(op1);
             exp.push_operand(op2);
 
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut shuttle = Shuttle::new(writer, reader);
-            exp.operate(&mut shuttle);
+            let _ = exp.operate(&mut shuttle);
 
             assert_eq!(574.03f64, exp.get_num_value(0f64));
         }
@@ -2941,10 +2961,10 @@ mod tests {
             exp.push_operand(Expression::new_number("4000.3".to_string()));
             exp.push_operand(Expression::new_number("500.1".to_string()));
 
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut shuttle = Shuttle::new(writer, reader);
-            exp.operate(&mut shuttle);
+            let _ = exp.operate(&mut shuttle);
 
             match shuttle.get_var(&ValueType::Number(4000.3f64)) {
                 ValueType::Empty => panic!("The numerical register assigned to has not been found back."),
@@ -2959,11 +2979,11 @@ mod tests {
             exp.push_operand(Expression::new_text("prec".to_string()));
             exp.push_operand(Expression::new_number("0.001".to_string()));
 
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut shuttle = Shuttle::new(writer, reader);
 
-            exp.operate(&mut shuttle);
+            let _ = exp.operate(&mut shuttle);
 
             assert_eq!(0.001f64, shuttle.orb);
         }
@@ -2974,11 +2994,11 @@ mod tests {
             exp.push_operand(Expression::new_text("loops".to_string()));
             exp.push_operand(Expression::new_number("500".to_string()));
 
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut shuttle = Shuttle::new(writer, reader);
 
-            exp.operate(&mut shuttle);
+            let _ = exp.operate(&mut shuttle);
 
             assert_eq!(500f64, shuttle.max_iterations);
         }
@@ -2994,11 +3014,11 @@ mod tests {
             let mut the_value = ValueType::Number(500f64);
             let mut ops = Vec::<Expression>::new();
 
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut shuttle = Shuttle::new(writer, reader);
 
-            nop('0', &mut the_value, &mut ops, &mut shuttle);
+            let _ = nop('0', &mut the_value, &mut ops, &mut shuttle);
 
             assert!(ops.is_empty());
 
@@ -3013,13 +3033,13 @@ mod tests {
             let mut the_value = ValueType::Empty;
             let mut ops = vec![Expression::new_text("gold".to_string())];
 
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut shuttle = Shuttle::new(writer, reader);
 
             // Have the golden ratio retrieved twice from the shuttle.
-            constants('c', &mut the_value, &mut ops, &mut shuttle);
-            constants('c', &mut the_value, &mut ops, &mut shuttle);
+            let _ = constants('c', &mut the_value, &mut ops, &mut shuttle);
+            let _ = constants('c', &mut the_value, &mut ops, &mut shuttle);
 
             // Verify that the calculation only happened once.
             assert_eq!(1u8, shuttle.golden_ratio_calculations);
@@ -4011,9 +4031,51 @@ mod tests {
         }
 
         #[test]
+        fn x_enum_opr_version_no_second_operand() {
+            const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+            assert_eq!(VERSION.to_string(), Interpreter::execute_with_mocked_io("o#version".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_enum_opr_version_full() {
+            const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+            assert_eq!(VERSION.to_string(), Interpreter::execute_with_mocked_io("o#version 0".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_enum_opr_version_invalid_operand() {
+            const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+            assert_eq!(VERSION.to_string(), Interpreter::execute_with_mocked_io("o#version 8".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_enum_opr_version_major() {
+            const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+            let version_nums: Vec<&str> = VERSION.split('.').collect();
+            let requested = version_nums.get(0).unwrap_or(&"_").to_string();
+            assert_eq!(requested, Interpreter::execute_with_mocked_io("o#version 1".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_enum_opr_version_minor() {
+            const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+            let version_nums: Vec<&str> = VERSION.split('.').collect();
+            let requested = version_nums.get(1).unwrap_or(&"_").to_string();
+            assert_eq!(requested, Interpreter::execute_with_mocked_io("o#version 2".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_enum_opr_version_revision() {
+            const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+            let version_nums: Vec<&str> = VERSION.split('.').collect();
+            let requested = version_nums.get(2).unwrap_or(&"_").to_string();
+            assert_eq!(requested, Interpreter::execute_with_mocked_io("o#version 3".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
         fn x_write() {
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut interpreter = Interpreter::new(writer, reader);
             interpreter.execute_opts("w[sHello!]".to_string(), true, false, false).unwrap();
 
@@ -4022,8 +4084,8 @@ mod tests {
 
         #[test]
         fn x_write_more() {
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut interpreter = Interpreter::new(writer, reader);
             interpreter.execute_opts("w([sA] [sB] [sC])".to_string(), true, false, false).unwrap();
 
@@ -4032,8 +4094,8 @@ mod tests {
 
         #[test]
         fn x_write_number() {
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut interpreter = Interpreter::new(writer, reader);
             interpreter.execute_opts("w+100 300".to_string(), true, false, false).unwrap();
 
@@ -4047,8 +4109,8 @@ mod tests {
 
         #[test]
         fn x_write_number_formatted() {
-            let mut writer = Box::new(Vec::<u8>::new());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut interpreter = Interpreter::new(writer, reader);
             interpreter.execute_opts("b`16 o(#fmt 2 #. #,) w31.5".to_string(), true, false, false).unwrap();
 
@@ -4068,48 +4130,48 @@ mod tests {
         #[test]
         fn x_write_to_stdout() {
             // To be tested using the -- --nocapture argument.
-            let mut writer = Box::new(std::io::stdout());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(std::io::stdout());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut interpreter = Interpreter::new(writer, reader);
             interpreter.execute_opts("w[s\n========== Hello from x_write_to_stdout() ! ==========\n]".to_string(), true, false, false).unwrap();
         }
 
         #[test]
         fn x_write_to_sink() {
-            let mut writer = Box::new(std::io::sink());
-            let mut reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let writer = Box::new(std::io::sink());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut interpreter = Interpreter::new(writer, reader);
             interpreter.execute_opts("w[sGarbage]".to_string(), true, false, false).unwrap();
         }
 
         #[test]
         fn x_read_number_base10() {
-            let mut writer = Box::new(std::io::sink());
-            let mut reader = Box::new(MockByString::new(vec!["16.2".to_string()]));
+            let writer = Box::new(std::io::sink());
+            let reader = Box::new(MockByString::new(vec!["16.2".to_string()]));
             let mut interpreter = Interpreter::new(writer, reader);
             assert_eq!(17f64, interpreter.execute_opts("w[sEnter a number:]+r0.8".to_string(), true, false, false).unwrap().numeric_value);
         }
 
         #[test]
         fn x_read_neg_number_base10_minus() {
-            let mut writer = Box::new(std::io::sink());
-            let mut reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
+            let writer = Box::new(std::io::sink());
+            let reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
             let mut interpreter = Interpreter::new(writer, reader);
             assert_eq!(-14.2f64, interpreter.execute_opts("w[sEnter a number:]+r2".to_string(), true, false, false).unwrap().numeric_value);
         }
 
         #[test]
         fn x_read_neg_number_base10_tilde() {
-            let mut writer = Box::new(std::io::sink());
-            let mut reader = Box::new(MockByString::new(vec!["~16.2".to_string()]));
+            let writer = Box::new(std::io::sink());
+            let reader = Box::new(MockByString::new(vec!["~16.2".to_string()]));
             let mut interpreter = Interpreter::new(writer, reader);
             assert_eq!(-14.2f64, interpreter.execute_opts("w[sEnter a number:]+r2".to_string(), true, false, false).unwrap().numeric_value);
         }
 
         #[test]
         fn x_read_neg_number_base10_non_leading() {
-            let mut writer = Box::new(std::io::sink());
-            let mut reader = Box::new(MockByString::new(vec!["16-".to_string()]));
+            let writer = Box::new(std::io::sink());
+            let reader = Box::new(MockByString::new(vec!["16-".to_string()]));
             let mut interpreter = Interpreter::new(writer, reader);
             let outcome = interpreter.execute_opts("w[sEnter a number:]+r 2".to_string(), true, false, false).unwrap().string_representation;
 
@@ -4120,24 +4182,24 @@ mod tests {
 
         #[test]
         fn x_read_number_base16() {
-            let mut writer = Box::new(std::io::sink());
-            let mut reader = Box::new(MockByString::new(vec!["1F.3".to_string()]));
+            let writer = Box::new(std::io::sink());
+            let reader = Box::new(MockByString::new(vec!["1F.3".to_string()]));
             let mut interpreter = Interpreter::new(writer, reader);
             assert_eq!(32f64, interpreter.execute_opts("b16 w[sEnter a number:]+r[n0.D]".to_string(), true, false, false).unwrap().numeric_value);
         }
 
         #[test]
         fn x_read_string() {
-            let mut writer = Box::new(std::io::sink());
-            let mut reader = Box::new(MockByString::new(vec!["1a1".to_string()]));
+            let writer = Box::new(std::io::sink());
+            let reader = Box::new(MockByString::new(vec!["1a1".to_string()]));
             let mut interpreter = Interpreter::new(writer, reader);
             assert_eq!("1a1200.000000".to_string(), interpreter.execute_opts("w[sEnter something:]+r200".to_string(), true, false, false).unwrap().string_representation);
         }
 
         #[test]
         fn x_read_number_and_string() {
-            let mut writer = Box::new(std::io::sink());
-            let mut reader = Box::new(MockByString::new(vec!["200".to_string(), "1a1".to_string()]));
+            let writer = Box::new(std::io::sink());
+            let reader = Box::new(MockByString::new(vec!["200".to_string(), "1a1".to_string()]));
             let mut interpreter = Interpreter::new(writer, reader);
             assert_eq!("1a1200.000000".to_string(), interpreter.execute_opts("+rr".to_string(), true, false, false).unwrap().string_representation);
         }
@@ -4146,8 +4208,8 @@ mod tests {
         #[ignore]
         fn x_read_from_stdin() {
             // To be tested using the -- --ignored --nocapture arguments.
-            let mut writer = Box::new(std::io::stdout());
-            let mut reader = Box::new(StdinReader::new());
+            let writer = Box::new(std::io::stdout());
+            let reader = Box::new(StdinReader::new());
             let mut interpreter = Interpreter::new(writer, reader);
             interpreter.execute_opts("w[sEnter a number:] $0r w+[sYou entered: ]v0 w+[sDouble is: ]*v0 2".to_string(), true, false, false).unwrap();
         }
@@ -4483,8 +4545,8 @@ mod tests {
 
         #[test]
         fn x_interpreter_keeps_variables() {
-            let mut writer = Box::new(std::io::sink());
-            let mut reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
+            let writer = Box::new(std::io::sink());
+            let reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
             let mut interpreter = Interpreter::new(writer, reader);
             assert_eq!(20_f64, interpreter.execute_opts("$#theNum 20 v#theNum".to_string(), true, false, false).unwrap().numeric_value);
             assert_eq!(25_f64, interpreter.execute_opts("+v#theNum 5".to_string(), true, false, false).unwrap().numeric_value);
@@ -4492,8 +4554,8 @@ mod tests {
 
         #[test]
         fn x_interpreter_keeps_stack() {
-            let mut writer = Box::new(std::io::sink());
-            let mut reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
+            let writer = Box::new(std::io::sink());
+            let reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
             let mut interpreter = Interpreter::new(writer, reader);
             assert_eq!(251_f64, interpreter.execute_opts("K 251".to_string(), true, false, false).unwrap().numeric_value);
             assert_eq!(251_f64, interpreter.execute_opts("k".to_string(), true, false, false).unwrap().numeric_value);
@@ -4501,8 +4563,8 @@ mod tests {
 
         #[test]
         fn x_interpreter_keeps_routines() {
-            let mut writer = Box::new(std::io::sink());
-            let mut reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
+            let writer = Box::new(std::io::sink());
+            let reader = Box::new(MockByString::new(vec!["-16.2".to_string()]));
             let mut interpreter = Interpreter::new(writer, reader);
             assert_eq!("dup".to_string(), interpreter.execute_opts("R#dup *k2".to_string(), true, false, false).unwrap().string_representation);
             assert_eq!(2000_f64, interpreter.execute_opts("X(#dup 1000)".to_string(), true, false, false).unwrap().numeric_value);

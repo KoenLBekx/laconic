@@ -7,7 +7,7 @@ LACONIC
 			~+-*/%^$():`;=<>!&|?°Ø§AabCceFiKklMmNnOopRrSsTtUuvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?°Ø  abCceFi  lMmN OopRrSsTt  vWwXxZ
+			~+-*/%^$():`;=<>!&|?°Ø  abCceFiKklMmN OopRrSsTt  vWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   interfere with command line syntax or string literals
@@ -1140,14 +1140,13 @@ Operators
 
 			o#version num
 							Version of Laconic interpreter.
-								(to be implemented)
 
 							The version information returned depends on the second operand:
 
 							o#version 0 yields a string containing full version information, e.g.: "001.000.003"
-							o#version 1 yields the major version as a number, e.g.: 1
-							o#version 2 yields the minor version as a number, e.g.: 0
-							o#version 2 yields the revision as a number, e.g.: 3
+							o#version 1 yields the major version as a string, e.g.: "1"
+							o#version 2 yields the minor version as a string, e.g.: "0"
+							o#version 3 yields the revision as a string, e.g.: "3"
 
 			o(#fmt nr_of_fractal_digits fractal_separator thousands_separator)
 
