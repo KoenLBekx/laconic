@@ -7,7 +7,7 @@ LACONIC
 			~+-*/%^$():`;=<>!&|?°Ø§AabCceFiKklMmNnOopRrSsTtUuvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?°Ø  abCceFiKklMmN OopRrSsTt  vWwXxZ
+			~+-*/%^$():`;=<>!&|?°Ø  abCceFiKklMmNnOopRrSsTt  vWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   interfere with command line syntax or string literals
@@ -1101,7 +1101,6 @@ Operators
 
 		n exp
 				Converts a string expression to a number.
-					(to be implemented)
 
 				If the first operand is a string, the n operator converts it to a a number, if possible.
 				If not, the returned number is NaN and all calculations with it will return NaN.

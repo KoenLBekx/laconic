@@ -375,6 +375,7 @@ impl Expression {
             'O' => &opr_funcs::enumerated_opr,
             'w' => &opr_funcs::write,
             'r' => &opr_funcs::read,
+            'n' => &opr_funcs::to_number,
             's' => &opr_funcs::sign,
             't' => &opr_funcs::get_type,
             'b' if alternative_marks_count == 0 => &opr_funcs::input_base,
@@ -910,7 +911,7 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:!w°SCTcstbKX"    .contains(chr) => 1,
+                        chr if "~iav:!w°SCTcstbKXn"   .contains(chr) => 1,
                         chr if "+-*/^l%&|x$W;mM=<>ZoR".contains(chr) => 2,
                         chr if "?O"                   .contains(chr) => 3,
                         chr if "F"                    .contains(chr) => 5,
@@ -1002,7 +1003,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^lia%°SCTpec$v:Kk§`?WF;mMN()=<>!&|xZoOwrstbRXØ".contains(op)
+        "~+-*/^lia%°SCTpec$v:Kk§`?WF;mMNn()=<>!&|xZoOwrstbRXØ".contains(op)
     }
 }
 
@@ -1185,6 +1186,8 @@ pub(crate) mod opr_funcs {
                         return Err("Illegal spaces in number input".to_string());
                     }
                 },
+                // Ignore underscores.
+                '_' => (),
                 _ =>  {
                     if !ignore_non_numeric_chars {
                         return Err("Illegal characters in number input".to_string());
@@ -1229,7 +1232,7 @@ pub(crate) mod opr_funcs {
             ValueType::Text(string_rep) => {
 
                 *result_value = ValueType::Number(parse_number(&string_rep, shuttle.input_base, true).
-                    expect("Function parse_num should never fail when called from function nop."));
+                    expect("Function parse_number should never fail when called from function nop."));
             },
             _ => (),
         }
@@ -2233,6 +2236,26 @@ pub(crate) mod opr_funcs {
         *result_value = match parse_number(&input_string, shuttle.input_base, false) {
             Ok(num) => ValueType::Number(num),
             Err(_) => ValueType::Text(input_string),
+        };
+
+        Ok(())
+    }
+
+    pub fn to_number(_opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        *result_value = if operands.len() == 0 {
+            ValueType::Number(f64::NAN)
+        } else {
+            // Only read operands[0]; ignore further operands.
+            match operands[0].get_value() {
+                ValueType::Number(n) => ValueType::Number(n),
+                ValueType::Text(t) => {
+                    match parse_number(&t, shuttle.input_base, false) {
+                        Ok(n) => ValueType::Number(n),
+                        Err(_) => ValueType::Number(f64::NAN),
+                    }
+                },
+                _ => ValueType::Number(f64::NAN),
+            }
         };
 
         Ok(())
@@ -4576,6 +4599,106 @@ mod tests {
             let mut interpreter = Interpreter::new(writer, reader);
             assert_eq!("dup".to_string(), interpreter.execute_opts("R#dup *k2".to_string(), true, false, false).unwrap().string_representation);
             assert_eq!(2000_f64, interpreter.execute_opts("X(#dup 1000)".to_string(), true, false, false).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_num() {
+            assert_eq!(8_f64, Interpreter::execute_with_mocked_io("n8".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_valid() {
+            assert_eq!(29_f64, Interpreter::execute_with_mocked_io("n#29".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_valid_base16() {
+            assert_eq!(26_f64, Interpreter::execute_with_mocked_io("b16 n#1A".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_valid_base50() {
+            assert_eq!(5050_f64, Interpreter::execute_with_mocked_io("b50 n[s2 1 0]".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_valid_base10_spaces() {
+            assert!(Interpreter::execute_with_mocked_io("b50 n[s1 72]".to_string()).unwrap().numeric_value.is_nan());
+        }
+
+        #[test]
+        fn x_to_num_string_valid_minus() {
+            assert_eq!(-29_f64, Interpreter::execute_with_mocked_io("n#-29".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_valid_tilde() {
+            assert_eq!(-29_f64, Interpreter::execute_with_mocked_io("n#~29".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_valid_underscore() {
+            assert_eq!(29_f64, Interpreter::execute_with_mocked_io("n#2_9".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_valid_underscore_only() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("n#_".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_valid_one_dot_middle() {
+            assert_eq!(1_f64, Interpreter::execute_with_mocked_io("Z#prec .01 =n#4.125 4.125".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_valid_one_dot_starting() {
+            assert_eq!(1_f64, Interpreter::execute_with_mocked_io("Z#prec .01 =n#.125 .125".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_valid_one_dot_ending() {
+            assert_eq!(27_f64, Interpreter::execute_with_mocked_io("n#27.".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_valid_one_dot_only() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("n#.".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_string_two_dots() {
+            assert_eq!(523.7478_f64, Interpreter::execute_with_mocked_io("n523.74.78".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_to_num_empty() {
+            assert!(Interpreter::execute_with_mocked_io("nØ".to_string()).unwrap().numeric_value.is_nan());
+        }
+
+        #[test]
+        fn x_to_num_string_invalid() {
+            assert!(Interpreter::execute_with_mocked_io("n[stwenty two]".to_string()).unwrap().numeric_value.is_nan());
+        }
+
+        #[test]
+        fn x_to_num_string_invalid_non_leading_minus() {
+            assert!(Interpreter::execute_with_mocked_io("n#25-8".to_string()).unwrap().numeric_value.is_nan());
+        }
+
+        #[test]
+        fn x_to_num_string_invalid_non_leading_tilde() {
+            assert!(Interpreter::execute_with_mocked_io("n#25~8".to_string()).unwrap().numeric_value.is_nan());
+        }
+
+        #[test]
+        fn x_to_num_string_num_nan() {
+            assert!(Interpreter::execute_with_mocked_io("nnØ".to_string()).unwrap().numeric_value.is_nan());
+        }
+
+        #[test]
+        fn x_adding_nan() {
+            assert!(Interpreter::execute_with_mocked_io("+20 nØ".to_string()).unwrap().numeric_value.is_nan());
         }
     }
 
