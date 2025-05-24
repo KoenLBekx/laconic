@@ -12,12 +12,13 @@ LACONIC
 		* Characters not to be used as operator:
 			' " \   interfere with command line syntax or string literals
 			. [ ] # have other meanings in Laconic.
+			{ }			can be used to delimit Laconic expressions in other contexts
 			whitespace
 
 		* Common characters not used yet:
-			´{},@£€¶µBDdEfGgHhIJjLPQqVz
+			´,@£€¶µBDdEfGgHhIJjLPQqVz
 			
-		Note the Unicode point of some characters not on all keyboards:
+		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
 			` 0060 Grave accent or Backtick
 			~	007E Tilde

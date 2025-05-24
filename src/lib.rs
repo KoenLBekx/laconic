@@ -317,6 +317,7 @@ struct Expression
     opr_mark: char,
     is_last_of_override: bool,
     has_overridden_nr_of_ops: bool,
+    alternative_marks_count: u8,
 }
 
 impl Expression {
@@ -386,9 +387,10 @@ impl Expression {
             operator: opr,
             operands: Vec::<Expression>::new(),
             value: ValueType::Empty,
-            opr_mark,
             is_last_of_override: false,
             has_overridden_nr_of_ops: false,
+            opr_mark,
+            alternative_marks_count,
         }
     }
 
@@ -400,6 +402,7 @@ impl Expression {
             opr_mark: '0',
             is_last_of_override: false,
             has_overridden_nr_of_ops: false,
+            alternative_marks_count: 0,
         }
     }
 
@@ -411,6 +414,7 @@ impl Expression {
             opr_mark: '"',
             is_last_of_override: false,
             has_overridden_nr_of_ops: false,
+            alternative_marks_count: 0,
         }
     }
 
@@ -499,6 +503,10 @@ impl Expression {
             },
             oth => oth.to_string(),
         };
+
+        for _ in 0..self.alternative_marks_count {
+            exp_rep.push('`');
+        }
 
         if self.has_overridden_nr_of_ops {
             exp_rep.push('(');
