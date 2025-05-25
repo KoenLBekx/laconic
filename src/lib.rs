@@ -46,16 +46,17 @@ impl fmt::Debug for Atom {
 #[derive(Debug, PartialEq)]
 pub enum ScriptError {
     DigitParsingFailure{position: usize, reason: String},
-    UnexpectedClosingParenthesis,
-    UnexpectedClosingBracket{position: usize},
-    UnknownOperator{position: usize, operator: char},
-    UnclosedBracketsAtEnd,
-    UnknownBracketContentTypeMarker{position: usize, marker: char},
+    DivideByZero(char),
     InsufficientOperands(char),
+    InvalidOperand(char),
+    UnclosedBracketsAtEnd,
+    UnexpectedClosingBracket{position: usize},
+    UnexpectedClosingParenthesis,
+    UnknownBracketContentTypeMarker{position: usize, marker: char},
     UnknownConstant(String),
     UnknownNamedOperator(String),
+    UnknownOperator{position: usize, operator: char},
     UnknownRoutine(String),
-    DivideByZero(char),
 }
 
 #[derive(Clone, Debug, PartialOrd)]
@@ -120,6 +121,7 @@ impl Hash for ValueType {
     }
 }
 
+#[derive(Debug)]
 struct NumberFormat {
     base: f64,
     fractal_digits: f64,
@@ -2043,6 +2045,7 @@ pub(crate) mod opr_funcs {
         let opr_func = match operands[0].get_value() {
             ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
             ValueType::Text(name) if name == "len".to_string() => get_length,
+            ValueType::Text(name) if name == "sub".to_string() => substring,
             ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
             ValueType::Text(name) if name == "version".to_string() => get_version,
             unknown =>  {
@@ -2090,6 +2093,11 @@ pub(crate) mod opr_funcs {
                 _ => (),
             }
         }
+
+        /*
+        #[cfg(test)]
+        println!("Number format: {:?}", shuttle.number_format);
+        */
 
         *result_value = ValueType::Empty;
 
@@ -2162,13 +2170,61 @@ pub(crate) mod opr_funcs {
         for opd in operands {
             tot_len +=
             match opd.get_value() {
-                ValueType::Text(txt) => txt.len(),
-                ValueType::Number(num) => shuttle.number_format.format(num).len(),
-                _ => 0,
-            }
+                ValueType::Text(txt) => txt,
+                ValueType::Number(num) => shuttle.number_format.format(num),
+                _ => "".to_string(),
+            }.chars().collect::<Vec<char>>().len();
         }
 
         *result_value = ValueType::Number(tot_len as f64);
+
+        Ok(())
+    }
+
+    pub fn substring(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        let characters: Vec::<char> = match operands[0].get_value() {
+            ValueType::Text(txt) => txt.chars().collect(),
+            ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
+            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+        };
+
+        let start_pos_float = if let ValueType::Number(sp) = operands[1].get_value() {
+            sp
+        } else {
+            return Err(ScriptError::InvalidOperand(opr_mark))
+        };
+
+        if start_pos_float < 0_f64 {
+            return Err(ScriptError::InvalidOperand(opr_mark));
+        }
+
+        let start_pos = start_pos_float as usize;
+
+        if start_pos >= characters.len() {
+            return Err(ScriptError::InvalidOperand(opr_mark));
+        }
+
+        let sub_len = if operands.len() >= 3 {
+            if let ValueType::Number(sp) = operands[2].get_value(){
+                sp as usize
+            } else {
+                return Err(ScriptError::InvalidOperand(opr_mark))
+            }
+        } else {
+            characters.len() - start_pos
+        };
+
+        let end_pos_excl = start_pos + sub_len;
+
+        if end_pos_excl > characters.len() {
+            return Err(ScriptError::InvalidOperand(opr_mark));
+        }
+
+        *result_value = ValueType::Text(characters[start_pos..end_pos_excl].iter().collect());
 
         Ok(())
     }
@@ -4759,7 +4815,79 @@ mod tests {
 
         #[test]
         fn x_len_string_non_ascii() {
-            assert_eq!(10_f64, Interpreter::execute_with_mocked_io("o#len #Αθηνά".to_string()).unwrap().numeric_value);
+            assert_eq!(5_f64, Interpreter::execute_with_mocked_io("o#len #Αθηνά".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_sub() {
+            assert_eq!("wa".to_string(), Interpreter::execute_with_mocked_io("o`#sub #Mirwart 3 2".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_sub_non_ascii() {
+            assert_eq!("κός".to_string(), Interpreter::execute_with_mocked_io("o`#sub #Γραμματικός 8 3".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_sub_number() {
+            // assert_eq!("123,45600".to_string(), Interpreter::execute_with_mocked_io("o`#fmt 5 #. #! o`#fmt 5 #, # 123.456".to_string()).unwrap().string_representation);
+            assert_eq!(",4560".to_string(), Interpreter::execute_with_mocked_io("o`#fmt 5 #. #! o`#fmt 5 #, # o`#sub 123.456 3 5".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_sub_no_operands() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o(#sub)".to_string()));
+        }
+
+        #[test]
+        fn x_sub_one_operand() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o#sub #Zupla".to_string()));
+        }
+
+        #[test]
+        fn x_sub_start_pos_is_string() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('O')),
+                Interpreter::execute_with_mocked_io("O#sub #Zupla #two".to_string()));
+        }
+
+        #[test]
+        fn x_sub_negative_start_pos() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('O')),
+                Interpreter::execute_with_mocked_io("O#sub #Zupla ~3".to_string()));
+        }
+
+        #[test]
+        fn x_sub_start_pos_too_great() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('O')),
+                Interpreter::execute_with_mocked_io("O#sub #Zupla 5".to_string()));
+        }
+
+        #[test]
+        fn x_sub_length_is_string() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("o`#sub #Zupla 1 #end".to_string()));
+        }
+
+        #[test]
+        fn x_sub_no_length_given() {
+            assert_eq!(
+                "pla".to_string(),
+                Interpreter::execute_with_mocked_io("O#sub #Zupla 2".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_sub_length_is_too_great() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("o`#sub #Zupla 1 5".to_string()));
         }
     }
 

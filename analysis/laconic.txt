@@ -4,10 +4,10 @@ LACONIC
 		// TODO: indicate the standard number of operands for every operator.
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():`;=<>!&|?°Ø§abCceFiKklMmNnOopRrSsTtUuvWwXxZ
+			~+-*/%^$():`;=<>!&|?°ØabCceFiKklMmNnOopRrSsTtUuvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?°Ø abCceFiKklMmNnOopRrSsTt  vWwXxZ
+			~+-*/%^$():`;=<>!&|?°ØabCceFiKklMmNnOopRrSsTt  vWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   interfere with command line syntax or string literals
@@ -16,7 +16,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			´,@£€¶µABDdEfGgHhIJjLPQqVz
+			´,@§£€¶µABDdEfGgHhIJjLPQqVz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -371,21 +371,24 @@ Operators
 
 	Strings
 
-		§ string start_position number_of_characters
-				(to be implemented)
+		o`#sub string start_position number_of_characters
+		o(#sub string start_position number_of_characters)
 
 			Substring of string, taking number_of_characters characters from the start_position.
 			Note that start_position is zero-based !
 
 			Thus
-				§ [sLa Roche-en-Ardenne] 3 5
+				o`#sub [sLa Roche-en-Ardenne] 3 5
 			yields
 				"Roche"
 
 			If number_of_characters is ommitted, the remaining characters until the end are extracted:
-				§([sLa Roche-en-Ardenne] 12)
+				O#sub [sLa Roche-en-Ardenne] 12
 			yields
 				"Ardenne"
+
+			If the first argument is not a string, but a number, then that number is first converted to a string
+			according to the o#fmt settings in effect.
 
 		o#uni num
 						A string having one character having Unicode point <num>.
@@ -405,6 +408,8 @@ Operators
 						e.g.
 							O#ucv #Союз 0
 								yields 1057
+
+						If the position operand is ommitted, the first character is used.
 
 		o#len string
 						Returns the length of the string.
