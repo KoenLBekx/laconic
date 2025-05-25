@@ -4,10 +4,10 @@ LACONIC
 		// TODO: indicate the standard number of operands for every operator.
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():`;=<>!&|?°Ø§AabCceFiKklMmNnOopRrSsTtUuvWwXxZ
+			~+-*/%^$():`;=<>!&|?°Ø§abCceFiKklMmNnOopRrSsTtUuvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?°Ø  abCceFiKklMmNnOopRrSsTt  vWwXxZ
+			~+-*/%^$():`;=<>!&|?°Ø abCceFiKklMmNnOopRrSsTt  vWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   interfere with command line syntax or string literals
@@ -16,7 +16,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			´,@£€¶µBDdEfGgHhIJjLPQqVz
+			´,@£€¶µABDdEfGgHhIJjLPQqVz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -218,6 +218,11 @@ LACONIC
 				yields
 					"Total: 353"
 
+			+# number
+				is a way of converting a number to a string in a format dictated by the latest
+				o#fmt
+				statement.
+
 		Other numerical operators, or other combinations of number and string operands,
 		will throw errors.
 			(To be implemented)
@@ -355,12 +360,7 @@ Operators
 
 			°`180 yields 3.14159...
 
-		A num num
-			(to be implemented)
-
-			atan2()
-
-			(Also to be implemented :)
+		(Also to be implemented :)
 
 		S`` hyperbolic sine (sinh)
 		S``` inverse hyperbolic sine (asinh)
@@ -407,8 +407,6 @@ Operators
 								yields 1057
 
 		o#len string
-				(to be implemented)
-
 						Returns the length of the string.
 
 						e.g.
@@ -418,6 +416,9 @@ Operators
 							o#len #
 							o#len [s]
 								both yield 0
+
+						If more than one operand is given, the total length of the string representations
+						will be returned.
 
 		O#find string substring
 				(to be implemented)

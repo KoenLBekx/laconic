@@ -8,6 +8,8 @@
 //      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
 // TODO: remove our outcomment code reported as never used by the compiler.
+// TODO: include the explanations in analysis/laconic.txt in markdown format as documentation
+//      comments.
 // TODO: use giantity ?
 //}
 
@@ -2040,6 +2042,7 @@ pub(crate) mod opr_funcs {
 
         let opr_func = match operands[0].get_value() {
             ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
+            ValueType::Text(name) if name == "len".to_string() => get_length,
             ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
             ValueType::Text(name) if name == "version".to_string() => get_version,
             unknown =>  {
@@ -2145,6 +2148,27 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Text(result_string);
+
+        Ok(())
+    }
+
+    pub fn get_length(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        let mut tot_len = 0usize;
+
+        for opd in operands {
+            tot_len +=
+            match opd.get_value() {
+                ValueType::Text(txt) => txt.len(),
+                ValueType::Number(num) => shuttle.number_format.format(num).len(),
+                _ => 0,
+            }
+        }
+
+        *result_value = ValueType::Number(tot_len as f64);
 
         Ok(())
     }
@@ -4699,6 +4723,43 @@ mod tests {
         #[test]
         fn x_adding_nan() {
             assert!(Interpreter::execute_with_mocked_io("+20 nØ".to_string()).unwrap().numeric_value.is_nan());
+        }
+
+        #[test]
+        fn x_len_no_args() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o#len".to_string()));
+        }
+
+        #[test]
+        fn x_len_one_string() {
+            assert_eq!(8_f64, Interpreter::execute_with_mocked_io("o#len #TokiPona".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_len_more_strings() {
+            assert_eq!(15_f64, Interpreter::execute_with_mocked_io("O#len #Antwerp #Brussels".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_len_num_formatted() {
+            assert_eq!(6_f64, Interpreter::execute_with_mocked_io("o(#fmt 3 #. #_) o#len 15.8".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_len_string_empty() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("o#len #".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_len_strings_empty() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("o(#len [s] [s] #)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_len_string_non_ascii() {
+            assert_eq!(10_f64, Interpreter::execute_with_mocked_io("o#len #Αθηνά".to_string()).unwrap().numeric_value);
         }
     }
 
