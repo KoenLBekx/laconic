@@ -2044,6 +2044,7 @@ pub(crate) mod opr_funcs {
 
         let opr_func = match operands[0].get_value() {
             ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
+            ValueType::Text(name) if name == "ucv".to_string() => get_unicode_value,
             ValueType::Text(name) if name == "len".to_string() => get_length,
             ValueType::Text(name) if name == "sub".to_string() => substring,
             ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
@@ -2177,6 +2178,35 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Number(tot_len as f64);
+
+        Ok(())
+    }
+
+    pub fn get_unicode_value(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 1 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        let characters: Vec::<char> = match operands[0].get_value() {
+            ValueType::Text(txt) => txt.chars().collect(),
+            ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
+            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+        };
+
+        let pos = if operands.len() < 2 {
+            0_usize
+        } else {
+            match operands[1].get_value() {
+                ValueType::Number(num) => num as usize,
+                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            }
+        };
+
+        if pos >= characters.len() {
+            return Err(ScriptError::InvalidOperand(opr_mark));
+        }
+
+        *result_value = ValueType::Number(characters[pos] as u32 as f64);
 
         Ok(())
     }
@@ -4888,6 +4918,52 @@ mod tests {
             assert_eq!(
                 Err(ScriptError::InvalidOperand('o')),
                 Interpreter::execute_with_mocked_io("o`#sub #Zupla 1 5".to_string()));
+        }
+
+        #[test]
+        fn x_ucv_ascii() {
+            assert_eq!(99_f64, Interpreter::execute_with_mocked_io("O#ucv #pacifism 2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_ucv_no_position_given() {
+            assert_eq!(112_f64, Interpreter::execute_with_mocked_io("o#ucv #pacifism".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_ucv_hanzi() {
+            assert_eq!(32147_f64, Interpreter::execute_with_mocked_io("O#ucv [s易經] 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_ucv_emoticon() {
+            assert_eq!(128525_f64, Interpreter::execute_with_mocked_io("O#ucv [s😀😍] 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_ucv_no_string_given() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o(#ucv)".to_string()));
+        }
+
+        #[test]
+        fn x_ucv_first_operand_is_number() {
+            assert_eq!(53_f64, Interpreter::execute_with_mocked_io("O#ucv 352 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_ucv_second_operand_is_string() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('O')),
+                Interpreter::execute_with_mocked_io("O#ucv #Oostende #three".to_string()));
+        }
+
+        #[test]
+        fn x_ucv_index_beyond_string_length() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('O')),
+                Interpreter::execute_with_mocked_io("O#ucv #Oostende 20".to_string()));
         }
     }
 

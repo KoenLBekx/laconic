@@ -391,115 +391,113 @@ Operators
 			according to the o#fmt settings in effect.
 
 		o#uni num
-						A string having one character having Unicode point <num>.
+			A string having one character having Unicode point <num>.
 
-						If more operands are provided, a string having characters 
-						from the given unicode points is returned.
+			If more operands are provided, a string having characters 
+			from the given unicode points is returned.
 
-						e.g.
-							o#uni 10	yields the newline character.
-							b16 o(#uni [n421] [n43E] [n44E] [n437]) yields "Союз".
+			e.g.
+				o#uni 10	yields the newline character.
+				b16 o(#uni [n421] [n43E] [n44E] [n437]) yields "Союз".
 
 		O#ucv string position
-				(to be implemented)
-				
-						Returns the unicode point value of the character at [position] in [string].
+			Returns the unicode point value of the character at [position] in [string].
 
-						e.g.
-							O#ucv #Союз 0
-								yields 1057
+			e.g.
+				O#ucv #Союз 0
+					yields 1057
 
-						If the position operand is ommitted, the first character is used.
+			If the position operand is ommitted, the first character is used.
 
 		o#len string
-						Returns the length of the string.
+			Returns the length of the string.
 
-						e.g.
-							o#len #Theodorakis
-								yields 11
+			e.g.
+				o#len #Theodorakis
+					yields 11
 
-							o#len #
-							o#len [s]
-								both yield 0
+				o#len #
+				o#len [s]
+					both yield 0
 
-						If more than one operand is given, the total length of the string representations
-						will be returned.
+			If more than one operand is given, the total length of the string representations
+			will be returned.
 
 		O#find string substring
-				(to be implemented)
+			(to be implemented)
 
-						Returns the start position of the first occurence
-						of substring in string.
+			Returns the start position of the first occurence
+			of substring in string.
 
-						This position is zero-based: the first character has position 0.
+			This position is zero-based: the first character has position 0.
 
-						If the substring is not found in string, this operator returns Ø:
-						the empty value.
-						
-						Note 0 (Zero, U+0030) is not Ø (capital letter O with stroke, U+00D8),
-						even if not all fonts show this clearly : 0Ø
+			If the substring is not found in string, this operator returns Ø:
+			the empty value.
+			
+			Note 0 (Zero, U+0030) is not Ø (capital letter O with stroke, U+00D8),
+			even if not all fonts show this clearly : 0Ø
 
-						e.g.
-							O#find #Samovar #a
-								yields 1
-							O#find [sNo hay remedio] #mejor
-								yields Ø
-							tO#find [sNo hay remedio] #mejor
-								yields 0
-							tO#find [sNo hay remedio] #hay
-								yields 1
+			e.g.
+				O#find #Samovar #a
+					yields 1
+				O#find [sNo hay remedio] #mejor
+					yields Ø
+				tO#find [sNo hay remedio] #mejor
+					yields 0
+				tO#find [sNo hay remedio] #hay
+					yields 1
 
-					If a fourth argument is present, it's used as the starting position for the search.
-					The position returned, however, still counts from the start of the string.
-				
-						e.g.
-							O(#find #Samovar #a 3)
-								yields 5
+			If a fourth argument is present, it's used as the starting position for the search.
+			The position returned, however, still counts from the start of the string.
+	
+			e.g.
+				O(#find #Samovar #a 3)
+					yields 5
 
 		o#(repl string substring replacement start)
-				(to be implemented)
+			(to be implemented)
 
-				Replaces the first occurrence from [start] of [substring] in [string] with [replacement].
-				If the [start] operand is negative, all occurrences are replaced.
-				If the [start] operand is ommitted, position 0 is assumed.
+			Replaces the first occurrence from [start] of [substring] in [string] with [replacement].
+			If the [start] operand is negative, all occurrences are replaced.
+			If the [start] operand is ommitted, position 0 is assumed.
 
-						e.g.
-							o(#repl #philadelphia #ph #f 0)
-								yields "filadelphia"
-							o(#repl #philadelphia #ph #f 3)
-								yields "philadelfia"
-							o(#repl #philadelphia #ph #f ~1)
-								yields "filadelfia"
+					e.g.
+						o(#repl #philadelphia #ph #f 0)
+							yields "filadelphia"
+						o(#repl #philadelphia #ph #f 3)
+							yields "philadelfia"
+						o(#repl #philadelphia #ph #f ~1)
+							yields "filadelfia"
 
-				(Note that all string operations are case-sensitive.)
+			(Note that all string operations are case-sensitive.)
 
 		o#lower string
-				(to be implemented)
+			(to be implemented)
 
-				Returns the all lower-case form of a string.
+			Returns the all lower-case form of a string.
 
-					e.g.
-						o#lower #McIntosh
-							yields "mcintosh"
+				e.g.
+					o#lower #McIntosh
+						yields "mcintosh"
 
 		o#upper string
-				(to be implemented)
+			(to be implemented)
 
-				Returns the all upper-case form of a string.
+			Returns the all upper-case form of a string.
 
-					e.g.
-						o#upper #McIntosh
-							yields "MCINTOSH"
+				e.g.
+					o#upper #McIntosh
+						yields "MCINTOSH"
 
 		o#proper string
-				(to be implemented)
+			(to be implemented)
 
-				Returns the all proper-case form of a string:
-				the first character in upper case, the rest in lower case.
+			Returns the all proper-case form of a string:
+			the first character in upper case, the rest in lower case.
 
-					e.g.
-						o#proper [sADDIS ABEBA]
-							yields "Addis Abeba"
+				e.g.
+					o#proper [sADDIS ABEBA]
+						yields "Addis Abeba"
 
 	Constants (zero-operand operators)
 
