@@ -2048,6 +2048,8 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "len".to_string() => get_length,
             ValueType::Text(name) if name == "find".to_string() => find_in_string,
             ValueType::Text(name) if name == "sub".to_string() => substring,
+            ValueType::Text(name) if name == "lower".to_string() => lower,
+            ValueType::Text(name) if name == "upper".to_string() => upper,
             ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
             ValueType::Text(name) if name == "version".to_string() => get_version,
             unknown =>  {
@@ -2307,7 +2309,7 @@ pub(crate) mod opr_funcs {
 
         let start_pos = start_pos_float as usize;
 
-        if start_pos >= characters.len() {
+        if start_pos > characters.len() {
             return Err(ScriptError::InvalidOperand(opr_mark));
         }
 
@@ -2328,6 +2330,34 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Text(characters[start_pos..end_pos_excl].iter().collect());
+
+        Ok(())
+    }
+
+    pub fn lower(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 1 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        *result_value = ValueType::Text(match operands[0].get_value() {
+            ValueType::Text(txt) => txt,
+            ValueType::Number(num) => shuttle.number_format.format(num),
+            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+        }.to_lowercase());
+
+        Ok(())
+    }
+
+    pub fn upper(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 1 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        *result_value = ValueType::Text(match operands[0].get_value() {
+            ValueType::Text(txt) => txt,
+            ValueType::Number(num) => shuttle.number_format.format(num),
+            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+        }.to_uppercase());
 
         Ok(())
     }
@@ -4966,10 +4996,24 @@ mod tests {
         }
 
         #[test]
-        fn x_sub_start_pos_too_great() {
+        fn x_sub_start_pos_is_source_length_requested_length_not_given() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('O')),
-                Interpreter::execute_with_mocked_io("O#sub #Zupla 5".to_string()));
+                "".to_string(),
+                Interpreter::execute_with_mocked_io("O#sub #Zupla 5".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_sub_start_pos_is_source_length_requested_length_zero() {
+            assert_eq!(
+                "".to_string(),
+                Interpreter::execute_with_mocked_io("o`#sub #Zupla 5 0".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_sub_start_pos_is_source_length_but_more_chars_requested() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("o`#sub #Zupla 5 1".to_string()));
         }
 
         #[test]
@@ -5129,6 +5173,112 @@ mod tests {
             assert_eq!(
                 Err(ScriptError::InvalidOperand('o')),
                 Interpreter::execute_with_mocked_io("o`#find #Metapontium #ium 9".to_string()));
+        }
+
+        #[test]
+        fn x_scripted_replace_in_middle_and_at_end() {
+           assert_eq!(
+               "fan can".to_string(),
+               Interpreter::execute_with_mocked_io(
+                   "$#src [sfat cat] $#f #t $#r #n W(;($(#pos o(#find v#src v#f)) v#pos) $#src +(o`#sub v#src 0 v#pos v#r O#sub v#src +v#pos o#len v#f)) v#src".to_string()
+               ).unwrap().string_representation
+           );
+        }
+
+        #[test]
+        fn x_lower_no_operand() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o(#lower)".to_string())
+            );
+        }
+
+        #[test]
+        fn x_lower_from_upper() {
+            assert_eq!(
+                "aix-la-chapelle".to_string(),
+                Interpreter::execute_with_mocked_io("o#lower #AIX-LA-CHAPELLE".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_lower_from_mixed() {
+            assert_eq!(
+                "aix-la-chapelle".to_string(),
+                Interpreter::execute_with_mocked_io("o#lower #Aix-La-Chapelle".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_lower_from_lower() {
+            assert_eq!(
+                "aix-la-chapelle".to_string(),
+                Interpreter::execute_with_mocked_io("o#lower #aix-la-chapelle".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_lower_from_upper_greek() {
+            assert_eq!(
+                "τούζλα".to_string(),
+                Interpreter::execute_with_mocked_io("o#lower #ΤΟΎΖΛΑ".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_lower_from_hanzi() {
+            assert_eq!(
+                "易經".to_string(),
+                Interpreter::execute_with_mocked_io("o#lower [s易經]".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_upper_no_operand() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o(#upper)".to_string())
+            );
+        }
+
+        #[test]
+        fn x_upper_from_upper() {
+            assert_eq!(
+                "AIX-LA-CHAPELLE".to_string(),
+                Interpreter::execute_with_mocked_io("o#upper #AIX-LA-CHAPELLE".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_upper_from_mixed() {
+            assert_eq!(
+                "AIX-LA-CHAPELLE".to_string(),
+                Interpreter::execute_with_mocked_io("o#upper #Aix-La-Chapelle".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_upper_from_lower() {
+            assert_eq!(
+                "AIX-LA-CHAPELLE".to_string(),
+                Interpreter::execute_with_mocked_io("o#upper #aix-la-chapelle".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_upper_from_lower_greek() {
+            assert_eq!(
+                "ΤΟΎΖΛΑ".to_string(),
+                Interpreter::execute_with_mocked_io("o#upper #τούζλα".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_upper_from_hanzi() {
+            assert_eq!(
+                "易經".to_string(),
+                Interpreter::execute_with_mocked_io("o#upper [s易經]".to_string()).unwrap().string_representation
+            );
         }
     }
 

@@ -454,25 +454,32 @@ Operators
 				O(#find #Samovar #a 3)
 					yields 5
 
-		o#(repl string substring replacement start)
+		o#(repl string substring replacement count)
 			(to be implemented)
+			Question: What is most needed:
+				- replace all occurrences
+				- replace nth occurrence
+				- replace all occurences after position x
+				- replace nth occurrence after position x
+				All of these use cases can be scripted using other operators!
 
-			Replaces the first occurrence from [start] of [substring] in [string] with [replacement].
-			If the [start] operand is negative, all occurrences are replaced.
-			If the [start] operand is ommitted, position 0 is assumed.
+						Replaces the [count] first occurrences of [substring] in [string] with [replacement].
+						If the [count] operand is negative, all occurrences are replaced.
+						If the [count] operand is ommitted, all occurrences are replaced.
 
-					e.g.
-						o(#repl #philadelphia #ph #f 0)
-							yields "filadelphia"
-						o(#repl #philadelphia #ph #f 3)
-							yields "philadelfia"
-						o(#repl #philadelphia #ph #f ~1)
-							yields "filadelfia"
+								e.g.
+									o(#repl #philadelphia #ph #f 1)
+										yields "filadelphia"
+									o(#repl #philadelphia #ph #f 2)
+										yields "filadelfia"
+									o(#repl #philadelphia #ph #f ~1)
+										yields "filadelfia"
+									o(#repl #philadelphia #ph #f)
+										yields "filadelfia"
 
-			(Note that all string operations are case-sensitive.)
+						(Note that all string operations are case-sensitive.)
 
 		o#lower string
-			(to be implemented)
 
 			Returns the all lower-case form of a string.
 
@@ -481,7 +488,6 @@ Operators
 						yields "mcintosh"
 
 		o#upper string
-			(to be implemented)
 
 			Returns the all upper-case form of a string.
 
