@@ -2046,6 +2046,7 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
             ValueType::Text(name) if name == "ucv".to_string() => get_unicode_value,
             ValueType::Text(name) if name == "len".to_string() => get_length,
+            ValueType::Text(name) if name == "find".to_string() => find_in_string,
             ValueType::Text(name) if name == "sub".to_string() => substring,
             ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
             ValueType::Text(name) if name == "version".to_string() => get_version,
@@ -2207,6 +2208,78 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Number(characters[pos] as u32 as f64);
+
+        Ok(())
+    }
+
+    pub fn find_in_string(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        let characters: Vec::<char> = match operands[0].get_value() {
+            ValueType::Text(txt) => txt.chars().collect(),
+            ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
+            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+        };
+
+        let source_len = characters.len();
+
+        let find_characters: Vec::<char> = match operands[1].get_value() {
+            ValueType::Text(txt) => txt.chars().collect(),
+            ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
+            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+        };
+
+        let find_len = find_characters.len();
+
+        if find_len > source_len {
+            return Err(ScriptError::InvalidOperand(opr_mark));
+        }
+
+        let start_pos = if operands.len() >= 3 {
+            match operands[2].get_value() {
+                ValueType::Number(num) => num as usize,
+                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            }
+        } else {
+            0_usize
+        };
+
+        let last_start_pos = source_len - find_len;
+
+        if start_pos > last_start_pos {
+            return Err(ScriptError::InvalidOperand(opr_mark));
+        }
+
+        if source_len == 0_usize {
+            *result_value = ValueType::Number(0_f64);
+
+            return Ok(());
+        }
+
+        for compare_start_pos in start_pos..=last_start_pos {
+            let mut matches = true;
+            let mut compare_find_pos = 0_usize;
+
+            for compare_source_pos in compare_start_pos..(compare_start_pos + find_len) {
+                matches = characters[compare_source_pos] == find_characters[compare_find_pos];
+
+                if !matches {
+                    break;
+                }
+
+                compare_find_pos += 1;
+            }
+
+            if matches {
+                *result_value = ValueType::Number(compare_start_pos as f64);
+
+                return Ok(());
+            }
+        }
+
+        *result_value = ValueType::Empty;
 
         Ok(())
     }
@@ -3188,7 +3261,7 @@ mod tests {
     }
 
     mod exec {
-        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, are_very_near, ScriptError};
+        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, ScriptError, ValueType, are_very_near,};
         use crate::input::{MockByString, StdinReader};
 
         #[test]
@@ -4964,6 +5037,98 @@ mod tests {
             assert_eq!(
                 Err(ScriptError::InvalidOperand('O')),
                 Interpreter::execute_with_mocked_io("O#ucv #Oostende 20".to_string()));
+        }
+
+        #[test]
+        fn x_find_match_in_middle() {
+            assert_eq!(2_f64, Interpreter::execute_with_mocked_io("o`#find #aaabcde #ab 0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_find_match_at_start() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("o`#find #aaabaaacde #aaa 0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_find_match_at_end() {
+            assert_eq!(4_f64, Interpreter::execute_with_mocked_io("o`#find #acabcde #cde 0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_find_no_start_pos_given() {
+            assert_eq!(2_f64, Interpreter::execute_with_mocked_io("o`#find #aaabcde #ab".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_find_not_found() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("to`#find #aaabcde #xyz 0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_find_source_string_length_zero_second_has_chars() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("o`#find # #www 0".to_string()));
+        }
+
+        #[test]
+        fn x_find_source_string_and_find_string_length_zero() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("o`#find # # 0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_find_start_pos_beyond_last_occurrence() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("to`#find #aaabcde #ab 3".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_find_start_pos_beyond_first_occurrence() {
+            assert_eq!(5_f64, Interpreter::execute_with_mocked_io("o`#find #aaabcabde #ab 3".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_find_no_operands() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o(#find)".to_string()));
+        }
+
+        #[test]
+        fn x_find_no_second_operand() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o#find #Yerseke".to_string()));
+        }
+
+        #[test]
+        fn x_find_empty_first_operand() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("$0 Ø o`#find v0 #where 0".to_string()));
+        }
+
+        #[test]
+        fn x_find_empty_find_string() {
+            assert_eq!(3_f64, Interpreter::execute_with_mocked_io("o`#find #aaabcabde # 3".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_find_numeric_first_operand() {
+            assert_eq!(1_f64, Interpreter::execute_with_mocked_io("o`#find 1334 #33 0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_find_start_pos_is_string() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("o`#find #Metapontium #pont #zero".to_string()));
+        }
+
+        #[test]
+        fn x_find_start_pos_beyond_last_possible() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("o`#find #Metapontium #ium 9".to_string()));
         }
     }
 

@@ -423,13 +423,16 @@ Operators
 			If more than one operand is given, the total length of the string representations
 			will be returned.
 
-		O#find string substring
-			(to be implemented)
+		o`#find string substring startpos
 
 			Returns the start position of the first occurence
 			of substring in string.
 
-			This position is zero-based: the first character has position 0.
+			If a fourth argument is present, it's used as the starting position for the search.
+			The position returned, however, still counts from the start of the string.
+			Otherwise, the search starting position is 0.
+
+			The position returned is zero-based: the first character has position 0.
 
 			If the substring is not found in string, this operator returns Ø:
 			the empty value.
@@ -446,9 +449,6 @@ Operators
 					yields 0
 				tO#find [sNo hay remedio] #hay
 					yields 1
-
-			If a fourth argument is present, it's used as the starting position for the search.
-			The position returned, however, still counts from the start of the string.
 	
 			e.g.
 				O(#find #Samovar #a 3)
@@ -505,12 +505,21 @@ Operators
 
 		p Pi
 
+		Ø	the Empty value.
+			This is the upper-case O-with-stroke character (U+00D8),
+			not the zero character.
+
 		c	name
 			named constants
+
+			c#empty
+			(to be implemented)
+				The Empty value; the Ø character is not available on every keyboard.
 
 			c#gold Golden Ratio (sectio aurea)
 
 				Calculated as (1 + sqrt(5))/2
+
 
 	Variables
 
@@ -722,7 +731,10 @@ Operators
 			0 = false,
 			# (empty string) = false,
 			[s] (empty string) = false,
-			uninitialized variable = false,
+			uninitialized variable (empty value) = false,
+			c#empty = false,
+			Ø (the empty value) = false
+
 			everything else = true.
 
 		! not
