@@ -293,6 +293,14 @@ Operators
 			i15 yields 15
 			i~27 yields ~27
 
+			i` fills the number towards the next integer value away from zero,
+					except if the number is already integer.
+				(to be implemented)
+
+			i`.5 yields 1
+			i`~.5 yields -1
+			i`3 yields 3
+
 		a Absolute value
 
 			a8 yields 8
@@ -515,11 +523,12 @@ Operators
 			This is the upper-case O-with-stroke character (U+00D8),
 			not the zero character.
 
+			This is the same as c#empty.
+
 		c	name
 			named constants
 
 			c#empty
-			(to be implemented)
 				The Empty value; the Ø character is not available on every keyboard.
 
 			c#gold Golden Ratio (sectio aurea)

@@ -1,5 +1,5 @@
 use std::env::args;
-use std::io::stdout;
+use std::io::{stdin, stdout};
 use laconic::Interpreter;
 
 fn main() {
@@ -7,6 +7,7 @@ fn main() {
     let mut show_before = false;
     let mut show_after = false;
     let mut do_execute = true;
+    let mut stdin_read = false;
 
     for arg_tuple in args().enumerate() {
         match arg_tuple {
@@ -25,6 +26,19 @@ fn main() {
 
                     if arg.contains('n') {
                         do_execute = false;
+                    }
+
+                    if arg.contains('i') && !stdin_read {
+                        stdin_read = true;
+                        let lines = stdin().lines();
+
+                        for res_line in lines {
+                            if let Ok(line) = res_line {
+                                script.push(' ');
+                                script.push_str(&line);
+                                script.push(' ');
+                            }
+                        }
                     }
                 }
             },
@@ -57,6 +71,7 @@ fn show_syntax() {
     println!("    -n    Don't execute the script");
     println!("    -b    Show the script as a tree of operators before execution.");
     println!("    -a    Show the script as a tree of operators after  execution.");
+    println!("    -i    Include the contents of standard input into the script.");
     println!();
     println!("Options can be combined:");
     println!("    laconic -bn '*440 ^2 /1 12");
@@ -77,4 +92,25 @@ fn show_syntax() {
     println!("'     +:1 v0'");
     println!("'     +:0 1'");
     println!("' v1'");
+    println!();
+    println!("Statements in a script file can be included in the script using the -i parameter.");
+    println!("Statements in the command line before the -i parameter ");
+    println!("will be included before the script file's statements;");
+    println!("Statements in the command line after the -i parameter ");
+    println!("will be included after the script file's statements.");
+    println!();
+    println!("E.g. :");
+    println!("      given script file clearStack.lac having the statements");
+    println!();
+    println!("          Wk`k");
+    println!();
+    println!("      the below command");
+    println!();
+    println!("          $ cat clearStack.lac | laconic 'o#fmt 0 K(10 20 30 40) wk`' -i 'wk`'");
+    println!();
+    println!("      will output:");
+    println!();
+    println!("          4");
+    println!("          0");
+    println!();
 }

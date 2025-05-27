@@ -1649,6 +1649,7 @@ pub(crate) mod opr_funcs {
                     },
                 }
             },
+            ValueType::Text(name) if name == "empty".to_string() => ValueType::Empty,
             _ => return Err(ScriptError::UnknownConstant(const_index.get_string_value("???".to_string()))),
         };
 
@@ -4550,6 +4551,11 @@ mod tests {
         #[test]
         fn x_consts_golden_ratio() {
             assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z#prec .000001   $0 10   $1 *v0c#gold   =/+v0v1 v1 /v1 v0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_consts_empty() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("tc#empty".to_string()).unwrap().numeric_value);
         }
 
         #[test]
