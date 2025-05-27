@@ -28,4 +28,8 @@ And you can also have statements as arguments precede and follow the statements 
 
 	cat scripts/laconic_script.lac | target/release/laconic '[c Statements in argument]' -i '[c More statements in argument ...]'
 
+Moreover, multiple script files can be fed to standard input/
+
+	cat script1.lac script2.lac script3.lac | laconic -i '[c Statements]'
+
 

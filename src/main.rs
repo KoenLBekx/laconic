@@ -93,7 +93,9 @@ fn show_syntax() {
     println!("'     +:0 1'");
     println!("' v1'");
     println!();
-    println!("Statements in a script file can be included in the script using the -i parameter.");
+    println!("Statements in a script file can be included in the script");
+    println!("via standard input using the -i parameter:");
+    println!();
     println!("Statements in the command line before the -i parameter ");
     println!("will be included before the script file's statements;");
     println!("Statements in the command line after the -i parameter ");
@@ -112,5 +114,9 @@ fn show_syntax() {
     println!();
     println!("          4");
     println!("          0");
+    println!();
+    println!("It's even possible to include multiple script files this way: e.g.:");
+    println!();
+    println!("          $ cat script1.cat script2.cat | laconic -i '[c Statements ...]'");
     println!();
 }
