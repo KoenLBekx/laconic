@@ -4,10 +4,10 @@ LACONIC
 		// TODO: indicate the standard number of operands for every operator.
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():`;=<>!&|?°ØabCceFiKklMmNnOopRrSsTtUuvWwXxZ
+			~+-*/%^$():`;=<>!&|?°ØabCcEeFiKklMmNnOopRrSsTtUuvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?°ØabCceFiKklMmNnOopRrSsTt  vWwXxZ
+			~+-*/%^$():`;=<>!&|?°ØabCc eFiKklMmNnOopRrSsTt  vWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   interfere with command line syntax or string literals
@@ -16,7 +16,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			´,@§£€¶µABDdEfGgHhIJjLPQqVz
+			´,@§£€¶µABDdfGgHhIJjLPQqVz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -268,6 +268,18 @@ Operators
 
 			/ 504 7 yields 72
 
+		/` Integer division and remainder
+			(to be implemented)
+			/` dividend divisor
+
+			Returns the quotient of the integer division, and pushes the remainder on the stack.
+
+			E.g.:
+				/` 20 7
+				Returns 2 after having pushed 6 on the stack, so
+				/` 20 7 k
+				would return 6.
+
 		% Modulo (Remainder)
 
 			%7 3 yields 1
@@ -293,9 +305,8 @@ Operators
 			i15 yields 15
 			i~27 yields ~27
 
-			i` fills the number towards the next integer value away from zero,
+		i` ceiling: fills the number towards the next integer value away from zero,
 					except if the number is already integer.
-				(to be implemented)
 
 			i`.5 yields 1
 			i`~.5 yields -1
@@ -1033,6 +1044,10 @@ Operators
 				$23r
 					stores the input read from standard input in variable 23.
 
+		r` reads a line from standard input and evaluates it as a Laconic expression or script.
+			This script shares the same variables, stack e.a. as the calling script.
+			(to be implemented)
+
 	Other
 
 		( Operand number override
@@ -1211,26 +1226,12 @@ Operators
 								o(#fmt 3 #, #) 1200.25      returns 1200,250
 								o(#fmt 3 #, #) 1200.2526    returns 1200,253
 								o(#fmt 6 #. #___) 1200.2526 returns 1_200.252_6
-							
-			o(#quotrem dividend divisor remainder_var)
-
-							Integer division and remainder
-								(to be implemented)
-
-								Returns the integer quotient of dividend/divisor
-								and stores the remainder in the variable designated by remainder_var.
-								This allows both the quotient and the remainder to be known using one division.
-
-								e.g
-									o(#quotrem 17 3 100)	yields 5 and stores 2 in variable 100.
 
 			o#fib  seq
 
 							Fibonacci number
-							(To be replaced by o#fib)
 								(to be implemented)
 
-								(F is the 6th letter.)
 								The seq(uence number) operand is truncated to an integer and converted to its
 								absolute value before being used to get a Fibonacci number.
 								
@@ -1245,7 +1246,7 @@ Operators
 									o #fib 6.1 yields 8
 									o #fib ~6.1 yields 8
 
-			o(#dow year month day)
+			o`#dow year month day
 
 							Day of week
 								(to be implemented)
@@ -1258,7 +1259,7 @@ Operators
 									o(#dow 2024 5 27)	yields 3: monday.
 									O #dow 2024 5			yields 3: tuesday.
 
-			o(#ymd year month day)
+			o`#ymd year month day
 							(to be implemented)
 
 							Sequence number of a day, assuming
@@ -1274,6 +1275,11 @@ Operators
 			(upper case O)
 			
 			See the explanations for the lower case o operator.
+
+		E eval: evaluates a string as a script and executes it.
+			This script shares the variables, stack, e.a. from the calling command.
+
+			(to be implemented)
 
 	Z Set options
 

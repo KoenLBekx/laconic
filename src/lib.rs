@@ -19,9 +19,10 @@ use std::hash::{Hash, Hasher};
 
 // Static lifetime: justified, because the functions referenced
 // are compiled into the application and live as long as it runs.
-// The first parameter should refer to an Expression's value property,
-// the second one to a Expression's operands property (operands are Expression objects),
-// the third one to the Shuttle containing other state.
+// The first parameter should pass the character that encoded the expression,
+// The second one to an Expression's value property,
+// the third one to a Expression's operands property (operands are Expression objects),
+// the fourth one to the Shuttle containing other state.
 type OperatorFunc = &'static dyn Fn(char, &mut ValueType, &mut [Expression], &mut Shuttle) -> Result<(), ScriptError>;
 
 #[derive(PartialEq)]
@@ -333,7 +334,8 @@ impl Expression {
             '+' => &opr_funcs::add,
             '-' => &opr_funcs::minus,
             '*' => &opr_funcs::multiply,
-            '/' => &opr_funcs::divide,
+            '/' if alternative_marks_count == 0 => &opr_funcs::divide,
+            '/' => &opr_funcs::int_div,
             '%' => &opr_funcs::modulo,
             '^' => &opr_funcs::power,
             'l' => &opr_funcs::log,
@@ -1370,6 +1372,40 @@ pub(crate) mod opr_funcs {
 
                     outcome /= op.get_num_value(1f64);
                 },
+            }
+        }
+
+        *result_value = ValueType::Number(outcome);
+
+        Ok(())
+    }
+    
+    pub fn int_div(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        let mut dividend = 0f64;
+        let mut outcome = 0f64;
+        let mut divisor: f64;
+
+        for (count, op) in operands.iter().enumerate() {
+            match count {
+                0 => dividend = op.get_num_value(0f64),
+                1 => {
+                    divisor = op.get_num_value(1f64);
+
+                    if divisor == 0f64 {
+                        return Err(ScriptError::DivideByZero(opr_mark));
+                    }
+
+                    let result_sign = dividend.signum() * divisor.signum();
+                    dividend = dividend.abs();
+                    divisor = divisor.abs();
+                    outcome = dividend.div_euclid(divisor) * result_sign;
+                    shuttle.stack.push(ValueType::Number(dividend.rem_euclid(divisor) * result_sign));
+                },
+                _ => (),
             }
         }
 
@@ -3514,6 +3550,76 @@ mod tests {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('%')),
                 Interpreter::execute_with_mocked_io("%".to_string()));
+        }
+
+        #[test]
+        fn x_modulo_by_zero() {
+            assert_eq!(
+                Err(ScriptError::DivideByZero('%')),
+                Interpreter::execute_with_mocked_io("%8 0".to_string()));
+        }
+
+        #[test]
+        fn x_intdiv_0_op() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('/')),
+                Interpreter::execute_with_mocked_io("/`".to_string()));
+        }
+
+        #[test]
+        fn x_intdiv_1_op() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('/')),
+                Interpreter::execute_with_mocked_io("/`20".to_string()));
+        }
+
+        #[test]
+        fn x_intdiv_2_op_pos() {
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("/`70 20".to_string()).unwrap().numeric_value);
+            assert_eq!(10f64, Interpreter::execute_with_mocked_io("/`70 20 k".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_intdiv_2_op_neg() {
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("/`~70 ~20".to_string()).unwrap().numeric_value);
+            assert_eq!(10f64, Interpreter::execute_with_mocked_io("/`~70 ~20 k".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_intdiv_2_op_pos_neg() {
+            assert_eq!(-3f64, Interpreter::execute_with_mocked_io("/`70 ~20".to_string()).unwrap().numeric_value);
+            assert_eq!(-10f64, Interpreter::execute_with_mocked_io("/`70 ~20 k".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_intdiv_2_op_neg_pos() {
+            assert_eq!(-3f64, Interpreter::execute_with_mocked_io("/`~70 20".to_string()).unwrap().numeric_value);
+            assert_eq!(-10f64, Interpreter::execute_with_mocked_io("/`~70 20 k".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_intdiv_2_op_int_frac() {
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("/`70 20.5".to_string()).unwrap().numeric_value);
+            assert_eq!(8.5f64, Interpreter::execute_with_mocked_io("/`70 20.5 k".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_intdiv_2_op_frac_frac() {
+            assert_eq!(2f64, Interpreter::execute_with_mocked_io("/`3.7 1.4".to_string()).unwrap().numeric_value);
+            assert!(are_very_near(0.9f64, Interpreter::execute_with_mocked_io("/`3.7 1.4 k".to_string()).unwrap().numeric_value));
+        }
+
+        #[test]
+        fn x_intdiv_3_op() {
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("/`(70 20 8)".to_string()).unwrap().numeric_value);
+            assert_eq!(10f64, Interpreter::execute_with_mocked_io("/`(70 20 8) k".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_intdiv_by_zero() {
+            assert_eq!(
+                Err(ScriptError::DivideByZero('/')),
+                Interpreter::execute_with_mocked_io("/`8 0".to_string()));
         }
 
         #[test]
