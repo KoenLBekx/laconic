@@ -269,7 +269,6 @@ Operators
 			/ 504 7 yields 72
 
 		/` Integer division and remainder
-			(to be implemented)
 			/` dividend divisor
 
 			Returns the quotient of the integer division, and pushes the remainder on the stack.
@@ -1249,7 +1248,6 @@ Operators
 			o`#dow year month day
 
 							Day of week
-								(to be implemented)
 
 								Returns a number from 0 to 6, where 0 is Saturday and 6 is Friday.
 
@@ -1269,6 +1267,10 @@ Operators
 
 								(Laconic's calendar operators calculate within the fiction
 								of the Gregorian calendar having been used since Roman imperial era.)
+
+			o#leap year
+
+				Returns 1 if year is a leap year, else 0.
 		
 		O Operator designated by name, 3 operands
 		

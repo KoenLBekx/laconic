@@ -2088,6 +2088,8 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "lower".to_string() => lower,
             ValueType::Text(name) if name == "upper".to_string() => upper,
             ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
+            ValueType::Text(name) if name == "leap".to_string() => opr_leap,
+            ValueType::Text(name) if name == "dow".to_string() => dow,
             ValueType::Text(name) if name == "version".to_string() => get_version,
             unknown =>  {
                 *result_value = default_outcome;
@@ -2218,6 +2220,115 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Number(tot_len as f64);
+
+        Ok(())
+    }
+
+    pub(crate) fn is_leap_year(year: f64) -> bool {
+        let int_year = year as u32;
+
+        if int_year % 4 != 0 {
+            false
+        } else if int_year % 100 != 0 {
+            true
+        } else {
+            int_year % 400 == 0
+        }
+    }
+
+    pub fn opr_leap(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        *result_value = ValueType::Number(
+            match operands[0].get_value() {
+                ValueType::Number(year) => {
+                   if is_leap_year(year) {1_f64} else {0_f64} 
+                },
+                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            }
+        );
+
+        Ok(())
+    }
+
+    pub(crate) fn days_in_month(month: u32, is_leap_year: bool) -> u32 {
+        match month {
+            1 => 31,
+            2 if is_leap_year => 29,
+            2 => 28,
+            3 => 31,
+            4 => 30,
+            5 => 31,
+            6 => 30,
+            7 => 31,
+            8 => 31,
+            9 => 30,
+            10 => 31,
+            11 => 30,
+            12 => 31,
+            _ => 0,
+        }
+    }
+
+    pub fn dow(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 3 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+        
+        let mut year_float = 0_f64;
+        let mut year = 0_u32;
+        let mut month = 0_u32;
+        let mut day = 0_u32;
+
+        for (count, opd) in operands.iter().enumerate() {
+            match opd.get_value() {
+                ValueType::Number(n) => if n >= 0_f64 {
+                    match count {
+                        0 => {
+                            year_float = n;
+                            year = n as u32;
+                        },
+                        1 => month = n as u32,
+                        2 => day = n as u32,
+                        _ => (),
+                    }
+                } else {
+                    return Err(ScriptError::InvalidOperand(opr_mark));
+                },
+                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            }
+        }
+
+        if (month) == 0 || (month > 12) {
+            return Err(ScriptError::InvalidOperand(opr_mark));
+        }
+
+        if (day == 0) || (day > 31) {
+            return Err(ScriptError::InvalidOperand(opr_mark));
+        }
+
+        let century = year / 100;
+        let year_in_century = year % 100;
+        let century_offset = (7 - ((century % 4) * 2)) % 7;
+        let year_offset = century_offset + year_in_century + (year_in_century / 4);
+        let mut month_offset = 0;
+
+        for m in 1..month {
+            month_offset += days_in_month(m, false);
+        }
+
+        if is_leap_year(year_float) && (month <= 2) {
+            month_offset = 7 + month_offset - 1;
+        }
+
+        #[cfg(test)]
+        println!("month_offset: {}", month_offset % 7);
+
+        let day_of_week = (year_offset + month_offset + day) % 7;
+
+        *result_value = ValueType::Number(day_of_week as f64);
 
         Ok(())
     }
@@ -3328,7 +3439,7 @@ mod tests {
     }
 
     mod exec {
-        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, ScriptError, ValueType, are_very_near,};
+        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, ScriptError, ValueType, are_very_near, opr_funcs::is_leap_year};
         use crate::input::{MockByString, StdinReader};
 
         #[test]
@@ -5391,6 +5502,76 @@ mod tests {
                 "易經".to_string(),
                 Interpreter::execute_with_mocked_io("o#upper [s易經]".to_string()).unwrap().string_representation
             );
+        }
+
+        #[test]
+        fn is_leap_year_1900() {
+            assert!(!is_leap_year(1900_f64));
+        }
+
+        #[test]
+        fn is_leap_year_2000() {
+            assert!(is_leap_year(2000_f64));
+        }
+
+        #[test]
+        fn is_leap_year_2011() {
+            assert!(!is_leap_year(2011_f64));
+        }
+
+        #[test]
+        fn is_leap_year_2012() {
+            assert!(is_leap_year(2012_f64));
+        }
+
+        #[test]
+        fn x_leap_false() {
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("o#leap 1998".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_leap_true() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("o#leap 1996".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_dow() {
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("o`#dow 2025 5 31".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_dow_xxc() {
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("o`#dow 1903 12 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_dow_2000_jan() {
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("o`#dow 2000 1 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_dow_2000_feb() {
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("o`#dow 2000 2 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_dow_1900_jan() {
+            assert_eq!(2f64, Interpreter::execute_with_mocked_io("o`#dow 1900 1 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_dow_1900_dec() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("o`#dow 1900 12 2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_dow_2024_dec() {
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("o`#dow 2024 12 31".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_dow_2024_feb() {
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("o`#dow 2024 2 29".to_string()).unwrap().numeric_value);
         }
     }
 
