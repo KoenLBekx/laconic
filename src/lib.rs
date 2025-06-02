@@ -2087,6 +2087,7 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "sub".to_string() => substring,
             ValueType::Text(name) if name == "lower".to_string() => lower,
             ValueType::Text(name) if name == "upper".to_string() => upper,
+            ValueType::Text(name) if name == "proper".to_string() => proper,
             ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
             ValueType::Text(name) if name == "leap".to_string() => opr_leap,
             ValueType::Text(name) if name == "dow".to_string() => dow,
@@ -2506,6 +2507,38 @@ pub(crate) mod opr_funcs {
             ValueType::Number(num) => shuttle.number_format.format(num),
             _ => return Err(ScriptError::InvalidOperand(opr_mark)),
         }.to_uppercase());
+
+        Ok(())
+    }
+
+    pub fn proper(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 1 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        let mut result = String::new();
+        let mut is_new_word = true;
+
+        for c in match operands[0].get_value() {
+            ValueType::Text(txt) => txt,
+            ValueType::Number(num) => shuttle.number_format.format(num),
+            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+        }.chars(){
+            let new_chars: Box<dyn Iterator<Item = char>> =  
+                if is_new_word {
+                    Box::new(c.to_uppercase())
+                } else {
+                    Box::new(c.to_lowercase())
+                };
+
+            for newc in new_chars {
+                result.push(newc);
+            }
+
+            is_new_word =  c.is_whitespace();
+        }
+
+        *result_value = ValueType::Text(result);
 
         Ok(())
     }
@@ -5501,6 +5534,46 @@ mod tests {
             assert_eq!(
                 "易經".to_string(),
                 Interpreter::execute_with_mocked_io("o#upper [s易經]".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_proper_from_lower() {
+            assert_eq!(
+                "How Now Brown Cow".to_string(),
+                Interpreter::execute_with_mocked_io("o#proper [show now brown cow]".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_proper_from_upper() {
+            assert_eq!(
+                "How Now Brown Cow".to_string(),
+                Interpreter::execute_with_mocked_io("o#proper [sHOW NOW BROWN COW]".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_proper_sz() {
+            assert_eq!(
+                "SS".to_string(),
+                Interpreter::execute_with_mocked_io("o#proper #ß".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_proper_number() {
+            assert_eq!(
+                "4_520".to_string(),
+                Interpreter::execute_with_mocked_io("o`#fmt 0 #. #_ o#proper 4520".to_string()).unwrap().string_representation
+            );
+        }
+
+        #[test]
+        fn x_proper_empty() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("o#proper c#empty".to_string())
             );
         }
 

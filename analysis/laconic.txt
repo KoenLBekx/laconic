@@ -514,7 +514,6 @@ Operators
 						yields "MCINTOSH"
 
 		o#proper string
-			(to be implemented)
 
 			Returns the all proper-case form of a string:
 			the first character in upper case, the rest in lower case.
@@ -1257,7 +1256,7 @@ Operators
 									o(#dow 2024 5 27)	yields 3: monday.
 									O #dow 2024 5			yields 3: tuesday.
 
-			o`#ymd year month day
+			o`#seq year month day
 							(to be implemented)
 
 							Sequence number of a day, assuming
@@ -1267,6 +1266,22 @@ Operators
 
 								(Laconic's calendar operators calculate within the fiction
 								of the Gregorian calendar having been used since Roman imperial era.)
+
+			o#sqy sequence_number
+							(to be implemented)
+
+							The year of the date the sequence number is associated with.
+
+			o#sqm sequence_number
+							(to be implemented)
+
+							The month of the date the sequence number is associated with.
+
+			o#sqd sequence_number
+							(to be implemented)
+
+							The day-in-month of the date the sequence number is associated with.
+							
 
 			o#leap year
 
