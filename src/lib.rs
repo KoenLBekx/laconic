@@ -2091,6 +2091,7 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
             ValueType::Text(name) if name == "leap".to_string() => opr_leap,
             ValueType::Text(name) if name == "dow".to_string() => dow,
+            ValueType::Text(name) if name == "greg".to_string() => gregorian_seq,
             ValueType::Text(name) if name == "version".to_string() => get_version,
             unknown =>  {
                 *result_value = default_outcome;
@@ -2330,6 +2331,143 @@ pub(crate) mod opr_funcs {
         let day_of_week = (year_offset + month_offset + day) % 7;
 
         *result_value = ValueType::Number(day_of_week as f64);
+
+        Ok(())
+    }
+
+    pub fn gregorian_seq(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 3 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+        
+        let mut year_float = 0_f64;
+        let mut year = 0_u32;
+        let mut month = 0_u32;
+        let mut day = 0_u32;
+
+        for (count, opd) in operands.iter().enumerate() {
+            match opd.get_value() {
+                ValueType::Number(n) => if n >= 0_f64 {
+                    match count {
+                        0 => {
+                            year_float = n;
+                            year = n as u32;
+                        },
+                        1 => month = n as u32,
+                        2 => day = n as u32,
+                        _ => (),
+                    }
+                } else {
+                    return Err(ScriptError::InvalidOperand(opr_mark));
+                },
+                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            }
+        }
+
+        if (month) == 0 || (month > 12) {
+            return Err(ScriptError::InvalidOperand(opr_mark));
+        }
+
+        if (day == 0) || (day > 31) {
+            return Err(ScriptError::InvalidOperand(opr_mark));
+        }
+
+        const DAYS_IN_YEAR :u32 = 365;
+
+        // One leap year
+        let days_in_four_years = (DAYS_IN_YEAR * 4) + 1;
+
+        // The first year isn't a leap year.
+        let days_in_century = (days_in_four_years * 25) - 1;
+
+        // The first year is a leap year again.
+        let days_in_four_centuries = (days_in_century * 4) + 1;
+
+        let mut result = if year > 0 {366} else {0};
+        let mut years_counted = 0;
+        let mut year_tested = 0;
+
+        let mut year_increment = 400;
+
+        loop {
+            year_tested = years_counted + year_increment;
+
+            if year_tested < year {
+                result += days_in_four_centuries;
+                years_counted = year_tested;
+            } else {
+                break;
+            }
+
+            #[cfg(test)]
+            println!("years_counted: {}", years_counted);
+        }
+
+        let mut year_increment = 100;
+
+        loop {
+            year_tested = years_counted + year_increment;
+
+            if year_tested < year {
+                result += days_in_century;
+                years_counted = year_tested;
+            } else {
+                break;
+            }
+
+            #[cfg(test)]
+            println!("years_counted: {}", years_counted);
+        }
+
+        let mut year_increment = 4;
+
+        loop {
+            year_tested = years_counted + year_increment;
+
+            if year_tested < year {
+                result += days_in_four_years;
+                years_counted = year_tested;
+            } else {
+                break;
+            }
+
+            #[cfg(test)]
+            println!("years_counted: {}", years_counted);
+        }
+
+        let mut year_increment = 1;
+
+        loop {
+            year_tested = years_counted + year_increment;
+
+            if year_tested < year {
+                result += DAYS_IN_YEAR;
+                years_counted = year_tested;
+            } else {
+                break;
+            }
+
+            #[cfg(test)]
+            println!("years_counted: {}", years_counted);
+        }
+
+        let is_leap_year = is_leap_year(year_float);
+        let mut months_counted = 0;
+        let mut months_tested = 0;
+
+        loop {
+            months_counted += 1;
+
+            if months_counted < month {
+                result += days_in_month(months_counted, is_leap_year);
+            } else {
+                break;
+            }
+        }
+
+        result += day;
+
+        *result_value = ValueType::Number(result as f64);
 
         Ok(())
     }
@@ -5645,6 +5783,56 @@ mod tests {
         #[test]
         fn x_dow_2024_feb() {
             assert_eq!(5f64, Interpreter::execute_with_mocked_io("o`#dow 2024 2 29".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_greg_first() {
+            assert_eq!(1_f64, Interpreter::execute_with_mocked_io("o`#greg 0 1 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_greg_first_month_of_march() {
+            assert_eq!(70_f64, Interpreter::execute_with_mocked_io("o`#greg 0 3 10".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_greg_last_of_first_year() {
+            assert_eq!(366_f64, Interpreter::execute_with_mocked_io("o`#greg 0 12 31".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_greg_one_year_plus() {
+            assert_eq!(731_f64, Interpreter::execute_with_mocked_io("o`#greg 1 12 31".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_greg_last_of_first_century() {
+            let expected = ((365 * 100) + 25) as f64;
+            assert_eq!(expected, Interpreter::execute_with_mocked_io("o`#greg 99 12 31".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_greg_last_of_second_century() {
+            let expected = ((365 * 200) + (24 * 2) + 1) as f64;
+            assert_eq!(expected, Interpreter::execute_with_mocked_io("o`#greg 199 12 31".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_greg_last_of_fourth_century() {
+            let expected = ((365 * 400) + (24 * 4) + 1) as f64;
+            assert_eq!(expected, Interpreter::execute_with_mocked_io("o`#greg 399 12 31".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_greg_last_of_fifth_century() {
+            let expected = ((365 * 500) + (24 * 5) + 2) as f64;
+            assert_eq!(expected, Interpreter::execute_with_mocked_io("o`#greg 499 12 31".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_greg_in_2000() {
+            let expected = ((365 * 2000) + (24 * 20) + 5 + 61) as f64;
+            assert_eq!(expected, Interpreter::execute_with_mocked_io("o`#greg 2000 3 1".to_string()).unwrap().numeric_value);
         }
     }
 

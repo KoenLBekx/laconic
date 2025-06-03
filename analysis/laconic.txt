@@ -948,7 +948,7 @@ Operators
 
 			As routines defined by the bare R operator (no `) don't have access to the variables of the calling code,
 			values have to be passed to it by putting items on the stack.
-			Mind that the stack items are read in reverse order : last-in, first-out.
+			Mind that the stack items are read in REVERSE ORDER : last-in, first-out.
 
 			E.g.:
 				[c This routine returns the average of the items on the stack.]
@@ -1256,10 +1256,9 @@ Operators
 									o(#dow 2024 5 27)	yields 3: monday.
 									O #dow 2024 5			yields 3: tuesday.
 
-			o`#seq year month day
-							(to be implemented)
+			o`#greg year month day
 
-							Sequence number of a day, assuming
+							Sequence number of a day in the Gregorian calendar, assuming
 
 								- January 1, year 0001 AD was day 1;
 								- December 31, year 0001 BC was day -1.
@@ -1267,21 +1266,20 @@ Operators
 								(Laconic's calendar operators calculate within the fiction
 								of the Gregorian calendar having been used since Roman imperial era.)
 
-			o#sqy sequence_number
+			o#gregy sequence_number
 							(to be implemented)
 
 							The year of the date the sequence number is associated with.
 
-			o#sqm sequence_number
+			o#gregm sequence_number
 							(to be implemented)
 
 							The month of the date the sequence number is associated with.
 
-			o#sqd sequence_number
+			o#gregd sequence_number
 							(to be implemented)
 
 							The day-in-month of the date the sequence number is associated with.
-							
 
 			o#leap year
 

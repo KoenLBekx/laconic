@@ -1,0 +1,105 @@
+[c	Iterates through all days from jan 1, 0000 up to dec 31, 2025
+		and checks if the sequence number is one more than the previous one.
+
+		If, at the end the script outputs
+			2026 13 32
+		then all sequence numbers were correct.
+
+		Otherwise, the year, month and day of the first erroneous sequence number
+		are output.
+]
+
+R
+	#daysInMonth
+	;;
+		$#leap k
+		$#m k
+		?=v#m 2 
+			?v#leap 29 28
+			?<v#m 8
+				?=%v#m 2 1
+					31
+					30
+				?=%v#m 2 1
+					30
+					31
+
+o`#fmt 0 #. #
+$#y 0
+$#prev 0
+$#endYear 2026
+
+W
+	<
+		v#y
+		v#endYear
+	;(
+		$#m 1
+
+		W
+			<
+				v#m
+				13
+			;(
+				$#d 1
+				$
+					#days
+					X(
+						#daysInMonth
+						v#m
+						o#leap v#y
+					)
+
+				W
+					!>
+						v#d
+						v#days
+					;(
+						$#seq o`#greg v#y v#m v#d
+						+:#prev 1
+
+						[c
+							w+(
+								[sseq: ]
+								v#seq
+								[s prev: ]
+								v#prev
+							)
+						]
+
+						?
+							!=
+								v#seq
+								v#prev
+							;(
+								w+(
+									[sWrong sequence number for (YMD): ]
+									v#y
+									[s ]
+									v#m
+									[s ]
+									v#d
+								)
+
+								$#y v#endYear
+								$#m 13
+								$#d 32
+							)
+							0
+						+:#d 1
+					)
+				+:#m 1
+			)
+		+:#y 1
+	)
+
+w+(
+	#
+	v#y
+	[s ]
+	v#m
+	[s ]
+	v#d
+	o#uni 10
+)
+
