@@ -1266,20 +1266,33 @@ Operators
 								(Laconic's calendar operators calculate within the fiction
 								of the Gregorian calendar having been used since Roman imperial era.)
 
+								No negative years are accepted.
+
 			o#gregy sequence_number
-							(to be implemented)
 
 							The year of the date the sequence number is associated with.
+							Numbers smaller than 1 yield an error message.
 
 			o#gregm sequence_number
-							(to be implemented)
 
 							The month of the date the sequence number is associated with.
+							Numbers smaller than 1 yield an error message.
 
 			o#gregd sequence_number
-							(to be implemented)
 
 							The day-in-month of the date the sequence number is associated with.
+							Numbers smaller than 1 yield an error message.
+
+			o#gregt sequence_number
+							(to be implemented)
+
+							A YYYY-MM-DD text representation of the date the sequence number is associated with.
+							Numbers smaller than 1 yield an error message.
+
+							E.g.:
+								$#seq + o`#greg 2025 6 4 365 o#gregt v#seq
+									yields
+								"2026-06-04"
 
 			o#leap year
 

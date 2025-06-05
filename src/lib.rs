@@ -597,6 +597,30 @@ struct Routine {
     in_new_variables_scope: bool,
 }
 
+enum DateInfoItem {
+    Year,
+    Month,
+    Day,
+}
+
+#[derive(Clone)]
+struct GregorianDateInfo {
+    sequence_nr: f64,
+    year: f64,
+    month: f64,
+    day: f64,
+}
+
+impl GregorianDateInfo {
+    fn get_info(&self, item: &DateInfoItem) -> f64 {
+        match item {
+            DateInfoItem::Year => self.year,
+            DateInfoItem::Month => self.month,
+            DateInfoItem::Day => self.day,
+        }
+    }
+}
+
 // Shuttle objects are used to be passed to every operator function
 // to provide state other than the operands.
 struct Shuttle {
@@ -612,9 +636,13 @@ struct Shuttle {
     number_format: NumberFormat,
     writer: Box<dyn output::EchoingWriter>,
     reader: Box<dyn input::StdinOrMock>,
+    last_calculated_gregorian_day: Option<GregorianDateInfo>,
 
     #[cfg(test)]
     golden_ratio_calculations: u8,
+
+    #[cfg(test)]
+    date_item_calculations: u8,
 }
 
 impl Shuttle {
@@ -632,8 +660,13 @@ impl Shuttle {
             number_format: NumberFormat::new(),
             writer,
             reader,
+            last_calculated_gregorian_day: None,
+
             #[cfg(test)]
             golden_ratio_calculations: 0u8,
+
+            #[cfg(test)]
+            date_item_calculations: 0u8,
         }
     }
 
@@ -1103,7 +1136,9 @@ pub mod output {
 
 pub(crate) mod opr_funcs {
     use std::collections::HashMap;
-    use super::{Expression, NO_VALUE, Routine, ScriptError, Shuttle, ValueType, are_near};
+    use super::{DateInfoItem, Expression, GregorianDateInfo, NO_VALUE, Routine, ScriptError, Shuttle, ValueType, are_near};
+
+    const DAYS_IN_YEAR :u32 = 365;
 
     fn has_any_string_operands(operands: &[Expression]) -> bool {
         let mut opd_count = 0usize;
@@ -1179,7 +1214,11 @@ pub(crate) mod opr_funcs {
                         has_pending_digit = true;
                         digit_value = (digit_value * 10) + char_val - diff_0;
                     } else {
-                        digits.push(char_val - if ch <= '9' { diff_0 } else { diff_a });
+                        digits.push(char_val - if ch <= '9' {
+                            diff_0
+                        } else {
+                            diff_a
+                        });
                     }
                 },
                 // Ignore spaces if single-character digits are used (base <= 36).
@@ -2092,6 +2131,9 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "leap".to_string() => opr_leap,
             ValueType::Text(name) if name == "dow".to_string() => dow,
             ValueType::Text(name) if name == "greg".to_string() => gregorian_seq,
+            ValueType::Text(name) if name == "gregy".to_string() => gregorian_year,
+            ValueType::Text(name) if name == "gregm".to_string() => gregorian_month,
+            ValueType::Text(name) if name == "gregd".to_string() => gregorian_day,
             ValueType::Text(name) if name == "version".to_string() => get_version,
             unknown =>  {
                 *result_value = default_outcome;
@@ -2246,7 +2288,11 @@ pub(crate) mod opr_funcs {
         *result_value = ValueType::Number(
             match operands[0].get_value() {
                 ValueType::Number(year) => {
-                   if is_leap_year(year) {1_f64} else {0_f64} 
+                   if is_leap_year(year) {
+                       1_f64
+                    } else {
+                        0_f64
+                    }
                 },
                 _ => return Err(ScriptError::InvalidOperand(opr_mark)),
             }
@@ -2372,8 +2418,6 @@ pub(crate) mod opr_funcs {
             return Err(ScriptError::InvalidOperand(opr_mark));
         }
 
-        const DAYS_IN_YEAR :u32 = 365;
-
         // One leap year
         let days_in_four_years = (DAYS_IN_YEAR * 4) + 1;
 
@@ -2383,9 +2427,14 @@ pub(crate) mod opr_funcs {
         // The first year is a leap year again.
         let days_in_four_centuries = (days_in_century * 4) + 1;
 
-        let mut result = if year > 0 {366} else {0};
+        let mut result = if year > 0 {
+            366
+        } else {
+            0
+        };
+
         let mut years_counted = 0;
-        let mut year_tested = 0;
+        let mut year_tested: u32;
 
         let mut year_increment = 400;
 
@@ -2403,7 +2452,7 @@ pub(crate) mod opr_funcs {
             println!("years_counted: {}", years_counted);
         }
 
-        let mut year_increment = 100;
+        year_increment = 100;
 
         loop {
             year_tested = years_counted + year_increment;
@@ -2419,7 +2468,7 @@ pub(crate) mod opr_funcs {
             println!("years_counted: {}", years_counted);
         }
 
-        let mut year_increment = 4;
+        year_increment = 4;
 
         loop {
             year_tested = years_counted + year_increment;
@@ -2435,7 +2484,7 @@ pub(crate) mod opr_funcs {
             println!("years_counted: {}", years_counted);
         }
 
-        let mut year_increment = 1;
+        year_increment = 1;
 
         loop {
             year_tested = years_counted + year_increment;
@@ -2453,7 +2502,6 @@ pub(crate) mod opr_funcs {
 
         let is_leap_year = is_leap_year(year_float);
         let mut months_counted = 0;
-        let mut months_tested = 0;
 
         loop {
             months_counted += 1;
@@ -2470,6 +2518,161 @@ pub(crate) mod opr_funcs {
         *result_value = ValueType::Number(result as f64);
 
         Ok(())
+    }
+
+    pub(crate) fn greg_sequence_to_date(seq_nr: f64) -> Result<GregorianDateInfo, ()> {
+        if seq_nr < 1_f64 {
+            return Err(());
+        }
+
+        // One leap year
+        let days_in_four_years = (DAYS_IN_YEAR * 4) + 1;
+
+        // The first year isn't a leap year.
+        let days_in_century = (days_in_four_years * 25) - 1;
+
+        // The first year is a leap year again.
+        let days_in_four_centuries = (days_in_century * 4) + 1;
+
+        let days_in_leap_century = days_in_century + 1;
+        let days_in_leap_year = DAYS_IN_YEAR + 1;
+
+        #[cfg(test)]
+        {
+            println!("days in four years: {}", days_in_four_years);
+            println!("days in century: {}", days_in_century);
+            println!("days in leap century: {}", days_in_leap_century);
+            println!("days in four centuries: {}", days_in_four_centuries);
+        }
+
+        let mut seq = seq_nr as u32;
+        let mut year = 0;
+        let mut month: u32;
+        let day: u32;
+
+        let mut count = seq / days_in_four_centuries;
+        year += 400 * count;
+        seq = seq % days_in_four_centuries;
+
+        // The first century starts with a leap year.
+        if seq >= days_in_leap_century {
+            seq -= days_in_leap_century;
+            year += 100;
+        }
+
+        count = seq / days_in_century;
+        year += 100 * count;
+        seq = seq % days_in_century;
+
+        count = seq / days_in_four_years;
+        year += 4 * count;
+        seq = seq % days_in_four_years;
+
+        // The first year is a leap year.
+        if seq >= days_in_leap_year {
+            seq -= days_in_leap_year;
+            year += 1;
+        }
+
+        count = seq / DAYS_IN_YEAR;
+        year += count;
+        seq = seq % DAYS_IN_YEAR;
+
+        if seq == 0 {
+            year -= 1;
+            month = 12;
+            day = 31;
+        } else {
+            let is_leap = is_leap_year(year as f64);
+            month = 1;
+            let mut month_days: u32;
+
+            loop {
+                month_days = days_in_month(month, is_leap);
+
+                if seq > month_days {
+                    month += 1;
+
+                    if month == 13 {
+                        panic!("greg_sequence_to_date: month can never be 13.");
+                    }
+
+                    seq -= month_days;
+                } else {
+                    break;
+                }
+            }
+
+            day = seq;
+        }
+
+        Ok(GregorianDateInfo {
+            sequence_nr: seq_nr,
+            year: year as f64,
+            month: month as f64,
+            day: day as f64,
+        })
+    }
+
+    pub fn gregorian_date_item(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, item: DateInfoItem) -> Result<(), ScriptError> {
+        if operands.len() < 1 {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        let seq_nr = match operands[0].get_value() {
+            ValueType::Number(num) => num,
+            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+        };
+
+        let item_opt = match shuttle.last_calculated_gregorian_day {
+            Some(ref date_info) =>
+                if date_info.sequence_nr == seq_nr {
+                    Some(date_info.get_info(&item))
+                } else {
+                    None
+                },
+            None => None,
+        };
+
+        #[cfg(test)]
+        if shuttle.date_item_calculations == 255 {
+            shuttle.date_item_calculations = 0;
+        }
+
+
+        let item_info = if item_opt.is_some() {
+            item_opt.expect("One should always be able to unwrap an Option::Some(_)")
+        } else {
+
+            #[cfg(test)]
+            {
+                shuttle.date_item_calculations += 1;
+            }
+
+            match greg_sequence_to_date(seq_nr) {
+                Ok(date_info) => {
+                    shuttle.last_calculated_gregorian_day = Some(date_info.clone());
+                    date_info.get_info(&item)
+                },
+                Err(_) => return Err(ScriptError::InvalidOperand(opr_mark)),
+            }
+        };
+
+        *result_value = ValueType::Number(item_info);
+
+        Ok(())
+    }
+
+    pub fn gregorian_year(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Year)
+    }
+
+    pub fn gregorian_month(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Month)
+    }
+
+    pub fn gregorian_day(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Day)
     }
 
     pub fn get_unicode_value(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
@@ -3610,8 +3813,9 @@ mod tests {
     }
 
     mod exec {
-        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, ScriptError, ValueType, are_very_near, opr_funcs::is_leap_year};
+        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, ScriptError, ValueType, are_very_near};
         use crate::input::{MockByString, StdinReader};
+        use crate::opr_funcs::{greg_sequence_to_date, is_leap_year};
 
         #[test]
         fn x_nop_hex_case_insensitive() {
@@ -5833,6 +6037,175 @@ mod tests {
         fn x_greg_in_2000() {
             let expected = ((365 * 2000) + (24 * 20) + 5 + 61) as f64;
             assert_eq!(expected, Interpreter::execute_with_mocked_io("o`#greg 2000 3 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn greg_seq_0() {
+            let date_info = greg_sequence_to_date(0_f64);
+            assert!(date_info.is_err());
+        }
+
+        #[test]
+        fn greg_seq_1() {
+            let date_info = greg_sequence_to_date(1_f64).unwrap();
+            assert_eq!(0_f64, date_info.year);
+            assert_eq!(1_f64, date_info.month);
+            assert_eq!(1_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_0_2_29() {
+            let date_info = greg_sequence_to_date(60_f64).unwrap();
+            assert_eq!(0_f64, date_info.year);
+            assert_eq!(2_f64, date_info.month);
+            assert_eq!(29_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_0_12_31() {
+            let date_info = greg_sequence_to_date(366_f64).unwrap();
+            assert_eq!(0_f64, date_info.year);
+            assert_eq!(12_f64, date_info.month);
+            assert_eq!(31_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_1_1_1() {
+            let date_info = greg_sequence_to_date(367_f64).unwrap();
+            assert_eq!(1_f64, date_info.year);
+            assert_eq!(1_f64, date_info.month);
+            assert_eq!(1_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_1_12_31() {
+            let date_info = greg_sequence_to_date(731_f64).unwrap();
+            assert_eq!(1_f64, date_info.year);
+            assert_eq!(12_f64, date_info.month);
+            assert_eq!(31_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_2_1_1() {
+            let date_info = greg_sequence_to_date(732_f64).unwrap();
+            assert_eq!(2_f64, date_info.year);
+            assert_eq!(1_f64, date_info.month);
+            assert_eq!(1_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_4_2_29() {
+            let date_info = greg_sequence_to_date(1521_f64).unwrap();
+            assert_eq!(4_f64, date_info.year);
+            assert_eq!(2_f64, date_info.month);
+            assert_eq!(29_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_6_3_1() {
+            let date_info = greg_sequence_to_date(2252_f64).unwrap();
+            assert_eq!(6_f64, date_info.year);
+            assert_eq!(3_f64, date_info.month);
+            assert_eq!(1_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_99_12_31() {
+            let date_info = greg_sequence_to_date(36525_f64).unwrap();
+            assert_eq!(99_f64, date_info.year);
+            assert_eq!(12_f64, date_info.month);
+            assert_eq!(31_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_100_1_1() {
+            let date_info = greg_sequence_to_date(36526_f64).unwrap();
+            assert_eq!(100_f64, date_info.year);
+            assert_eq!(1_f64, date_info.month);
+            assert_eq!(1_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_100_3_1() {
+            let date_info = greg_sequence_to_date(36585_f64).unwrap();
+            assert_eq!(100_f64, date_info.year);
+            assert_eq!(3_f64, date_info.month);
+            assert_eq!(1_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_399_12_31() {
+            let date_info = greg_sequence_to_date(146097_f64).unwrap();
+            assert_eq!(399_f64, date_info.year);
+            assert_eq!(12_f64, date_info.month);
+            assert_eq!(31_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_400_1_1() {
+            let date_info = greg_sequence_to_date(146098_f64).unwrap();
+            assert_eq!(400_f64, date_info.year);
+            assert_eq!(1_f64, date_info.month);
+            assert_eq!(1_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_400_3_1() {
+            let date_info = greg_sequence_to_date(146158_f64).unwrap();
+            assert_eq!(400_f64, date_info.year);
+            assert_eq!(3_f64, date_info.month);
+            assert_eq!(1_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_600_3_1() {
+            let date_info = greg_sequence_to_date(219206_f64).unwrap();
+            assert_eq!(600_f64, date_info.year);
+            assert_eq!(3_f64, date_info.month);
+            assert_eq!(1_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_2024_12_31() {
+            let date_info = greg_sequence_to_date(739617_f64).unwrap();
+            assert_eq!(2024_f64, date_info.year);
+            assert_eq!(12_f64, date_info.month);
+            assert_eq!(31_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_2025_9_10() {
+            let date_info = greg_sequence_to_date(739870_f64).unwrap();
+            assert_eq!(2025_f64, date_info.year);
+            assert_eq!(9_f64, date_info.month);
+            assert_eq!(10_f64, date_info.day);
+        }
+
+        #[test]
+        fn x_gregy() {
+            assert_eq!(2025_f64, Interpreter::execute_with_mocked_io("o#gregy 739870".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_gregm() {
+            assert_eq!(9_f64, Interpreter::execute_with_mocked_io("o#gregm 739870".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_gregd() {
+            assert_eq!(10_f64, Interpreter::execute_with_mocked_io("o#gregd 739870".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_greg_ymd() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let mut interpreter = Interpreter::new(writer, reader);
+            interpreter.execute_opts("o#gregy 730545".to_string(), true, false, false).unwrap();
+            interpreter.execute_opts("o#gregm 730545".to_string(), true, false, false).unwrap();
+            interpreter.execute_opts("o#gregd 730545".to_string(), true, false, false).unwrap();
+
+            assert_eq!(1, interpreter.shuttle.date_item_calculations);
         }
     }
 
