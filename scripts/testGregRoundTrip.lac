@@ -1,0 +1,42 @@
+[c
+	Tests every day sequence number in the range 1 ... 740000
+	calculating the corresponding year, month and day
+	and checking if the sequence number for these numbers
+	is the original one again.
+]
+
+$#first 1
+$#last  740000 [c 2026-01-18]
+Z#loops +v#last 1
+$#testOk 1 
+
+F
+	v#first
+	v#last
+	1
+	#seq 
+	;(
+		$#y o#gregy v#seq
+		$#m o#gregm v#seq
+		$#d o#gregd v#seq
+		$#calc o`#greg v#y v#m v#d
+		$
+			#testOk
+			=
+				v#seq
+				v#calc
+		w O#gregt v#calc #-
+		?
+			v#testOk
+			+:#seq 1
+			;
+				$#failedSeq v#seq
+				$#seq +v#last 1
+	)
+
+w?
+	v#testOk
+	[sTest OK!]
+	+
+		[sTest failed on sequence number ]
+		v#failedSeq

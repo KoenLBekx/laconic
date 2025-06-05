@@ -28,6 +28,7 @@ o`#fmt 0 #. #
 $#y 0
 $#prev 0
 $#endYear 2026
+Z#loops + o`#greg v#endYear 12 31
 
 W
 	<
