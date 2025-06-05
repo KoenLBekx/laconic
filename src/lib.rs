@@ -2321,42 +2321,61 @@ pub(crate) mod opr_funcs {
         }
     }
 
-    pub fn dow(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 3 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
-        }
+    pub fn dow(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         
         let mut year_float = 0_f64;
         let mut year = 0_u32;
         let mut month = 0_u32;
         let mut day = 0_u32;
 
-        for (count, opd) in operands.iter().enumerate() {
-            match opd.get_value() {
-                ValueType::Number(n) => if n >= 0_f64 {
-                    match count {
-                        0 => {
-                            year_float = n;
-                            year = n as u32;
+        match operands.len() {
+            0 => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            1 => {
+                let mut dummy = ValueType::Empty;
+
+                match gregorian_date_item(opr_mark, &mut dummy, operands, shuttle, DateInfoItem::Year) {
+                    Ok(date_item) => {
+                        year_float = date_item.get_info(&DateInfoItem::Year);
+                        year = year_float as u32;
+                        month = date_item.get_info(&DateInfoItem::Month) as u32;
+                        day = date_item.get_info(&DateInfoItem::Day) as u32;
+                    },
+                    Err(se) => return Err(se),
+                }
+            },
+            2 => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            _ =>  {
+                for (count, opd) in operands.iter().enumerate() {
+                    match opd.get_value() {
+                        ValueType::Number(n) => if n >= 0_f64 {
+                            match count {
+                                0 => {
+                                    year_float = n;
+                                    year = n as u32;
+                                },
+                                1 => month = n as u32,
+                                2 => day = n as u32,
+                                _ => (),
+                            }
+                        } else {
+                            return Err(ScriptError::InvalidOperand(opr_mark));
                         },
-                        1 => month = n as u32,
-                        2 => day = n as u32,
-                        _ => (),
+                        _ => return Err(ScriptError::InvalidOperand(opr_mark)),
                     }
-                } else {
+                }
+
+                if (month) == 0 || (month > 12) {
                     return Err(ScriptError::InvalidOperand(opr_mark));
-                },
-                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
-            }
+                }
+
+                if (day == 0) || (day > 31) {
+                    return Err(ScriptError::InvalidOperand(opr_mark));
+                }
+            },
         }
 
-        if (month) == 0 || (month > 12) {
-            return Err(ScriptError::InvalidOperand(opr_mark));
-        }
-
-        if (day == 0) || (day > 31) {
-            return Err(ScriptError::InvalidOperand(opr_mark));
-        }
+        #[cfg(test)]
+        println!("YMD: {}-{}-{}", year, month, day);
 
         let century = year / 100;
         let year_in_century = year % 100;
@@ -2527,7 +2546,9 @@ pub(crate) mod opr_funcs {
         }
 
         // One leap year
-        let days_in_four_years = (DAYS_IN_YEAR * 4) + 1;
+        // ... but not always !
+        let days_in_four_years_no_leap = DAYS_IN_YEAR * 4;
+        let days_in_four_years = days_in_four_years_no_leap + 1;
 
         // The first year isn't a leap year.
         let days_in_century = (days_in_four_years * 25) - 1;
@@ -2540,6 +2561,7 @@ pub(crate) mod opr_funcs {
 
         #[cfg(test)]
         {
+            println!("days in four years no leap: {}", days_in_four_years_no_leap);
             println!("days in four years: {}", days_in_four_years);
             println!("days in century: {}", days_in_century);
             println!("days in leap century: {}", days_in_leap_century);
@@ -2551,33 +2573,64 @@ pub(crate) mod opr_funcs {
         let mut month: u32;
         let day: u32;
 
+        #[cfg(test)]
+        println!("Starting from seq {}", seq);
+
         let mut count = seq / days_in_four_centuries;
         year += 400 * count;
         seq = seq % days_in_four_centuries;
 
-        // The first century starts with a leap year.
-        if seq >= days_in_leap_century {
-            seq -= days_in_leap_century;
-            year += 100;
+        #[cfg(test)]
+        println!("- days in 4 centuries:    seq={}, year={}", seq, year);
+
+        if is_leap_year(year as f64) {
+            if seq >= days_in_leap_century {
+                seq -= days_in_leap_century;
+                year += 100;
+            }
         }
+
+        #[cfg(test)]
+        println!("- 1st (leap)century:      seq={}, year={}", seq, year);
 
         count = seq / days_in_century;
         year += 100 * count;
         seq = seq % days_in_century;
 
+        #[cfg(test)]
+        println!("- count centuries:        seq={}, year={}, count={}", seq, year, count);
+
+        if (seq >= days_in_four_years_no_leap) && !is_leap_year(year as f64) {
+            year += 4;
+            seq -= days_in_four_years_no_leap;
+        }
+
+        #[cfg(test)]
+        println!("- 1st no-leap 4 years:    seq={}, year={}", seq, year);
+
         count = seq / days_in_four_years;
         year += 4 * count;
         seq = seq % days_in_four_years;
 
-        // The first year is a leap year.
-        if seq >= days_in_leap_year {
-            seq -= days_in_leap_year;
-            year += 1;
+        #[cfg(test)]
+        println!("- count * 4 years:        seq={}, year={}, count={}", seq, year, count);
+
+        if is_leap_year(year as f64) {
+            if seq >= days_in_leap_year {
+                seq -= days_in_leap_year;
+                year += 1;
+            }
         }
+
+        #[cfg(test)]
+        println!("- 1st (leap)year:         seq={}, year={}", seq, year);
 
         count = seq / DAYS_IN_YEAR;
         year += count;
         seq = seq % DAYS_IN_YEAR;
+
+        #[cfg(test)]
+        println!("- count years:            seq={}, year={}, count={}", seq, year, count);
 
         if seq == 0 {
             year -= 1;
@@ -5992,7 +6045,7 @@ mod tests {
         }
 
         #[test]
-        fn x_dow_xxc() {
+        fn x_dow_20cent() {
             assert_eq!(3f64, Interpreter::execute_with_mocked_io("o`#dow 1903 12 1".to_string()).unwrap().numeric_value);
         }
 
@@ -6024,6 +6077,11 @@ mod tests {
         #[test]
         fn x_dow_2024_feb() {
             assert_eq!(5f64, Interpreter::execute_with_mocked_io("o`#dow 2024 2 29".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_dow_seq_nr() {
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("o`#dow 720593".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -6216,6 +6274,22 @@ mod tests {
             assert_eq!(2025_f64, date_info.year);
             assert_eq!(9_f64, date_info.month);
             assert_eq!(10_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_101_1_1() {
+            let date_info = greg_sequence_to_date(36891_f64).unwrap();
+            assert_eq!(101_f64, date_info.year);
+            assert_eq!(1_f64, date_info.month);
+            assert_eq!(1_f64, date_info.day);
+        }
+
+        #[test]
+        fn greg_seq_1972_11_30() {
+            let date_info = greg_sequence_to_date(720593_f64).unwrap();
+            assert_eq!(1972_f64, date_info.year);
+            assert_eq!(11_f64, date_info.month);
+            assert_eq!(30_f64, date_info.day);
         }
 
         #[test]

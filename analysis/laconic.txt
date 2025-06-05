@@ -1254,12 +1254,14 @@ Operators
 							Day of week
 
 								Returns a number from 0 to 6, where 0 is Saturday and 6 is Friday.
-
-								If the day operator is ommitted, day "0" is presumed - i.e., the last day of the previous month.
 								
 								e.g.
-									o(#dow 2024 5 27)	yields 3: monday.
-									O #dow 2024 5			yields 3: tuesday.
+									o`#dow 2024 5 27	yields 3: monday.
+
+								If only one numeric argument is given, it's not understood as a year, but as the Gregorian day
+								sequence number - see the o`#greg operator.
+
+								e.g. o`#dow 2025 6 5	yields 5: thursday.
 
 			o`#greg year month day
 
@@ -1290,27 +1292,35 @@ Operators
 
 			o#gregt sequence_number
 
-							A YYYYMMDD text representation of the date the sequence number is associated with.
+							A YYYYMMDDWWW text representation of the date the sequence number is associated with.
 							Numbers smaller than 1 yield an error message.
+							(WWW = the weekday as an English abbreviation, from MON to SUN)
+
+							Weekday: to be implemented.
 
 							E.g.:
 								$#seq + o`#greg 2025 6 4 365 o#gregt v#seq
 									yields
-								"20260604"
+								"20260604WED"
 
 							If a third string argument is given, this is used as a separator. E.g.:
 								$#seq + o`#greg 2025 6 4 365 O#gregt v#seq #-
 									yields
-								"2026-06-04"
+								"2026-06-04-WED"
 
 							This separator can be any length; if a space is desired, pass it as [s ]:
 								$#seq + o`#greg 2025 6 4 365 O#gregt v#seq [s ]
 									yields
-								"2026 06 04"
+								"2026 06 04 WED"
 
 			o#leap year
 
 				Returns 1 if year is a leap year, else 0.
+
+			O#days year month
+				(to be implemented)
+
+				Days in month: returns the days in a given month in a given year.
 		
 		O Operator designated by name, 3 operands
 		
