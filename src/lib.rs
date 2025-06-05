@@ -2134,6 +2134,7 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "gregy".to_string() => gregorian_year,
             ValueType::Text(name) if name == "gregm".to_string() => gregorian_month,
             ValueType::Text(name) if name == "gregd".to_string() => gregorian_day,
+            ValueType::Text(name) if name == "gregt".to_string() => gregorian_text,
             ValueType::Text(name) if name == "version".to_string() => get_version,
             unknown =>  {
                 *result_value = default_outcome;
@@ -2614,7 +2615,7 @@ pub(crate) mod opr_funcs {
         })
     }
 
-    pub fn gregorian_date_item(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, item: DateInfoItem) -> Result<(), ScriptError> {
+    pub fn gregorian_date_item(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, item: DateInfoItem) -> Result<GregorianDateInfo, ScriptError> {
         if operands.len() < 1 {
             return Err(ScriptError::InsufficientOperands(opr_mark));
         }
@@ -2624,10 +2625,10 @@ pub(crate) mod opr_funcs {
             _ => return Err(ScriptError::InvalidOperand(opr_mark)),
         };
 
-        let item_opt = match shuttle.last_calculated_gregorian_day {
+        let date_info_opt = match shuttle.last_calculated_gregorian_day {
             Some(ref date_info) =>
                 if date_info.sequence_nr == seq_nr {
-                    Some(date_info.get_info(&item))
+                    Some(date_info.clone())
                 } else {
                     None
                 },
@@ -2639,9 +2640,8 @@ pub(crate) mod opr_funcs {
             shuttle.date_item_calculations = 0;
         }
 
-
-        let item_info = if item_opt.is_some() {
-            item_opt.expect("One should always be able to unwrap an Option::Some(_)")
+        let date_info = if date_info_opt.is_some() {
+            date_info_opt.expect("One should always be able to unwrap an Option::Some(_)")
         } else {
 
             #[cfg(test)]
@@ -2652,27 +2652,64 @@ pub(crate) mod opr_funcs {
             match greg_sequence_to_date(seq_nr) {
                 Ok(date_info) => {
                     shuttle.last_calculated_gregorian_day = Some(date_info.clone());
-                    date_info.get_info(&item)
+                    date_info
                 },
                 Err(_) => return Err(ScriptError::InvalidOperand(opr_mark)),
             }
         };
 
-        *result_value = ValueType::Number(item_info);
+        *result_value = ValueType::Number(date_info.get_info(&item));
 
-        Ok(())
+        Ok(date_info)
     }
 
     pub fn gregorian_year(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Year)
+        match gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Year) {
+            Ok(_) => Ok(()),
+            Err(se) => Err(se),
+        }
     }
 
     pub fn gregorian_month(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Month)
+        match gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Month) {
+            Ok(_) => Ok(()),
+            Err(se) => Err(se),
+        }
     }
 
     pub fn gregorian_day(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Day)
+        match gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Day) {
+            Ok(_) => Ok(()),
+            Err(se) => Err(se),
+        }
+    }
+
+    pub fn gregorian_text(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        let sepa = if operands.len() > 1 {
+            match operands[1].get_value() {
+                ValueType::Text(t) => t,
+                ValueType::Empty => String::new(),
+                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            }
+        } else {
+            String::new()
+        };
+
+        match gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Year) {
+            Ok(date_info) => {
+                *result_value = ValueType::Text(format!(
+                    "{:04}{}{:02}{}{:02}",
+                    date_info.get_info(&DateInfoItem::Year),
+                    sepa.clone(),
+                    date_info.get_info(&DateInfoItem::Month),
+                    sepa,
+                    date_info.get_info(&DateInfoItem::Day)
+                ));
+
+                Ok(())
+            },
+            Err(se) => Err(se),
+        }
     }
 
     pub fn get_unicode_value(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
@@ -6206,6 +6243,52 @@ mod tests {
             interpreter.execute_opts("o#gregd 730545".to_string(), true, false, false).unwrap();
 
             assert_eq!(1, interpreter.shuttle.date_item_calculations);
+        }
+
+        #[test]
+        fn x_gregt_no_separator_argument() {
+            assert_eq!("20250401".to_string(), Interpreter::execute_with_mocked_io("o#gregt 739708".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_gregt_separator_argument_length_zero() {
+            assert_eq!("20250401".to_string(), Interpreter::execute_with_mocked_io("O#gregt 739708 #".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_gregt_separator_dash() {
+            assert_eq!("2025-04-01".to_string(), Interpreter::execute_with_mocked_io("O#gregt 739708 #-".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_gregt_separator_blank() {
+            assert_eq!("2025 04 01".to_string(), Interpreter::execute_with_mocked_io("O#gregt 739708 [s ]".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_gregt_year_two_digits() {
+            assert_eq!("0055-04-01".to_string(), Interpreter::execute_with_mocked_io("O#gregt 20180 #-".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_gregt_year_five_digits() {
+            assert_eq!("10001-04-01".to_string(), Interpreter::execute_with_mocked_io("O#gregt 3652882 #-".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_gregt_erroneous_arg_0() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("o#gregt #zupla".to_string())
+            );
+        }
+
+        #[test]
+        fn x_gregt_erroneous_separator_arg() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('O')),
+                Interpreter::execute_with_mocked_io("O#gregt 739708 0".to_string())
+            );
         }
     }
 

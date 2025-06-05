@@ -4,10 +4,10 @@ LACONIC
 		// TODO: indicate the standard number of operands for every operator.
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():`;=<>!&|?°ØabCcEeFiKklMmNnOopRrSsTtUuvWwXxZ
+			~+-*/%^$():`;=<>!&|?°ØaBbCcEeFiKklMmNnOopRrSsTtUuvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?°ØabCc eFiKklMmNnOopRrSsTt  vWwXxZ
+			~+-*/%^$():`;=<>!&|?°Øa bCc eFiKklMmNnOopRrSsTt  vWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   interfere with command line syntax or string literals
@@ -16,7 +16,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			´,@§£€¶µABDdfGgHhIJjLPQqVz
+			´,@§£€¶µADdfGgHhIJjLPQqVz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -916,6 +916,11 @@ Operators
 					*:1v2 [c loop execution body]
 				v1
 
+		B num
+			(to be implemented)
+
+			Breaks the current F- or W-loop if num is 0, otherwise the enclosing F- or W-loop num levels above.
+
 	Routines
 
 		R defines a Routine which will have separate variables and can't use the variables of the calling code.
@@ -1284,15 +1289,24 @@ Operators
 							Numbers smaller than 1 yield an error message.
 
 			o#gregt sequence_number
-							(to be implemented)
 
-							A YYYY-MM-DD text representation of the date the sequence number is associated with.
+							A YYYYMMDD text representation of the date the sequence number is associated with.
 							Numbers smaller than 1 yield an error message.
 
 							E.g.:
 								$#seq + o`#greg 2025 6 4 365 o#gregt v#seq
 									yields
+								"20260604"
+
+							If a third string argument is given, this is used as a separator. E.g.:
+								$#seq + o`#greg 2025 6 4 365 O#gregt v#seq #-
+									yields
 								"2026-06-04"
+
+							This separator can be any length; if a space is desired, pass it as [s ]:
+								$#seq + o`#greg 2025 6 4 365 O#gregt v#seq [s ]
+									yields
+								"2026 06 04"
 
 			o#leap year
 
