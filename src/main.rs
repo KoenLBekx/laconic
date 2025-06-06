@@ -108,7 +108,7 @@ fn show_syntax() {
     println!();
     println!("      the below command");
     println!();
-    println!("          $ cat clearStack.lac | laconic 'o#fmt 0 K(10 20 30 40) wk,' -i 'wk,'");
+    println!("          $ cat clearStack.lac | laconic 'o§fmt 0 K(10 20 30 40) wk,' -i 'wk,'");
     println!();
     println!("      will output:");
     println!();

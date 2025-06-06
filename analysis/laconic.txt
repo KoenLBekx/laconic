@@ -11,12 +11,13 @@ LACONIC
 
 		* Characters not to be used as operator:
 			' " \   interfere with command line syntax or string literals
-			. [ ] # have other meanings in Laconic.
+							in Rust code or calling modules
+			. [ ] § have other meanings in Laconic.
 			{ }			can be used to delimit Laconic expressions in other contexts
 			whitespace
 
 		* Common characters not used yet:
-			`´,@§£€¶µADdfGgHhIJjLPQqVz
+			`´,#@§£€¶µADdfGgHhIJjLPQqVz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -197,17 +198,17 @@ LACONIC
 			- enclosed between [s and ] : string bracket contents
 
 			- simple strings: enclosed between any of
-				# and whitespace
-				# and [
-				# and (
-				# and )
+				§ and whitespace
+				§ and [
+				§ and (
+				§ and )
 	
-				Note that the # character doesn't terminate a simple string, so it can be part of one.
+				Note that the § character doesn't terminate a simple string, so it can be part of one.
 
 		Eg.:
 
 			[sKunji Namparshespa] yields the string "Kunji Namparshespa".
-			#Petrov yields the string "Petrov".
+			§Petrov yields the string "Petrov".
 
 		If any of their operands is a string, some numerical operators will perform string-related operations :
 
@@ -218,9 +219,9 @@ LACONIC
 				yields
 					"Total: 353"
 
-			+# number
+			+§ number
 				is a way of converting a number to a string in a format dictated by the latest
-				o#fmt
+				o§fmt
 				statement.
 
 		Other numerical operators, or other combinations of number and string operands,
@@ -389,59 +390,59 @@ Operators
 
 	Strings
 
-		o,#sub string start_position number_of_characters
-		o(#sub string start_position number_of_characters)
+		o,§sub string start_position number_of_characters
+		o(§sub string start_position number_of_characters)
 
 			Substring of string, taking number_of_characters characters from the start_position.
 			Note that start_position is zero-based !
 
 			Thus
-				o,#sub [sLa Roche-en-Ardenne] 3 5
+				o,§sub [sLa Roche-en-Ardenne] 3 5
 			yields
 				"Roche"
 
 			If number_of_characters is ommitted, the remaining characters until the end are extracted:
-				O#sub [sLa Roche-en-Ardenne] 12
+				O§sub [sLa Roche-en-Ardenne] 12
 			yields
 				"Ardenne"
 
 			If the first argument is not a string, but a number, then that number is first converted to a string
-			according to the o#fmt settings in effect.
+			according to the o§fmt settings in effect.
 
-		o#uni num
+		o§uni num
 			A string having one character having Unicode point <num>.
 
 			If more operands are provided, a string having characters 
 			from the given unicode points is returned.
 
 			e.g.
-				o#uni 10	yields the newline character.
-				b16 o(#uni [n421] [n43E] [n44E] [n437]) yields "Союз".
+				o§uni 10	yields the newline character.
+				b16 o(§uni [n421] [n43E] [n44E] [n437]) yields "Союз".
 
-		O#ucv string position
+		O§ucv string position
 			Returns the unicode point value of the character at [position] in [string].
 
 			e.g.
-				O#ucv #Союз 0
+				O§ucv §Союз 0
 					yields 1057
 
 			If the position operand is ommitted, the first character is used.
 
-		o#len string
+		o§len string
 			Returns the length of the string.
 
 			e.g.
-				o#len #Theodorakis
+				o§len §Theodorakis
 					yields 11
 
-				o#len #
-				o#len [s]
+				o§len §
+				o§len [s]
 					both yield 0
 
 			If more than one operand is given, the total length of the string representations
 			will be returned.
 
-		o,#find string substring startpos
+		o,§find string substring startpos
 
 			Returns the start position of the first occurence
 			of substring in string.
@@ -459,20 +460,20 @@ Operators
 			even if not all fonts show this clearly : 0Ø
 
 			e.g.
-				O#find #Samovar #a
+				O§find §Samovar §a
 					yields 1
-				O#find [sNo hay remedio] #mejor
+				O§find [sNo hay remedio] §mejor
 					yields Ø
-				tO#find [sNo hay remedio] #mejor
+				tO§find [sNo hay remedio] §mejor
 					yields 0
-				tO#find [sNo hay remedio] #hay
+				tO§find [sNo hay remedio] §hay
 					yields 1
 	
 			e.g.
-				O(#find #Samovar #a 3)
+				O(§find §Samovar §a 3)
 					yields 5
 
-		o#(repl string substring replacement count)
+		o§(repl string substring replacement count)
 			(to be implemented)
 			Question: What is most needed:
 				- replace all occurrences
@@ -486,40 +487,40 @@ Operators
 						If the [count] operand is ommitted, all occurrences are replaced.
 
 								e.g.
-									o(#repl #philadelphia #ph #f 1)
+									o(§repl §philadelphia §ph §f 1)
 										yields "filadelphia"
-									o(#repl #philadelphia #ph #f 2)
+									o(§repl §philadelphia §ph §f 2)
 										yields "filadelfia"
-									o(#repl #philadelphia #ph #f ~1)
+									o(§repl §philadelphia §ph §f ~1)
 										yields "filadelfia"
-									o(#repl #philadelphia #ph #f)
+									o(§repl §philadelphia §ph §f)
 										yields "filadelfia"
 
 						(Note that all string operations are case-sensitive.)
 
-		o#lower string
+		o§lower string
 
 			Returns the all lower-case form of a string.
 
 				e.g.
-					o#lower #McIntosh
+					o§lower §McIntosh
 						yields "mcintosh"
 
-		o#upper string
+		o§upper string
 
 			Returns the all upper-case form of a string.
 
 				e.g.
-					o#upper #McIntosh
+					o§upper §McIntosh
 						yields "MCINTOSH"
 
-		o#proper string
+		o§proper string
 
 			Returns the all proper-case form of a string:
 			the first character in upper case, the rest in lower case.
 
 				e.g.
-					o#proper [sADDIS ABEBA]
+					o§proper [sADDIS ABEBA]
 						yields "Addis Abeba"
 
 	Constants (zero-operand operators)
@@ -532,15 +533,15 @@ Operators
 			This is the upper-case O-with-stroke character (U+00D8),
 			not the zero character.
 
-			This is the same as c#empty.
+			This is the same as c§empty.
 
 		c	name
 			named constants
 
-			c#empty
+			c§empty
 				The Empty value; the Ø character is not available on every keyboard.
 
-			c#gold Golden Ratio (sectio aurea)
+			c§gold Golden Ratio (sectio aurea)
 
 				Calculated as (1 + sqrt(5))/2
 
@@ -555,7 +556,7 @@ Operators
 			$4.2 10 assigns 10 to variable number 4.2
 			$~4.9 10 assigns 10 to variable number -4.9
 
-			$#startValue 10 assigns 10 to variable "startValue"
+			$§startValue 10 assigns 10 to variable "startValue"
 			$[sstart value] 10 assigns 10 to variable "start value"
 
 			$0+2 8 assigns 10 to variable number 0.
@@ -573,7 +574,7 @@ Operators
 			If the $ operator has more than two operands and the first one has a string value,
 			consecutive variables are assigned to also, to wit as follows:
 
-			$(#reg 20 30 40 50)
+			$(§reg 20 30 40 50)
 				assigns
 					20 to variable "reg",
 					30 to variable "reg1",
@@ -585,7 +586,7 @@ Operators
 			$2 30 +v2 4
 				yields 34
 
-			$#theNumber 11 +v#theNumber 9
+			$§theNumber 11 +v§theNumber 9
 				yields 20
 
 		: references and assigns to a variable
@@ -605,8 +606,8 @@ Operators
 			~:2
 				means $2 ~v2   (Convert the value of variable 2 to its opposite)
 
-			*:#product 3
-				means $#product *#product 3 (Assign to variable "product" its current value times 3)
+			*:§product 3
+				means $§product *§product 3 (Assign to variable "product" its current value times 3)
 
 			It is even possible to assign the value of the parent operator to two variables referenced as operands:
 
@@ -702,15 +703,15 @@ Operators
 
 			The equality operator takes the precision orb into account.
 
-				(The orb can be set using expression Z#prec n)
+				(The orb can be set using expression Z§prec n)
 
-			Z#prec .1 =21.3 21.35 yields 1
+			Z§prec .1 =21.3 21.35 yields 1
 
 		< less than:
 
 			< 5 20 yields 1
 
-			< #A #a yields 1
+			< §A §a yields 1
 				Upper case characters are considered "smaller" than lower case ones,
 				as they have a lower Unicode point.
 
@@ -728,7 +729,7 @@ Operators
 			Note: uninitialized variables are considered "empty" and to be smaller than any other value,
 			even smaller than negative infinity, which can be obtained by dividing a negative number by zero :
 
-			< v#UnusedForNow /~1 0
+			< v§UnusedForNow /~1 0
 				yields 1
 
 		> 
@@ -743,20 +744,20 @@ Operators
 
 			>(701 90 87 4) yields 1
 
-			> #Brussels #Antwerp yields 1
-			> #金 #gold yields 1 as Chinese characters have a higher Unicode point than Latin ones.
-			> #1024 1024 yields 1, as the first operand is a string and the second a number.
-			> 20 v#UnusedForNow yields 1, as an uninitialized variable is smaller than anything else.
+			> §Brussels §Antwerp yields 1
+			> §金 §gold yields 1 as Chinese characters have a higher Unicode point than Latin ones.
+			> §1024 1024 yields 1, as the first operand is a string and the second a number.
+			> 20 v§UnusedForNow yields 1, as an uninitialized variable is smaller than anything else.
 
 	Logic
 
 		Note:
 
 			0 = false,
-			# (empty string) = false,
+			§ (empty string) = false,
 			[s] (empty string) = false,
 			uninitialized variable (empty value) = false,
-			c#empty = false,
+			c§empty = false,
 			Ø (the empty value) = false
 
 			everything else = true.
@@ -768,11 +769,11 @@ Operators
 			!4 yields 0
 			!1 yields 0
 			!0 yields 1
-			!v#NotUsedYet yields 1
+			!v§NotUsedYet yields 1
 			![s] yields 1
-			!# yields 1
-			!!# yields 0
-			!#Hello yields 0
+			!§ yields 1
+			!!§ yields 0
+			!§Hello yields 0
 			![s Hello, Mylady] yields 0
 
 			Used with more than the standard one operand,
@@ -780,7 +781,7 @@ Operators
 
 			!(0 -4 4 * 25 0) yields 1
 			!(0 0 9) yields 0
-			!(# # #Haha) yields 0
+			!(§ § §Haha) yields 0
 
 		& logical and : if all operands are non-zero (true), then 1, else zero (false)
 
@@ -927,11 +928,11 @@ Operators
 		R defines a Routine which will have separate variables and can't use the variables of the calling code.
 
 			E.g.:
-				R#tau *2p
+				R§tau *2p
 					defines a routine named "tau" that returns Tau, which is twice Pi.
 
 			E.g.:
-				R#tau *2p $#peripheryA *X#tau v#radA
+				R§tau *2p $§peripheryA *X§tau v§radA
 					defines a routine and calls it.
 
 			(These are just examples - it's more efficient to calculate Tau once and store it in a variable.)
@@ -942,8 +943,8 @@ Operators
 			- or else the R operator's operands can be enclosed in parentheses:
 
 			E.g. both scripts to the same :
-				R#revertStack ;;$(0kk) Kv0 Kv1
-				R(#revertStack $(0kk) Kv0 Kv1)
+				R§revertStack ;;$(0kk) Kv0 Kv1
+				R(§revertStack $(0kk) Kv0 Kv1)
 			to wit, they define a routine that switches the order of the stack's top two items.
 
 			As routines declared using the bare R operator (no ,) have a separate variables scope,
@@ -959,18 +960,18 @@ Operators
 			E.g.:
 				[c This routine returns the average of the items on the stack.]
 				R(
-					#average
-					$#count k,
-					$#total 0
+					§average
+					$§count k,
+					$§total 0
 					W
 						k,
-						+:#total k
-					/v#total v#count
+						+:§total k
+					/v§total v§count
 				)
 
 				[c Let us put some items on the stack and call the routine.]
 				K(41 25 60 ~50 4)
-				X#average
+				X§average
 				[c This call should return 16.]
 
 			Return value: the return value of the routine's last operator is returned.
@@ -991,12 +992,12 @@ Operators
 			E.g.:
 				[c This routine swaps the value of two variables, the names of which are read from the stack.]
 				R,(
-					#swap
-					$#swpVar1 k
-					$#swpVar2 k
-					Kvv#swpVar1
-					$v#swpVar1 vv#swpVar2
-					$v#swpVar2 k
+					§swap
+					$§swpVar1 k
+					$§swpVar2 k
+					Kvv§swpVar1
+					$v§swpVar1 vv§swpVar2
+					$v§swpVar2 k
 				)
 
 				[c Putting 4 in variable 0 and 8 in variable 1]
@@ -1006,7 +1007,7 @@ Operators
 				K(0 1)
 
 				[c Calling the swap routine.]
-				X#swap
+				X§swap
 
 				[c Checking the result.]
 				w+[svar0: ] v0
@@ -1020,8 +1021,8 @@ Operators
 			so the routine can use these stack items as arguments.
 
 			E.g.: both scripts do the same:
-				X(#average 20 1 5 80)
-				K(20 1 5 80) X#average
+				X(§average 20 1 5 80)
+				K(20 1 5 80) X§average
 
 			If a non-declared routine is called, the Empty value is returned.
 
@@ -1141,7 +1142,7 @@ Operators
 
 				t 39           yields 1 : numeric
 				t [sWhat?]     yields 2 : string
-				t v#NotUsedYet yields 0 : empty or uninitialized : an empty expression will yield 0.
+				t v§NotUsedYet yields 0 : empty or uninitialized : an empty expression will yield 0.
 
 		Ø
 				(Upper case Ø)
@@ -1188,17 +1189,17 @@ Operators
 
 			In addition from the named operators handling strings, the below named operators have been implemented:
 
-			o#version num
+			o§version num
 							Version of Laconic interpreter.
 
 							The version information returned depends on the second operand:
 
-							o#version 0 yields a string containing full version information, e.g.: "001.000.003"
-							o#version 1 yields the major version as a string, e.g.: "1"
-							o#version 2 yields the minor version as a string, e.g.: "0"
-							o#version 3 yields the revision as a string, e.g.: "3"
+							o§version 0 yields a string containing full version information, e.g.: "001.000.003"
+							o§version 1 yields the major version as a string, e.g.: "1"
+							o§version 2 yields the minor version as a string, e.g.: "0"
+							o§version 3 yields the revision as a string, e.g.: "3"
 
-			o(#fmt nr_of_fractal_digits fractal_separator thousands_separator)
+			o(§fmt nr_of_fractal_digits fractal_separator thousands_separator)
 
 							Set the output format for numbers when written using the w operator or output as string:
 
@@ -1219,19 +1220,19 @@ Operators
 							Note:
 							- Laconic won't allow the fractal and thousands separator to be equal.
 								A command to that effect will be ignored.
-							- If you don't want a thousands separator, provide an empty string: [s] or #
+							- If you don't want a thousands separator, provide an empty string: [s] or §
 							- This formatting is strictly for output.
 								In Laconic script code and as input
 								for the r(ead) operator, fractal separators should always be '.' dots and
 								thousands separators, if any, '_' underscores.
 
 							E.g.:
-								o(#fmt 3 #, #.) 1200.25     returns 1.200,250 (European Continental style)
-								o(#fmt 3 #, #) 1200.25      returns 1200,250
-								o(#fmt 3 #, #) 1200.2526    returns 1200,253
-								o(#fmt 6 #. #___) 1200.2526 returns 1_200.252_6
+								o(§fmt 3 §, §.) 1200.25     returns 1.200,250 (European Continental style)
+								o(§fmt 3 §, §) 1200.25      returns 1200,250
+								o(§fmt 3 §, §) 1200.2526    returns 1200,253
+								o(§fmt 6 §. §___) 1200.2526 returns 1_200.252_6
 
-			o#fib  seq
+			o§fib  seq
 
 							Fibonacci number
 								(to be implemented)
@@ -1240,31 +1241,31 @@ Operators
 								absolute value before being used to get a Fibonacci number.
 								
 								e.g.
-									o #fib 0 yields 0
-									o #fib 1 yields 1
-									o #fib 2 yields 1
-									o #fib 3 yields 2
-									o #fib 4 yields 3
-									o #fib 5 yields 5
-									o #fib 6 yields 8
-									o #fib 6.1 yields 8
-									o #fib ~6.1 yields 8
+									o §fib 0 yields 0
+									o §fib 1 yields 1
+									o §fib 2 yields 1
+									o §fib 3 yields 2
+									o §fib 4 yields 3
+									o §fib 5 yields 5
+									o §fib 6 yields 8
+									o §fib 6.1 yields 8
+									o §fib ~6.1 yields 8
 
-			o,#dow year month day
+			o,§dow year month day
 
 							Day of week
 
 								Returns a number from 0 to 6, where 0 is Saturday and 6 is Friday.
 								
 								e.g.
-									o,#dow 2024 5 27	yields 3: monday.
+									o,§dow 2024 5 27	yields 3: monday.
 
 								If only one numeric argument is given, it's not understood as a year, but as the Gregorian day
-								sequence number - see the o,#greg operator.
+								sequence number - see the o,§greg operator.
 
-								e.g. o,#dow 2025 6 5	yields 5: thursday.
+								e.g. o,§dow 2025 6 5	yields 5: thursday.
 
-			o,#greg year month day
+			o,§greg year month day
 
 							Sequence number of a day in the Gregorian calendar, assuming
 
@@ -1276,47 +1277,47 @@ Operators
 
 								No negative years are accepted.
 
-			o#gregy sequence_number
+			o§gregy sequence_number
 
 							The year of the date the sequence number is associated with.
 							Numbers smaller than 1 yield an error message.
 
-			o#gregm sequence_number
+			o§gregm sequence_number
 
 							The month of the date the sequence number is associated with.
 							Numbers smaller than 1 yield an error message.
 
-			o#gregd sequence_number
+			o§gregd sequence_number
 
 							The day-in-month of the date the sequence number is associated with.
 							Numbers smaller than 1 yield an error message.
 
-			o#gregt sequence_number
+			o§gregt sequence_number
 
 							A YYYYMMDDWWW text representation of the date the sequence number is associated with.
 							Numbers smaller than 1 yield an error message.
 							(WWW = the weekday as an English abbreviation, from MON to SUN)
 
 							E.g.:
-								$#seq + o,#greg 2025 6 4 365 o#gregt v#seq
+								$§seq + o,§greg 2025 6 4 365 o§gregt v§seq
 									yields
 								"20260604WED"
 
 							If a third string argument is given, this is used as a separator. E.g.:
-								$#seq + o,#greg 2025 6 4 365 O#gregt v#seq #-
+								$§seq + o,§greg 2025 6 4 365 O§gregt v§seq §-
 									yields
 								"2026-06-04-WED"
 
 							This separator can be any length; if a space is desired, pass it as [s ]:
-								$#seq + o,#greg 2025 6 4 365 O#gregt v#seq [s ]
+								$§seq + o,§greg 2025 6 4 365 O§gregt v§seq [s ]
 									yields
 								"2026 06 04 WED"
 
-			o#leap year
+			o§leap year
 
 				Returns 1 if year is a leap year, else 0.
 
-			O#days year month
+			O§days year month
 				(to be implemented)
 
 				Days in month: returns the days in a given month in a given year.
@@ -1340,9 +1341,9 @@ Operators
 		If the first operand refers to an unknown option,
 		the operator and its operands are ignored.
 
-		Z#prec n : Precision "orb" for =-operator.
+		Z§prec n : Precision "orb" for =-operator.
 					 Default : 0; if n is negative, this default is restored.
 
-		Z#loops n : maximum number of loops executed by F- or W-operator.
+		Z§loops n : maximum number of loops executed by F- or W-operator.
 					 If 0, no maximum is imposed, which removes the protection against infinite loops.
 					 Default : 10,000.
