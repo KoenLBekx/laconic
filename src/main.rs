@@ -1,5 +1,6 @@
 use std::env::args;
-use std::io::{stdin, stdout};
+use std::io::stdout;
+use std::fs::read_to_string;
 use laconic::Interpreter;
 
 fn main() {
@@ -7,14 +8,23 @@ fn main() {
     let mut show_before = false;
     let mut show_after = false;
     let mut do_execute = true;
-    let mut stdin_read = false;
+    let mut expect_file_name = false;
 
     for arg_tuple in args().enumerate() {
         match arg_tuple {
             (0, _) => (),
             (_, arg) =>  {
                 if !arg.starts_with('-') {
-                    script.push_str(&arg);
+                    if expect_file_name {
+                        expect_file_name = false;
+
+                        match read_to_string(&arg) {
+                            Ok(content) => script.push_str(&content),
+                            Err(msg) => panic!("Error while reading {}: {}", &arg, msg),
+                        }
+                    } else {
+                        script.push_str(&arg);
+                    }
                 } else {
                     if arg.contains('a') {
                         show_after = true;
@@ -28,17 +38,8 @@ fn main() {
                         do_execute = false;
                     }
 
-                    if arg.contains('i') && !stdin_read {
-                        stdin_read = true;
-                        let lines = stdin().lines();
-
-                        for res_line in lines {
-                            if let Ok(line) = res_line {
-                                script.push(' ');
-                                script.push_str(&line);
-                                script.push(' ');
-                            }
-                        }
+                    if arg.contains('i') && !expect_file_name {
+                        expect_file_name = true;
                     }
                 }
             },
@@ -71,7 +72,7 @@ fn show_syntax() {
     println!("    -n    Don't execute the script");
     println!("    -b    Show the script as a tree of operators before execution.");
     println!("    -a    Show the script as a tree of operators after  execution.");
-    println!("    -i    Include the contents of standard input into the script.");
+    println!("    -i    Include the contents of a file into the script.");
     println!();
     println!("Options can be combined:");
     println!("    laconic -bn '*440 ^2 /1 12");
@@ -94,7 +95,7 @@ fn show_syntax() {
     println!("' v1'");
     println!();
     println!("Statements in a script file can be included in the script");
-    println!("via standard input using the -i parameter:");
+    println!("using the -i parameter:");
     println!();
     println!("Statements in the command line before the -i parameter ");
     println!("will be included before the script file's statements;");
@@ -108,7 +109,7 @@ fn show_syntax() {
     println!();
     println!("      the below command");
     println!();
-    println!("          $ cat clearStack.lac | laconic 'o§fmt 0 K(10 20 30 40) wk,' -i 'wk,'");
+    println!("          $ laconic 'o§fmt 0 K(10 20 30 40) wk,' -i clearStack.lac 'wk,'");
     println!();
     println!("      will output:");
     println!();
@@ -117,6 +118,6 @@ fn show_syntax() {
     println!();
     println!("It's even possible to include multiple script files this way: e.g.:");
     println!();
-    println!("          $ cat script1.cat script2.cat | laconic -i '[c Statements ...]'");
+    println!("          $ laconic -i script1.lac -i script2.lac '[c Statements ...]' -i script3.lac '[c Other statements ...]'");
     println!();
 }
