@@ -4,10 +4,10 @@ LACONIC
 		// TODO: indicate the standard number of operands for every operator.
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():`;=<>!&|?°ØaBbCcEeFiKklMmNnOopRrSsTtUuvWwXxZ
+			~+-*/%^$():,;=<>!&|?°ØaBbCcEeFiKklMmNnOopRrSsTtUuvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():`;=<>!&|?°Øa bCc eFiKklMmNnOopRrSsTt  vWwXxZ
+			~+-*/%^$():,;=<>!&|?°Øa bCc eFiKklMmNnOopRrSsTt  vWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   interfere with command line syntax or string literals
@@ -16,11 +16,11 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			´,@§£€¶µADdfGgHhIJjLPQqVz
+			`´,@§£€¶µADdfGgHhIJjLPQqVz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
-			` 0060 Grave accent or Backtick
+			` 0060 Backtick or Grave Accent
 			~	007E Tilde
 			£ 00A3 Pound
 			§ 00A7 Section (paragraph) sign (Alt-Shift-S)
@@ -143,7 +143,7 @@ LACONIC
 
 			The default number base is 10.
 
-			However, using the b and b` operators, one can switch to other bases for input and output.
+			However, using the b and b, operators, one can switch to other bases for input and output.
 
 			Digits for bases greater than 10 consist of 0 to 9 and the appropriate number of upper case letters needed:
 
@@ -173,11 +173,11 @@ LACONIC
 
 			This reduces calculating with hours, minutes and seconds to calculating seconds in base 60:
 
-			b`60 b60 /[n5 20 8] 4 yields 80(base10) : a fourth of 5 hours, 20 minutes and 8 seconds is 4802 seconds or 1 hour, 20 minutes and 2 seconds.
+			b,60 b60 /[n5 20 8] 4 yields 80(base10) : a fourth of 5 hours, 20 minutes and 8 seconds is 4802 seconds or 1 hour, 20 minutes and 2 seconds.
 			
-			Combinations of b`n and bn commands allow conversion of numbers between bases.
+			Combinations of b,n and bn commands allow conversion of numbers between bases.
 			In order to avoid mistakes in the specification of the output base,
-			it's best to issue the b`n expression before the bn expression.
+			it's best to issue the b,n expression before the bn expression.
 
 			It's even possible to process numbers of different bases together:
 
@@ -268,15 +268,15 @@ Operators
 
 			/ 504 7 yields 72
 
-		/` Integer division and remainder
-			/` dividend divisor
+		/, Integer division and remainder
+			/, dividend divisor
 
 			Returns the quotient of the integer division, and pushes the remainder on the stack.
 
 			E.g.:
-				/` 20 7
+				/, 20 7
 				Returns 2 after having pushed 6 on the stack, so
-				/` 20 7 k
+				/, 20 7 k
 				would return 6.
 
 		% Modulo (Remainder)
@@ -304,12 +304,12 @@ Operators
 			i15 yields 15
 			i~27 yields ~27
 
-		i` ceiling: fills the number towards the next integer value away from zero,
+		i, ceiling: fills the number towards the next integer value away from zero,
 					except if the number is already integer.
 
-			i`.5 yields 1
-			i`~.5 yields -1
-			i`3 yields 3
+			i,.5 yields 1
+			i,~.5 yields -1
+			i,3 yields 3
 
 		a Absolute value
 
@@ -348,55 +348,55 @@ Operators
 
 		S sine of n radians
 			
-			S°`45 yields 0.7071...
+			S°,45 yields 0.7071...
 
-		S` arcsine in radians
+		S, arcsine in radians
 
-			°S`0.7071 yields 44.999 etc.
+			°S,0.7071 yields 44.999 etc.
 
 		C	cosine of n radians
 
-			C°`45 yields 0.7071...
+			C°,45 yields 0.7071...
 
-		C` arccosine in radians
+		C, arccosine in radians
 
-			°C`0.7071 yields 44.999 etc.
+			°C,0.7071 yields 44.999 etc.
 
 		T	tangent of n radians
 
-			T°`45 yields 1
+			T°,45 yields 1
 
-		T` arctangent in radians
+		T, arctangent in radians
 
-			°T`1 yields 44.999 etc.
+			°T,1 yields 44.999 etc.
 
 		° degrees from radians
 
 			°p yields 180
 
-		°` radians from degrees
+		°, radians from degrees
 
-			°`180 yields 3.14159...
+			°,180 yields 3.14159...
 
 		(Also to be implemented :)
 
-		S`` hyperbolic sine (sinh)
-		S``` inverse hyperbolic sine (asinh)
-		C`` hyperbolic cosine (cosinh)
-		C``` inverse hyperbolic cosine (acosinh)
-		T`` hyperbolic tangent (tanh)
-		T``` inverse hyperbolic tangent (atanh)
+		S,, hyperbolic sine (sinh)
+		S,,, inverse hyperbolic sine (asinh)
+		C,, hyperbolic cosine (cosinh)
+		C,,, inverse hyperbolic cosine (acosinh)
+		T,, hyperbolic tangent (tanh)
+		T,,, inverse hyperbolic tangent (atanh)
 
 	Strings
 
-		o`#sub string start_position number_of_characters
+		o,#sub string start_position number_of_characters
 		o(#sub string start_position number_of_characters)
 
 			Substring of string, taking number_of_characters characters from the start_position.
 			Note that start_position is zero-based !
 
 			Thus
-				o`#sub [sLa Roche-en-Ardenne] 3 5
+				o,#sub [sLa Roche-en-Ardenne] 3 5
 			yields
 				"Roche"
 
@@ -441,7 +441,7 @@ Operators
 			If more than one operand is given, the total length of the string representations
 			will be returned.
 
-		o`#find string substring startpos
+		o,#find string substring startpos
 
 			Returns the start position of the first occurence
 			of substring in string.
@@ -684,7 +684,7 @@ Operators
 
 			This operator can be used by routines to read parameters.
 
-		k`
+		k,
 			Stack depth: gets the number of items on the stack.
 
 	Comparison
@@ -946,13 +946,13 @@ Operators
 				R(#revertStack $(0kk) Kv0 Kv1)
 			to wit, they define a routine that switches the order of the stack's top two items.
 
-			As routines declared using the bare R operator (no `) have a separate variables scope,
+			As routines declared using the bare R operator (no ,) have a separate variables scope,
 			any values stored in variables during these routines' operation are lost afterwards.
-			If this is not desired, use the R` declaration operator.
+			If this is not desired, use the R, declaration operator.
 
 			Parameter passing:
 
-			As routines defined by the bare R operator (no `) don't have access to the variables of the calling code,
+			As routines defined by the bare R operator (no ,) don't have access to the variables of the calling code,
 			values have to be passed to it by putting items on the stack.
 			Mind that the stack items are read in REVERSE ORDER : last-in, first-out.
 
@@ -960,10 +960,10 @@ Operators
 				[c This routine returns the average of the items on the stack.]
 				R(
 					#average
-					$#count k`
+					$#count k,
 					$#total 0
 					W
-						k`
+						k,
 						+:#total k
 					/v#total v#count
 				)
@@ -982,7 +982,7 @@ Operators
 			Anyway, that declared routine will be redeclared on every call of the declaring routine.
 			This can be useful to have a different behaviour under the same routine name, depending on circumstances.)
 
-		R` defines a Routine which will share the variables of the calling code.
+		R, defines a Routine which will share the variables of the calling code.
 
 			Behaves in the same way as the bare R operator, except that the routine
 			will have access to the calling code's variables, so it can manipulate these.
@@ -990,7 +990,7 @@ Operators
 
 			E.g.:
 				[c This routine swaps the value of two variables, the names of which are read from the stack.]
-				R`(
+				R,(
 					#swap
 					$#swpVar1 k
 					$#swpVar2 k
@@ -1048,7 +1048,7 @@ Operators
 				$23r
 					stores the input read from standard input in variable 23.
 
-		r` reads a line from standard input and evaluates it as a Laconic expression or script.
+		r, reads a line from standard input and evaluates it as a Laconic expression or script.
 			This script shares the same variables, stack e.a. as the calling script.
 			(to be implemented)
 
@@ -1070,30 +1070,30 @@ Operators
 
 		) End of operand number override - see '('. 
 
-		` (Backtick) : modifies operation of previous operator:
+		, (comma) : modifies operation of previous operator:
 
 					° 1 yields the value of 1 radian in degrees.
-					°`1 yields the value of 1 degree in radians.
+					°,1 yields the value of 1 degree in radians.
 
 					S 1 yields sine of 1 radian
-					S`1 yields arcsine of 1 in radians
+					S,1 yields arcsine of 1 in radians
 
 					The same goes for the C(osine) and T(angent) operators.
 
 					i 1.5 yields 1 (truncate to same or smalller integer, towards zero)
-					i`1.5 yields 2 (fill to same or greater integer, away from zero)
+					i,1.5 yields 2 (fill to same or greater integer, away from zero)
 
 					b 2 sets base of subsequent input numbers
-					b`2 sets base of subsequent output numbers
+					b,2 sets base of subsequent output numbers
 
-					The ` operator only takes one operand, and this number can't be overridden.
+					The , operator only takes one operand, and this number can't be overridden.
 
 					However, if the number of operands of the modified operator is overridden,
-					one is free to put the ` operator inside or before the (operands) group :
+					one is free to put the , operator inside or before the (operands) group :
 
-					°`1
-					°(`1)
-					°`(1)
+					°,1
+					°(,1)
+					°,(1)
 
 						all yield the same result.
 
@@ -1132,9 +1132,9 @@ Operators
 
 					The b operator returns the value of its base.
 
-		b`n : Base of subsequent output numbers (displayed as final output and by the w(rite) operator).
+		b,n : Base of subsequent output numbers (displayed as final output and by the w(rite) operator).
 
-					The b` operator returns the value of its base.
+					The b, operator returns the value of its base.
 
 		t exp
 				Returns type of expression
@@ -1172,16 +1172,16 @@ Operators
 			- the lower case o operator takes 2 operands : the named operator name and one operation operand;
 			- the upper case O operator takes 3 operands : the named operator name and two operation operands.
 
-			Furthermore, adding the backtick operator to both the O and o operands increases their expected number of operands by (2 * number_of_backticks), so
+			Furthermore, adding the comma operator to both the O and o operands increases their expected number of operands by (2 * number_of_commas), so
 
-			- the o` operator takes 4 operands;
-			- the O` operator takes 5 operands;
-			- the o`` operator takes 6 operands;
-			- the O`` operator takes 7 operands;
+			- the o, operator takes 4 operands;
+			- the O, operator takes 5 operands;
+			- the o,, operator takes 6 operands;
+			- the O,, operator takes 7 operands;
 			etc.
 
 			Both operators, however, can have their number of operands overridden by the ( and ) operators,
-			in which case they can be used interchangeably and following backticks don't affect the number of expected operands (they can still affect the behaviour, though).
+			in which case they can be used interchangeably and following commas don't affect the number of expected operands (they can still affect the behaviour, though).
 
 			The operator's name, which is the first operand of the o and O operators, can either be a number or a string.
 			For readability, however, strings are chosen for the implemented operators.
@@ -1250,21 +1250,21 @@ Operators
 									o #fib 6.1 yields 8
 									o #fib ~6.1 yields 8
 
-			o`#dow year month day
+			o,#dow year month day
 
 							Day of week
 
 								Returns a number from 0 to 6, where 0 is Saturday and 6 is Friday.
 								
 								e.g.
-									o`#dow 2024 5 27	yields 3: monday.
+									o,#dow 2024 5 27	yields 3: monday.
 
 								If only one numeric argument is given, it's not understood as a year, but as the Gregorian day
-								sequence number - see the o`#greg operator.
+								sequence number - see the o,#greg operator.
 
-								e.g. o`#dow 2025 6 5	yields 5: thursday.
+								e.g. o,#dow 2025 6 5	yields 5: thursday.
 
-			o`#greg year month day
+			o,#greg year month day
 
 							Sequence number of a day in the Gregorian calendar, assuming
 
@@ -1298,17 +1298,17 @@ Operators
 							(WWW = the weekday as an English abbreviation, from MON to SUN)
 
 							E.g.:
-								$#seq + o`#greg 2025 6 4 365 o#gregt v#seq
+								$#seq + o,#greg 2025 6 4 365 o#gregt v#seq
 									yields
 								"20260604WED"
 
 							If a third string argument is given, this is used as a separator. E.g.:
-								$#seq + o`#greg 2025 6 4 365 O#gregt v#seq #-
+								$#seq + o,#greg 2025 6 4 365 O#gregt v#seq #-
 									yields
 								"2026-06-04-WED"
 
 							This separator can be any length; if a space is desired, pass it as [s ]:
-								$#seq + o`#greg 2025 6 4 365 O#gregt v#seq [s ]
+								$#seq + o,#greg 2025 6 4 365 O#gregt v#seq [s ]
 									yields
 								"2026 06 04 WED"
 

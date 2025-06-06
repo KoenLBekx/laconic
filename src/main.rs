@@ -79,7 +79,7 @@ fn show_syntax() {
     println!("    of the first semitone higher than the diapason.");
     println!();
     println!("E.g. : laconic ' $0 1 $1 0 W!>v0 4 ;+:1 v0 +:0 1 v1'");
-    println!("       will yield 10 (summation of 4");
+    println!("       will yield 10 (summation of 4)");
     println!("In a shell that supports multi-line commands,");
     println!("the script can be split over multiple lines, e.g.:");
     println!();
@@ -104,11 +104,11 @@ fn show_syntax() {
     println!("E.g. :");
     println!("      given script file clearStack.lac having the statements");
     println!();
-    println!("          Wk`k");
+    println!("          Wk,k");
     println!();
     println!("      the below command");
     println!();
-    println!("          $ cat clearStack.lac | laconic 'o#fmt 0 K(10 20 30 40) wk`' -i 'wk`'");
+    println!("          $ cat clearStack.lac | laconic 'o#fmt 0 K(10 20 30 40) wk,' -i 'wk,'");
     println!();
     println!("      will output:");
     println!();

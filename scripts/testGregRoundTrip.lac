@@ -19,7 +19,7 @@ F
 		$#y o#gregy v#seq
 		$#m o#gregm v#seq
 		$#d o#gregd v#seq
-		$#calc o`#greg v#y v#m v#d
+		$#calc o,#greg v#y v#m v#d
 		$
 			#testOk
 			=
