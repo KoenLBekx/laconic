@@ -359,6 +359,7 @@ impl Expression {
             'N' => &opr_funcs::preceding_nr_operands,
             'W' => &opr_funcs::exec_while,
             'F' => &opr_funcs::exec_for,
+            'B' => &opr_funcs::set_break,
             'R' if alternative_marks_count == 0 => &opr_funcs::define_routine_with_new_scope,
             'R' => &opr_funcs::define_routine_sharing_variables,
             'X' => &opr_funcs::exec_routine,
@@ -649,6 +650,7 @@ struct Shuttle {
     writer: Box<dyn output::EchoingWriter>,
     reader: Box<dyn input::StdinOrMock>,
     last_calculated_gregorian_day: Option<GregorianDateInfo>,
+    break_target: u32,
 
     #[cfg(test)]
     golden_ratio_calculations: u8,
@@ -673,6 +675,7 @@ impl Shuttle {
             writer,
             reader,
             last_calculated_gregorian_day: None,
+            break_target: 0_u32,
 
             #[cfg(test)]
             golden_ratio_calculations: 0u8,
@@ -962,7 +965,7 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:!w°SCTcstbKXn"   .contains(chr) => 1,
+                        chr if "~iav:!w°SCTcstbKXnB"  .contains(chr) => 1,
                         chr if "+-*/^l%&|x$W;mM=<>ZoR".contains(chr) => 2,
                         chr if "?O"                   .contains(chr) => 3,
                         chr if "F"                    .contains(chr) => 5,
@@ -1054,7 +1057,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^lia%°SCTpec$v:Kk§`?WF;mMNn()=<>!&|xZoOwrstbRXØ".contains(op)
+        "~+-*/^lia%°SCTpec$v:Kk§`?WF;mMNn()=<>!&|xZoOwrstbRXØB".contains(op)
     }
 }
 
@@ -3155,11 +3158,19 @@ pub(crate) mod opr_funcs {
                         iter_count += 1f64;
                         op.operate(shuttle)?;
                         outcome = op.get_num_value(0f64);
+
+                        if shuttle.break_target > 0_u32 {
+                            break 'outer;
+                        }
                     },
                 }
 
                 op_count += 1;
             }
+        }
+
+        if shuttle.break_target > 0_u32 {
+            shuttle.break_target -= 1_u32;
         }
 
         shuttle.preceding_nr_operands = iter_count;
@@ -3206,7 +3217,7 @@ pub(crate) mod opr_funcs {
         let mut op_count: usize;
         let mut op: &mut Expression;
 
-        loop {
+        'outer: loop {
             if (shuttle.max_iterations > 0f64) && (iter_count >= shuttle.max_iterations) {
                 break;
             }
@@ -3229,6 +3240,10 @@ pub(crate) mod opr_funcs {
                     outcome = op.get_num_value(0f64);
                 }
 
+                if shuttle.break_target > 0_u32 {
+                    break 'outer;
+                }
+
                 op_count += 1;
             }
 
@@ -3239,9 +3254,34 @@ pub(crate) mod opr_funcs {
             }
         }
 
+        if shuttle.break_target > 0_u32 {
+            shuttle.break_target -= 1_u32;
+        }
+
         shuttle.preceding_nr_operands = iter_count;
 
         *result_value = ValueType::Number(outcome);
+
+        Ok(())
+    }
+
+    pub fn set_break(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(opr_mark));
+        }
+
+        let target = match operands[0].get_value() {
+            ValueType::Number(num) => num ,
+            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+        };
+
+        if target < 0_f64 {
+            return Err(ScriptError::InvalidOperand(opr_mark));
+        }
+
+        shuttle.break_target = target as u32;
+
+        *result_value = ValueType::Number(target);
 
         Ok(())
     }
@@ -4852,6 +4892,21 @@ mod tests {
         }
 
         #[test]
+        fn x_while_break() {
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("$#last 10 $#count 1 W(!>v#count v#last ?=v#count 5 B1 0 +:#count 1) v#count".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_while_break_2() {
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("$#last 10 $#count 1 W(1 W(!>v#count v#last ?=v#count 5 B2 0 +:#count 1) +:#count 10) v#count".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_while_break_0() {
+            assert_eq!(4f64, Interpreter::execute_with_mocked_io("$#last 3 $#count 1 W(!>v#count v#last B0 +:#count 1) v#count".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_for_4_op_asc() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('F')),
@@ -4881,6 +4936,21 @@ mod tests {
         #[test]
         fn x_for_descending() {
             assert_eq!(24f64, Interpreter::execute_with_mocked_io("$0 1 F4 1 1 1 *:0v1 v0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_for_break() {
+            assert_eq!(5_f64, Interpreter::execute_with_mocked_io("F1 10 1 1 ?=v1 5 B1 0 v1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_for_break_0() {
+            assert_eq!(4_f64, Interpreter::execute_with_mocked_io("F1 4 1 1 ?=v1 2 B0 0 v1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_for_break_2() {
+            assert_eq!(2_f64, Interpreter::execute_with_mocked_io("$0 0 F1 3 1 2 F1 10 1 1 ?=v1 3 B2 +:0 1 v0".to_string()).unwrap().numeric_value);
         }
 
         #[test]

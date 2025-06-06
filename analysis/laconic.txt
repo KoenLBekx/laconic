@@ -917,9 +917,10 @@ Operators
 				v1
 
 		B num
-			(to be implemented)
 
-			Breaks the current F- or W-loop if num is 0, otherwise the enclosing F- or W-loop num levels above.
+			Breaks the current F- or W-loop if num is 1, otherwise the enclosing F- or W-loop num levels above.
+
+			If a 0 is passed, suppresses a previously set break target, if any.
 
 	Routines
 
