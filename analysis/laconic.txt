@@ -1296,8 +1296,6 @@ Operators
 							Numbers smaller than 1 yield an error message.
 							(WWW = the weekday as an English abbreviation, from MON to SUN)
 
-							Weekday: to be implemented.
-
 							E.g.:
 								$#seq + o`#greg 2025 6 4 365 o#gregt v#seq
 									yields

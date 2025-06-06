@@ -413,6 +413,18 @@ impl Expression {
         }
     }
 
+    pub fn new_number_resolved(num: f64) -> Self {
+        Expression {
+            operator: &opr_funcs::nop,
+            operands: Vec::<Expression>::new(),
+            value: ValueType::Number(num),
+            opr_mark: '0',
+            is_last_of_override: false,
+            has_overridden_nr_of_ops: false,
+            alternative_marks_count: 0,
+        }
+    }
+
     pub fn new_text(txt: String) -> Self {
         Expression {
             operator: &opr_funcs::string_expr,
@@ -1139,6 +1151,16 @@ pub(crate) mod opr_funcs {
     use super::{DateInfoItem, Expression, GregorianDateInfo, NO_VALUE, Routine, ScriptError, Shuttle, ValueType, are_near};
 
     const DAYS_IN_YEAR :u32 = 365;
+
+    const WEEKDAYS: [&str; 7] = [
+        "SAT",
+        "SUN",
+        "MON",
+        "TUE",
+        "WED",
+        "THU",
+        "FRI",
+    ];
 
     fn has_any_string_operands(operands: &[Expression]) -> bool {
         let mut opd_count = 0usize;
@@ -2321,9 +2343,29 @@ pub(crate) mod opr_funcs {
         }
     }
 
+    fn day_of_week(year: u32, month: u32, day: u32) -> u32 {
+        let century = year / 100;
+        let year_in_century = year % 100;
+        let century_offset = (7 - ((century % 4) * 2)) % 7;
+        let year_offset = century_offset + year_in_century + (year_in_century / 4);
+        let mut month_offset = 0;
+
+        for m in 1..month {
+            month_offset += days_in_month(m, false);
+        }
+
+        if is_leap_year(year as f64) && (month <= 2) {
+            month_offset = 7 + month_offset - 1;
+        }
+
+        #[cfg(test)]
+        println!("month_offset: {}", month_offset % 7);
+
+        (year_offset + month_offset + day) % 7
+    }
+
     pub fn dow(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         
-        let mut year_float = 0_f64;
         let mut year = 0_u32;
         let mut month = 0_u32;
         let mut day = 0_u32;
@@ -2335,8 +2377,7 @@ pub(crate) mod opr_funcs {
 
                 match gregorian_date_item(opr_mark, &mut dummy, operands, shuttle, DateInfoItem::Year) {
                     Ok(date_item) => {
-                        year_float = date_item.get_info(&DateInfoItem::Year);
-                        year = year_float as u32;
+                        year = date_item.get_info(&DateInfoItem::Year) as u32;
                         month = date_item.get_info(&DateInfoItem::Month) as u32;
                         day = date_item.get_info(&DateInfoItem::Day) as u32;
                     },
@@ -2349,10 +2390,7 @@ pub(crate) mod opr_funcs {
                     match opd.get_value() {
                         ValueType::Number(n) => if n >= 0_f64 {
                             match count {
-                                0 => {
-                                    year_float = n;
-                                    year = n as u32;
-                                },
+                                0 => year = n as u32,
                                 1 => month = n as u32,
                                 2 => day = n as u32,
                                 _ => (),
@@ -2377,25 +2415,7 @@ pub(crate) mod opr_funcs {
         #[cfg(test)]
         println!("YMD: {}-{}-{}", year, month, day);
 
-        let century = year / 100;
-        let year_in_century = year % 100;
-        let century_offset = (7 - ((century % 4) * 2)) % 7;
-        let year_offset = century_offset + year_in_century + (year_in_century / 4);
-        let mut month_offset = 0;
-
-        for m in 1..month {
-            month_offset += days_in_month(m, false);
-        }
-
-        if is_leap_year(year_float) && (month <= 2) {
-            month_offset = 7 + month_offset - 1;
-        }
-
-        #[cfg(test)]
-        println!("month_offset: {}", month_offset % 7);
-
-        let day_of_week = (year_offset + month_offset + day) % 7;
-
+        let day_of_week = day_of_week(year, month, day);
         *result_value = ValueType::Number(day_of_week as f64);
 
         Ok(())
@@ -2748,15 +2768,24 @@ pub(crate) mod opr_funcs {
             String::new()
         };
 
-        match gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Year) {
+        let mut dummy = ValueType::Empty;
+
+        match gregorian_date_item(opr_mark, &mut dummy, operands, shuttle, DateInfoItem::Year) {
             Ok(date_info) => {
+                let year = date_info.get_info(&DateInfoItem::Year);
+                let month = date_info.get_info(&DateInfoItem::Month);
+                let day = date_info.get_info(&DateInfoItem::Day);
+                let weekday = day_of_week(year as u32, month as u32, day as u32) as usize;
+
                 *result_value = ValueType::Text(format!(
-                    "{:04}{}{:02}{}{:02}",
-                    date_info.get_info(&DateInfoItem::Year),
+                    "{:04}{}{:02}{}{:02}{}{}",
+                    year,
                     sepa.clone(),
-                    date_info.get_info(&DateInfoItem::Month),
+                    month,
                     sepa,
-                    date_info.get_info(&DateInfoItem::Day)
+                    day,
+                    sepa,
+                    WEEKDAYS[weekday]
                 ));
 
                 Ok(())
@@ -6321,32 +6350,32 @@ mod tests {
 
         #[test]
         fn x_gregt_no_separator_argument() {
-            assert_eq!("20250401".to_string(), Interpreter::execute_with_mocked_io("o#gregt 739708".to_string()).unwrap().string_representation);
+            assert_eq!("20250401TUE".to_string(), Interpreter::execute_with_mocked_io("o#gregt 739708".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_gregt_separator_argument_length_zero() {
-            assert_eq!("20250401".to_string(), Interpreter::execute_with_mocked_io("O#gregt 739708 #".to_string()).unwrap().string_representation);
+            assert_eq!("20250401TUE".to_string(), Interpreter::execute_with_mocked_io("O#gregt 739708 #".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_gregt_separator_dash() {
-            assert_eq!("2025-04-01".to_string(), Interpreter::execute_with_mocked_io("O#gregt 739708 #-".to_string()).unwrap().string_representation);
+            assert_eq!("2025-04-01-TUE".to_string(), Interpreter::execute_with_mocked_io("O#gregt 739708 #-".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_gregt_separator_blank() {
-            assert_eq!("2025 04 01".to_string(), Interpreter::execute_with_mocked_io("O#gregt 739708 [s ]".to_string()).unwrap().string_representation);
+            assert_eq!("2025 04 01 TUE".to_string(), Interpreter::execute_with_mocked_io("O#gregt 739708 [s ]".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_gregt_year_two_digits() {
-            assert_eq!("0055-04-01".to_string(), Interpreter::execute_with_mocked_io("O#gregt 20180 #-".to_string()).unwrap().string_representation);
+            assert_eq!("0055-04-01-THU".to_string(), Interpreter::execute_with_mocked_io("O#gregt 20180 #-".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_gregt_year_five_digits() {
-            assert_eq!("10001-04-01".to_string(), Interpreter::execute_with_mocked_io("O#gregt 3652882 #-".to_string()).unwrap().string_representation);
+            assert_eq!("10001-04-01-SUN".to_string(), Interpreter::execute_with_mocked_io("O#gregt 3652882 #-".to_string()).unwrap().string_representation);
         }
 
         #[test]
