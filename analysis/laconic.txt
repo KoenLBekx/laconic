@@ -8,10 +8,10 @@ LACONIC
 		//				about a specific operator (given in next parameter).
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():,;=<>!&|?°ØaBbCcEeFiKklMmNnOopRrSsTtUuVvWwXxZ
+			~+-*/%^$():,;=<>!&|?°Ø¶aBbCcEeFiKklMmNnOopRrSsTtUuVvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():,;=<>!&|?°ØaBbCcEeFiKklMmNnOopRrSsTt   vWwXxZ
+			~+-*/%^$():,;=<>!&|?°Ø¶aBbCcEeFiKklMmNnOopRrSsTt   vWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   	interfere with command line syntax or string literals
@@ -21,7 +21,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			`´#@£€¶µADdfGgHhIJjLPQqz
+			`´#@£€µADdfGgHhIJjLPQqz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -32,7 +32,7 @@ LACONIC
 			° 00B0 Degrees sign (Alt-Shift-:)
 			´ 00B4 Acute accent
 			µ 00B5 Mu
-			¶ 00B6 Pilcrow
+			¶ 00B6 Pilcrow (AltGr-r)
 			€ 20AC Euro
 			ø 00F8 (Alt-l)
 			Ø 00D8 (Alt-Shift-L)
@@ -423,6 +423,8 @@ Operators
 				o§uni 10	yields the newline character.
 				b16 o(§uni [n421] [n43E] [n44E] [n437]) yields "Союз".
 
+				Note: the ¶ operator and c§n constant operator also yield a newline character.
+
 		O§ucv string position
 			Returns the unicode point value of the character at [position] in [string].
 
@@ -539,16 +541,26 @@ Operators
 
 			This is the same as c§empty.
 
+		¶ newline character
+			
+			For keyboard input, try AltGr-r.
+			(¶ is U+00B6.)
+
+			This is the same as c§n
+
 		c	name
 			named constants
 
 			c§empty
 				The Empty value; the Ø character is not available on every keyboard.
 
-			c§gold Golden Ratio (sectio aurea)
-
+			c§gold
+				Golden Ratio (sectio aurea)
 				Calculated as (1 + sqrt(5))/2
 
+			c§n
+				newline character
+				This is the same as ¶
 
 	Variables
 
@@ -1032,23 +1044,30 @@ Operators
 
 	Input & Output
 
-		w	write the value of an expression to standard output and returns that value.
+		w
+			write the value of an expression to standard output and returns that value.
+
+					E.g.:
+						$0 7 wv0
 
 					Note that no newline or CR characters are inserted automatically.
+					You can, however, easily add a newline to any text using the + and ¶ operators: e.g.:
 
-					$0 7 wv7
+						w+¶[sCalculating ...]
+						w+[sCalculating ...]¶
+						w+(¶[sCalculating ...]¶)
 
 			If more than one argument is given, they are all written to standard output.
 
-		w, filepath
+		w, filepath expression
 			(to be implemented)
 
-			Writes to a file, appending to it.
+			Writes the outcome of the expression to a file, appending to it.
 
-		w,, filepath
+		w,, filepath expression
 			(to be implemented)
 
-			Writes to a file, overwriting it.
+			Writes the outcome of the expression to a file, overwriting it.
 
 		r read a line from standard input.
 
@@ -1070,9 +1089,10 @@ Operators
 				(See the E operator for an example.)
 
 		r, filepath
-			(to be implemented)
 
 			reads a file and return its string content.
+			The file should consist entirely of valid UTF-8 characters.
+			If not, an error is thrown.
 
 			E.g.:
 				Er, filepath
@@ -1361,7 +1381,25 @@ Operators
 			In combination with the r operator, this allows input of Laconic script
 			code during script execution:
 
-			laconic 'w[sPlease enter a number:] Kr w[sEnter an operation on that number (represented as k):] Er'
+			laconic 'w[sPlease enter a number: ] Kr w[sEnter an operation on that number (represented as k): ] Er'
+
+			Furthermore, the E operator can also be used to import a library of laconic code: e.g.:
+
+				given the file lib.lac having content
+
+					R
+						§Avg
+						;;;
+							$0 0
+							$1 k,
+							W
+								k,
+								+:0k
+							/v0v1
+
+				the command below can use the §Avg routine:
+
+					laconic 'Er, §lib.lac K(8 6 4) X§Avg'
 
 			Note: if you want a string to be evaluated by E to return a hard-coded string again, you've got to nest
 			string markers: e.g.:

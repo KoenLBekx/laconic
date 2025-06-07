@@ -2,6 +2,7 @@ use std::env::args;
 use std::io::stdout;
 use std::fs::read_to_string;
 use laconic::Interpreter;
+use string_io_and_mock::FileTextHandler;
 
 fn main() {
     let mut script = String::new();
@@ -49,7 +50,8 @@ fn main() {
     if !script.is_empty() {
         let writer = Box::new(stdout());
         let reader = Box::new(laconic::input::StdinReader::new());
-        let mut interpreter = Interpreter::new(writer, reader);
+        let text_io_handler = Box::new(FileTextHandler::new());
+        let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
 
         match interpreter.execute_opts(
             script,
