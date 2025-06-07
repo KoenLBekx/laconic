@@ -11,7 +11,7 @@ LACONIC
 			~+-*/%^$():,;=<>!&|?°ØaBbCcEeFiKklMmNnOopRrSsTtUuVvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():,;=<>!&|?°Øa bCc eFiKklMmNnOopRrSsTt   vWwXxZ
+			~+-*/%^$():,;=<>!&|?°ØaBbCcEeFiKklMmNnOopRrSsTt   vWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   	interfere with command line syntax or string literals
