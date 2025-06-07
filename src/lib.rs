@@ -23,7 +23,7 @@ use std::hash::{Hash, Hasher};
 // The second one to an Expression's value property,
 // the third one to a Expression's operands property (operands are Expression objects),
 // the fourth one to the Shuttle containing other state.
-type OperatorFunc = &'static dyn Fn(char, &mut ValueType, &mut [Expression], &mut Shuttle) -> Result<(), ScriptError>;
+type OperatorFunc = &'static dyn Fn(&mut char, &mut ValueType, &mut [Expression], &mut Shuttle) -> Result<(), ScriptError>;
 
 #[derive(PartialEq)]
 enum Atom {
@@ -327,9 +327,11 @@ struct Expression
 
 impl Expression {
     pub fn new(opr_mark: char, alternative_marks_count: u8) -> Self {
+        // '"' is used for an E-expression after its first operation
+
         let opr: OperatorFunc = match opr_mark {
             '0' => &opr_funcs::nop,
-            '"' => &opr_funcs::string_expr,
+            '§' => &opr_funcs::string_expr,
             '~' => &opr_funcs::unaryminus,
             '+' => &opr_funcs::add,
             '-' => &opr_funcs::minus,
@@ -388,6 +390,7 @@ impl Expression {
             'b' if alternative_marks_count == 0 => &opr_funcs::input_base,
             'b' => &opr_funcs::output_base,
             'Ø' => &opr_funcs::empty,
+            'E' => &opr_funcs::eval,
             _ => &opr_funcs::nop,
         };
 
@@ -431,7 +434,7 @@ impl Expression {
             operator: &opr_funcs::string_expr,
             operands: Vec::<Expression>::new(),
             value: ValueType::Text(txt),
-            opr_mark: '"',
+            opr_mark: '§',
             is_last_of_override: false,
             has_overridden_nr_of_ops: false,
             alternative_marks_count: 0,
@@ -477,7 +480,7 @@ impl Expression {
             }
         }
 
-        (self.operator)(self.opr_mark, &mut self.value, &mut self.operands, shuttle)?;
+        (self.operator)(&mut self.opr_mark, &mut self.value, &mut self.operands, shuttle)?;
 
         let assignment_indexes = shuttle.assignment_indexes_stack.pop()
             .expect("fn operate should always find elements in shuttle.assignment_indexes_stack after execution of the operator.");
@@ -516,7 +519,7 @@ impl Expression {
 
                 _ => panic!("An expression with opr_mark '0' should have a ValueType::Number, ValueType::Text or ValueType::Empty"),
             },
-            '"' => match self.value {
+            '§' => match self.value {
                 ValueType::Empty => "no_value".to_string(),
                 ValueType::Text(ref txt) => txt.clone(),
                 _ => panic!("An expression with opr_mark '\"' should either have a ValueType::Text or ValueType::Empty"),
@@ -595,7 +598,7 @@ impl fmt::Debug for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let representation = match self.opr_mark  {
             '0' => format!("{}", self.get_num_value(0f64)),
-            '"' => self.get_string_value("(no_value)".to_string()),
+            '§' => self.get_string_value("(no_value)".to_string()),
             _   => String::new(),
         };
 
@@ -965,7 +968,7 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:!w°SCTcstbKXnB"  .contains(chr) => 1,
+                        chr if "~iav:!w°SCTcstbKXnBE" .contains(chr) => 1,
                         chr if "+-*/^l%&|x$W;mM=<>ZoR".contains(chr) => 2,
                         chr if "?O"                   .contains(chr) => 3,
                         chr if "F"                    .contains(chr) => 5,
@@ -1057,7 +1060,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^lia%°SCTpec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRXØB".contains(op)
+        "~+-*/^lia%°SCTpec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRXØBE".contains(op)
     }
 }
 
@@ -1151,7 +1154,7 @@ pub mod output {
 
 pub(crate) mod opr_funcs {
     use std::collections::HashMap;
-    use super::{DateInfoItem, Expression, GregorianDateInfo, NO_VALUE, Routine, ScriptError, Shuttle, ValueType, are_near};
+    use super::{DateInfoItem, Expression, GregorianDateInfo, Interpreter, NO_VALUE, Routine, ScriptError, Shuttle, ValueType, are_near};
 
     const DAYS_IN_YEAR :u32 = 365;
 
@@ -1293,7 +1296,7 @@ pub(crate) mod opr_funcs {
         Ok(num * sign_factor)
     }
 
-    pub fn nop(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn nop(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         // If still needed, parse the string representation to a number.
         // TODO : for now, invalid strings are parsed to NaN; later on, a
         // ScriptError::InvalidNumber is needed.
@@ -1310,22 +1313,22 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn empty(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn empty(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Empty;
 
         Ok(())
     }
 
-    pub fn string_expr(_opr_mark: char, _result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn string_expr(_opr_mark: &mut char, _result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         // Don't do anything.
         // Meant for Expressions that contain a fixed string value from creation.
 
         Ok(())
     }
     
-    pub fn add(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn add(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         if has_any_string_operands(operands) {
@@ -1359,9 +1362,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn multiply(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn multiply(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = 0f64;
@@ -1378,9 +1381,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn power(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn power(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = 0f64;
@@ -1397,9 +1400,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn minus(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn minus(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = 0f64;
@@ -1416,9 +1419,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn divide(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn divide(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = 0f64;
@@ -1431,7 +1434,7 @@ pub(crate) mod opr_funcs {
                     num_val = op.get_num_value(1f64);
 
                     if num_val == 0f64 {
-                        return Err(ScriptError::DivideByZero(opr_mark));
+                        return Err(ScriptError::DivideByZero(*opr_mark));
                     }
 
                     outcome /= op.get_num_value(1f64);
@@ -1444,9 +1447,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn int_div(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn int_div(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut dividend = 0f64;
@@ -1460,7 +1463,7 @@ pub(crate) mod opr_funcs {
                     divisor = op.get_num_value(1f64);
 
                     if divisor == 0f64 {
-                        return Err(ScriptError::DivideByZero(opr_mark));
+                        return Err(ScriptError::DivideByZero(*opr_mark));
                     }
 
                     let result_sign = dividend.signum() * divisor.signum();
@@ -1478,9 +1481,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn modulo(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn modulo(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = 0f64;
@@ -1493,7 +1496,7 @@ pub(crate) mod opr_funcs {
                     num_val = op.get_num_value(1f64);
 
                     if num_val == 0f64 {
-                        return Err(ScriptError::DivideByZero(opr_mark));
+                        return Err(ScriptError::DivideByZero(*opr_mark));
                     }
 
                     outcome %= op.get_num_value(1f64);
@@ -1506,18 +1509,18 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn combine(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn combine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.last() {
             Some(e) => e.get_value(),
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
         };
 
         Ok(())
     }
     
-    pub fn min(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn min(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = ValueType::Max;
@@ -1540,9 +1543,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn max(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn max(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = ValueType::Empty;
@@ -1561,19 +1564,19 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn unaryminus(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn unaryminus(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => ValueType::Number(- e.get_num_value(0f64)),
         };
 
         Ok(())
     }
 
-    pub fn intgr(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn intgr(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(
             match operands.first() {
-                None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+                None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
                 Some(e) => {
                     e.get_num_value(0f64).trunc()
                 },
@@ -1583,10 +1586,10 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn ceiling(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn ceiling(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(
             match operands.first() {
-                None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+                None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
                 Some(e) => {
                     let num = e.get_num_value(0f64);
 
@@ -1602,18 +1605,18 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn abs(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn abs(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => ValueType::Number(e.get_num_value(0f64).abs()),
         };
 
         Ok(())
     }
 
-    pub fn degrees(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn degrees(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).to_degrees())
             },
@@ -1622,9 +1625,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn radians(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn radians(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).to_radians())
             },
@@ -1633,9 +1636,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn sine(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn sine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).sin())
             },
@@ -1644,9 +1647,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn asin(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn asin(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).asin())
             },
@@ -1655,9 +1658,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn cosine(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn cosine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).cos())
             },
@@ -1666,9 +1669,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn acos(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn acos(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).acos())
             },
@@ -1677,9 +1680,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn tangent(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn tangent(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).tan())
             },
@@ -1688,9 +1691,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn atan(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn atan(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).atan())
             },
@@ -1699,11 +1702,11 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn log(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn log(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
             *result_value = ValueType::Number(0f64);
 
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let base = operands[0].get_num_value(0f64);
@@ -1713,21 +1716,21 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn pi(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn pi(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(std::f64::consts::PI);
 
         Ok(())
     }
 
-    pub fn euler_const(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn euler_const(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(std::f64::consts::E);
 
         Ok(())
     }
 
-    pub fn constants(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn constants(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let const_index = operands[0].get_value();
@@ -1756,9 +1759,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn assign_number_register(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn assign_number_register(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let name_is_string = operands[0].get_value().get_type_as_num() == 2f64;
@@ -1809,9 +1812,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn get_number_register(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn get_number_register(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let index = operands[0].get_value();
@@ -1826,9 +1829,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn assignment_maker(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn assignment_maker(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let index = operands[0].get_value();
@@ -1848,9 +1851,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn push_stack(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn push_stack(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = ValueType::Empty;
@@ -1865,7 +1868,7 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn pop_stack(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn pop_stack(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match shuttle.stack.pop() {
             None => ValueType::Empty,
             Some(vt) => vt,
@@ -1874,15 +1877,15 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn stack_depth(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn stack_depth(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(shuttle.stack.len() as f64);
 
         Ok(())
     }
     
-    pub fn equals(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn equals(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut are_equal = true;
@@ -1921,9 +1924,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn less(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn less(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = true;
@@ -1960,9 +1963,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn greater(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn greater(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = true;
@@ -1999,9 +2002,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn not(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn not(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = true;
@@ -2024,9 +2027,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn and(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn and(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = true;
@@ -2049,9 +2052,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn or(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn or(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = false;
@@ -2074,9 +2077,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn xor(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn xor(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut trues = 0usize;
@@ -2107,9 +2110,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn setting(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn setting(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut setting_name = ValueType::Empty;
@@ -2134,13 +2137,13 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn enumerated_opr(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn enumerated_opr(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         let default_outcome = ValueType::Number(0f64);
 
         if operands.is_empty() {
             *result_value = default_outcome;
 
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let opr_func = match operands[0].get_value() {
@@ -2174,7 +2177,7 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn get_version(_opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn get_version(_opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         const VERSION: &'static str = env!("CARGO_PKG_VERSION");
         let version_nums: Vec<&str> = VERSION.split('.').collect();
 
@@ -2193,9 +2196,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn set_number_format(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn set_number_format(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         for (count, op) in operands.iter().enumerate() {
@@ -2217,9 +2220,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn sign(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn sign(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut all_positive = true;
@@ -2249,9 +2252,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn get_unicode_chars(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn get_unicode_chars(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut result_string = String::new();
@@ -2273,9 +2276,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn get_length(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn get_length(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut tot_len = 0usize;
@@ -2306,9 +2309,9 @@ pub(crate) mod opr_funcs {
         }
     }
 
-    pub fn opr_leap(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn opr_leap(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         *result_value = ValueType::Number(
@@ -2320,7 +2323,7 @@ pub(crate) mod opr_funcs {
                         0_f64
                     }
                 },
-                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
             }
         );
 
@@ -2367,14 +2370,14 @@ pub(crate) mod opr_funcs {
         (year_offset + month_offset + day) % 7
     }
 
-    pub fn dow(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn dow(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         
         let mut year = 0_u32;
         let mut month = 0_u32;
         let mut day = 0_u32;
 
         match operands.len() {
-            0 => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            0 => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             1 => {
                 let mut dummy = ValueType::Empty;
 
@@ -2387,7 +2390,7 @@ pub(crate) mod opr_funcs {
                     Err(se) => return Err(se),
                 }
             },
-            2 => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            2 => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             _ =>  {
                 for (count, opd) in operands.iter().enumerate() {
                     match opd.get_value() {
@@ -2399,18 +2402,18 @@ pub(crate) mod opr_funcs {
                                 _ => (),
                             }
                         } else {
-                            return Err(ScriptError::InvalidOperand(opr_mark));
+                            return Err(ScriptError::InvalidOperand(*opr_mark));
                         },
-                        _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+                        _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
                     }
                 }
 
                 if (month) == 0 || (month > 12) {
-                    return Err(ScriptError::InvalidOperand(opr_mark));
+                    return Err(ScriptError::InvalidOperand(*opr_mark));
                 }
 
                 if (day == 0) || (day > 31) {
-                    return Err(ScriptError::InvalidOperand(opr_mark));
+                    return Err(ScriptError::InvalidOperand(*opr_mark));
                 }
             },
         }
@@ -2424,9 +2427,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn gregorian_seq(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn gregorian_seq(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 3 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
         
         let mut year_float = 0_f64;
@@ -2447,18 +2450,18 @@ pub(crate) mod opr_funcs {
                         _ => (),
                     }
                 } else {
-                    return Err(ScriptError::InvalidOperand(opr_mark));
+                    return Err(ScriptError::InvalidOperand(*opr_mark));
                 },
-                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
             }
         }
 
         if (month) == 0 || (month > 12) {
-            return Err(ScriptError::InvalidOperand(opr_mark));
+            return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
         if (day == 0) || (day > 31) {
-            return Err(ScriptError::InvalidOperand(opr_mark));
+            return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
         // One leap year
@@ -2691,14 +2694,14 @@ pub(crate) mod opr_funcs {
         })
     }
 
-    pub fn gregorian_date_item(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, item: DateInfoItem) -> Result<GregorianDateInfo, ScriptError> {
+    pub fn gregorian_date_item(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, item: DateInfoItem) -> Result<GregorianDateInfo, ScriptError> {
         if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let seq_nr = match operands[0].get_value() {
             ValueType::Number(num) => num,
-            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
         };
 
         let date_info_opt = match shuttle.last_calculated_gregorian_day {
@@ -2730,7 +2733,7 @@ pub(crate) mod opr_funcs {
                     shuttle.last_calculated_gregorian_day = Some(date_info.clone());
                     date_info
                 },
-                Err(_) => return Err(ScriptError::InvalidOperand(opr_mark)),
+                Err(_) => return Err(ScriptError::InvalidOperand(*opr_mark)),
             }
         };
 
@@ -2739,33 +2742,33 @@ pub(crate) mod opr_funcs {
         Ok(date_info)
     }
 
-    pub fn gregorian_year(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn gregorian_year(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         match gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Year) {
             Ok(_) => Ok(()),
             Err(se) => Err(se),
         }
     }
 
-    pub fn gregorian_month(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn gregorian_month(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         match gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Month) {
             Ok(_) => Ok(()),
             Err(se) => Err(se),
         }
     }
 
-    pub fn gregorian_day(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn gregorian_day(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         match gregorian_date_item(opr_mark, result_value, operands, shuttle, DateInfoItem::Day) {
             Ok(_) => Ok(()),
             Err(se) => Err(se),
         }
     }
 
-    pub fn gregorian_text(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn gregorian_text(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         let sepa = if operands.len() > 1 {
             match operands[1].get_value() {
                 ValueType::Text(t) => t,
                 ValueType::Empty => String::new(),
-                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
             }
         } else {
             String::new()
@@ -2797,15 +2800,15 @@ pub(crate) mod opr_funcs {
         }
     }
 
-    pub fn get_unicode_value(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn get_unicode_value(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let characters: Vec::<char> = match operands[0].get_value() {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
-            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
         };
 
         let pos = if operands.len() < 2 {
@@ -2813,12 +2816,12 @@ pub(crate) mod opr_funcs {
         } else {
             match operands[1].get_value() {
                 ValueType::Number(num) => num as usize,
-                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
             }
         };
 
         if pos >= characters.len() {
-            return Err(ScriptError::InvalidOperand(opr_mark));
+            return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
         *result_value = ValueType::Number(characters[pos] as u32 as f64);
@@ -2826,15 +2829,15 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn find_in_string(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn find_in_string(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let characters: Vec::<char> = match operands[0].get_value() {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
-            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
         };
 
         let source_len = characters.len();
@@ -2842,19 +2845,19 @@ pub(crate) mod opr_funcs {
         let find_characters: Vec::<char> = match operands[1].get_value() {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
-            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
         };
 
         let find_len = find_characters.len();
 
         if find_len > source_len {
-            return Err(ScriptError::InvalidOperand(opr_mark));
+            return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
         let start_pos = if operands.len() >= 3 {
             match operands[2].get_value() {
                 ValueType::Number(num) => num as usize,
-                _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
             }
         } else {
             0_usize
@@ -2863,7 +2866,7 @@ pub(crate) mod opr_funcs {
         let last_start_pos = source_len - find_len;
 
         if start_pos > last_start_pos {
-            return Err(ScriptError::InvalidOperand(opr_mark));
+            return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
         if source_len == 0_usize {
@@ -2898,38 +2901,38 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn substring(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn substring(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let characters: Vec::<char> = match operands[0].get_value() {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
-            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
         };
 
         let start_pos_float = if let ValueType::Number(sp) = operands[1].get_value() {
             sp
         } else {
-            return Err(ScriptError::InvalidOperand(opr_mark))
+            return Err(ScriptError::InvalidOperand(*opr_mark))
         };
 
         if start_pos_float < 0_f64 {
-            return Err(ScriptError::InvalidOperand(opr_mark));
+            return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
         let start_pos = start_pos_float as usize;
 
         if start_pos > characters.len() {
-            return Err(ScriptError::InvalidOperand(opr_mark));
+            return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
         let sub_len = if operands.len() >= 3 {
             if let ValueType::Number(sp) = operands[2].get_value(){
                 sp as usize
             } else {
-                return Err(ScriptError::InvalidOperand(opr_mark))
+                return Err(ScriptError::InvalidOperand(*opr_mark))
             }
         } else {
             characters.len() - start_pos
@@ -2938,7 +2941,7 @@ pub(crate) mod opr_funcs {
         let end_pos_excl = start_pos + sub_len;
 
         if end_pos_excl > characters.len() {
-            return Err(ScriptError::InvalidOperand(opr_mark));
+            return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
         *result_value = ValueType::Text(characters[start_pos..end_pos_excl].iter().collect());
@@ -2946,37 +2949,37 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn lower(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn lower(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         *result_value = ValueType::Text(match operands[0].get_value() {
             ValueType::Text(txt) => txt,
             ValueType::Number(num) => shuttle.number_format.format(num),
-            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
         }.to_lowercase());
 
         Ok(())
     }
 
-    pub fn upper(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn upper(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         *result_value = ValueType::Text(match operands[0].get_value() {
             ValueType::Text(txt) => txt,
             ValueType::Number(num) => shuttle.number_format.format(num),
-            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
         }.to_uppercase());
 
         Ok(())
     }
 
-    pub fn proper(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn proper(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut result = String::new();
@@ -2985,7 +2988,7 @@ pub(crate) mod opr_funcs {
         for c in match operands[0].get_value() {
             ValueType::Text(txt) => txt,
             ValueType::Number(num) => shuttle.number_format.format(num),
-            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
         }.chars(){
             let new_chars: Box<dyn Iterator<Item = char>> =  
                 if is_new_word {
@@ -3006,9 +3009,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn get_type(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn get_type(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         *result_value = ValueType::Number(operands[0].get_value().get_type_as_num());
@@ -3016,9 +3019,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn input_base(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn input_base(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
                 let num_val = e.get_num_value(0f64).trunc();
 
@@ -3033,9 +3036,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn output_base(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn output_base(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(opr_mark)),
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
                 let num_val = e.get_num_value(0f64).trunc();
 
@@ -3050,7 +3053,7 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn write(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn write(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
             /*
             let _ = shuttle.writer.write(b"(empty output)\n");
@@ -3059,7 +3062,7 @@ pub(crate) mod opr_funcs {
             *result_value = ValueType::Text(String::new());
             */
 
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         for op in operands {
@@ -3083,7 +3086,54 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn read(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    /*
+        E + string, not evaluating to string:
+                E([s...], opr_mark E)
+            ->  E(other_op, E)
+            ->  E(other_op, E)
+        E + string, evaluating to string, no use of special opr_mark:
+                E([sHello!], opr_mark E)
+            ->  E(Hello!, opr_mark E)
+            ->  Error: unknown operator
+        E + string, evaluating to string, use of special opr_mark on first operand:
+                E([sHello!], opr_mark E)
+            ->  E(Hello!, opr_mark ")
+            ->  E(Hello!, opr_mark ")
+        E + number:
+                E(number, opr_mark E)
+            ->  E(number, opr_mark E)
+            ->  E(number, opr_mark E)
+    */
+    pub fn eval(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
+        }
+
+        #[cfg(test)]
+        println!("fn eval: opr_mark={}, operands[0]={:?} ", *opr_mark, operands[0]);
+
+        // Only the first operand is used; subsequent ones are completely ignored.
+        match operands[0].get_value() {
+            ValueType::Text(program) if *opr_mark == 'E' => {
+                *opr_mark = '"';
+
+                let atoms = Interpreter::split_atoms(&program)?;
+                let mut tree: Expression = Interpreter::make_tree(atoms)?;
+                operands[0] = tree;
+                operands[0].operate(shuttle)?;
+
+                *result_value = operands[0].get_value();
+            },
+            ValueType::Text(txt) => *result_value = ValueType::Text(txt),
+            ValueType::Number(num) => *result_value = ValueType::Number(num),
+            ValueType::Empty => *result_value = ValueType::Empty,
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+        }
+        
+        Ok(())
+    }
+
+    pub fn read(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         let input_string = match shuttle.reader.read_line() {
             Some(s) => s.replace("\n", "").replace("\r", ""),
             None => String::new(),
@@ -3098,7 +3148,7 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn to_number(_opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn to_number(_opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = if operands.len() == 0 {
             ValueType::Number(f64::NAN)
         } else {
@@ -3118,15 +3168,15 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn preceding_nr_operands(_opr_mark: char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn preceding_nr_operands(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(shuttle.preceding_nr_operands);
 
         Ok(())
     }
 
-    pub fn exec_while(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn exec_while(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = 0f64;
@@ -3180,9 +3230,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn exec_for(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn exec_for(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 5 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = 0f64;
@@ -3195,7 +3245,7 @@ pub(crate) mod opr_funcs {
         if operands.len() < 5 {
             *result_value = ValueType::Number(outcome);
 
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         for (op_count, op) in operands.iter_mut().enumerate() {
@@ -3265,18 +3315,18 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn set_break(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn set_break(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let target = match operands[0].get_value() {
             ValueType::Number(num) => num ,
-            _ => return Err(ScriptError::InvalidOperand(opr_mark)),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
         };
 
         if target < 0_f64 {
-            return Err(ScriptError::InvalidOperand(opr_mark));
+            return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
         shuttle.break_target = target as u32;
@@ -3286,9 +3336,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn exec_if(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn exec_if(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 3 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut outcome = ValueType::Empty;
@@ -3318,23 +3368,23 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn define_routine_sharing_variables(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn define_routine_sharing_variables(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         define_routine(opr_mark, result_value, operands, shuttle, false)?;
 
         Ok(())
     }
     
-    pub fn define_routine_with_new_scope(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn define_routine_with_new_scope(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         define_routine(opr_mark, result_value, operands, shuttle, true)?;
 
         Ok(())
     }
 
-    fn define_routine(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, in_new_variables_scope: bool) -> Result<(), ScriptError> {
+    fn define_routine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, in_new_variables_scope: bool) -> Result<(), ScriptError> {
         if operands.len() < 2 {
             *result_value = ValueType::Empty;
             
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         let mut name = ValueType::Empty;
@@ -3370,11 +3420,11 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn exec_routine(opr_mark: char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn exec_routine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Empty;
 
         if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(opr_mark));
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
         // Returns empty value.
@@ -3943,7 +3993,7 @@ mod tests {
             let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let mut shuttle = Shuttle::new(writer, reader);
 
-            let _ = nop('0', &mut the_value, &mut ops, &mut shuttle);
+            let _ = nop(&mut '0', &mut the_value, &mut ops, &mut shuttle);
 
             assert!(ops.is_empty());
 
@@ -3963,8 +4013,8 @@ mod tests {
             let mut shuttle = Shuttle::new(writer, reader);
 
             // Have the golden ratio retrieved twice from the shuttle.
-            let _ = constants('c', &mut the_value, &mut ops, &mut shuttle);
-            let _ = constants('c', &mut the_value, &mut ops, &mut shuttle);
+            let _ = constants(&mut 'c', &mut the_value, &mut ops, &mut shuttle);
+            let _ = constants(&mut 'c', &mut the_value, &mut ops, &mut shuttle);
 
             // Verify that the calculation only happened once.
             assert_eq!(1u8, shuttle.golden_ratio_calculations);
@@ -6461,6 +6511,49 @@ mod tests {
             assert_eq!(
                 Err(ScriptError::InvalidOperand('O')),
                 Interpreter::execute_with_mocked_io("O§gregt 739708 0".to_string())
+            );
+        }
+
+        #[test]
+        fn x_eval_simple() {
+            assert_eq!(140_f64, Interpreter::execute_with_mocked_io("$0 40 $§prog [s+:0 100] Ev§prog".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_eval_number() {
+            assert_eq!(250_f64, Interpreter::execute_with_mocked_io("$§prog [s250] Ev§prog".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_eval_empty() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("$§prog [sc§empty] tEv§prog".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_eval_routines_incl_names() {
+            assert_eq!(5_f64, Interpreter::execute_with_mocked_io("$§prog [sR§incr +k1 R§half /k2] Ev§prog K9 KX§incr X§half".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_eval_routine_code_only() {
+            assert_eq!(6_f64, Interpreter::execute_with_mocked_io("R§incr E[s+k1] R§half E[s/k2] K9 KX§incr KX§half X§incr".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_eval_text_repeatedly() {
+            assert_eq!("Mary Renault".to_string(), Interpreter::execute_with_mocked_io("$0 §initial F1 3 1 1 $0E[s[sMary Renault]] v0".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_eval_numeric_repeatedly() {
+            assert_eq!(6_f64, Interpreter::execute_with_mocked_io("$0 0 F1 3 1 1 $0E*v1 2 v0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_eval_no_args() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('E')),
+                Interpreter::execute_with_mocked_io("E".to_string())
             );
         }
     }
