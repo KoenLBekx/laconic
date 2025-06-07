@@ -2,12 +2,16 @@ LACONIC
 
 		// TODO: explain standard number of operands and how to deviate from it.
 		// TODO: indicate the standard number of operands for every operator.
+		// TODO: add a -o parameter to the executable that gives an overview
+		//				of all operators grouped by functionality (arithmetic, flow, settings, etc.)
+		// TODO: add a -h parameter to the executable that gives comprehensive info
+		//				about a specific operator (given in next parameter).
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():,;=<>!&|?°ØaBbCcEeFiKklMmNnOopRrSsTtUuvWwXxZ
+			~+-*/%^$():,;=<>!&|?°ØaBbCcEeFiKklMmNnOopRrSsTtUuVvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():,;=<>!&|?°Øa bCc eFiKklMmNnOopRrSsTt  vWwXxZ
+			~+-*/%^$():,;=<>!&|?°Øa bCc eFiKklMmNnOopRrSsTt   vWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   interfere with command line syntax or string literals
@@ -17,7 +21,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			`´,#@§£€¶µADdfGgHhIJjLPQqVz
+			`´,#@§£€¶µADdfGgHhIJjLPQqz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -1036,6 +1040,16 @@ Operators
 
 			If more than one argument is given, they are all written to standard output.
 
+		w, filepath
+			(to be implemented)
+
+			Writes to a file, appending to it.
+
+		w,, filepath
+			(to be implemented)
+
+			Writes to a file, overwriting it.
+
 		r read a line from standard input.
 
 			This command reads a line of text from standard input and returns the result:
@@ -1049,9 +1063,20 @@ Operators
 				$23r
 					stores the input read from standard input in variable 23.
 
-		r, reads a line from standard input and evaluates it as a Laconic expression or script.
-			This script shares the same variables, stack e.a. as the calling script.
+			Er
 			(to be implemented)
+
+			reads a line from standard input and evaluates it as a Laconic expression or script.
+			This script shares the same variables, stack e.a. as the calling script.
+
+		r, filepath
+			(to be implemented)
+
+			reads a file and return its string content.
+
+			Er, filepath
+
+				reads a script file and uses its contents as Laconic script code.
 
 	Other
 
@@ -1329,9 +1354,16 @@ Operators
 			See the explanations for the lower case o operator.
 
 		E eval: evaluates a string as a script and executes it.
+			(to be implemented)
+
 			This script shares the variables, stack, e.a. from the calling command.
 
+		V reads an environment variable and returns its string content.
 			(to be implemented)
+
+			E.g.:
+				o,§fmt V§fractal_digits §. §_
+
 
 	Z Set options
 
