@@ -530,7 +530,7 @@ impl Expression {
             '§' => match self.value {
                 ValueType::Empty => "no_value".to_string(),
                 ValueType::Text(ref txt) => txt.clone(),
-                _ => panic!("An expression with opr_mark '\"' should either have a ValueType::Text or ValueType::Empty"),
+                _ => panic!("An expression with opr_mark '§' should either have a ValueType::Text or ValueType::Empty"),
             },
             oth => oth.to_string(),
         };
@@ -562,7 +562,7 @@ impl Expression {
         ops = ops.replace('\n', "\n\u{0_2502}\t");
         exp_rep.push_str(ops.as_str());
 
-        if !("0\"".contains(self.opr_mark)) {
+        if !("0§".contains(self.opr_mark)) {
             // Vim folding fix braces: {{
             exp_rep.push_str("\n\u{0_2514}\u{0_2500}> ");
             // exp_rep.push_str(format!("{:?}", self.value).as_str());
@@ -571,7 +571,7 @@ impl Expression {
                 ValueType::Empty => "no_value".to_string(),
                 ValueType::Number(num) => num.to_string(),
                 ValueType::Text(ref txt) => txt.clone(),
-                ValueType::Max => panic!("An Expression having opr_mark 0 or \" should not have a value of ValueType::Max."),
+                ValueType::Max => panic!("An Expression having opr_mark 0 or § should not have a value of ValueType::Max."),
             };
 
             exp_rep.push_str(val_rep.as_str());
@@ -3111,24 +3111,6 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    /*
-        E + string, not evaluating to string:
-                E([s...], opr_mark E)
-            ->  E(other_op, E)
-            ->  E(other_op, E)
-        E + string, evaluating to string, no use of special opr_mark:
-                E([sHello!], opr_mark E)
-            ->  E(Hello!, opr_mark E)
-            ->  Error: unknown operator
-        E + string, evaluating to string, use of special opr_mark on first operand:
-                E([sHello!], opr_mark E)
-            ->  E(Hello!, opr_mark ")
-            ->  E(Hello!, opr_mark ")
-        E + number:
-                E(number, opr_mark E)
-            ->  E(number, opr_mark E)
-            ->  E(number, opr_mark E)
-    */
     pub fn eval(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
             return Err(ScriptError::InsufficientOperands(*opr_mark));
@@ -3139,17 +3121,13 @@ pub(crate) mod opr_funcs {
 
         // Only the first operand is used; subsequent ones are completely ignored.
         match operands[0].get_value() {
-            ValueType::Text(program) if *opr_mark == 'E' => {
-                *opr_mark = '"';
-
+            ValueType::Text(program) => {
                 let atoms = Interpreter::split_atoms(&program)?;
-                let tree: Expression = Interpreter::make_tree(atoms)?;
-                operands[0] = tree;
-                operands[0].operate(shuttle)?;
+                let mut tree: Expression = Interpreter::make_tree(atoms)?;
+                tree.operate(shuttle)?;
 
-                *result_value = operands[0].get_value();
+                *result_value = tree.get_value();
             },
-            ValueType::Text(txt) => *result_value = ValueType::Text(txt),
             ValueType::Number(num) => *result_value = ValueType::Number(num),
             ValueType::Empty => *result_value = ValueType::Empty,
             _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
@@ -6615,12 +6593,17 @@ mod tests {
         }
 
         #[test]
-        fn x_eval_text_repeatedly() {
+        fn x_eval_text_repeated_same_string() {
             assert_eq!("Mary Renault".to_string(), Interpreter::execute_with_mocked_io("$0 §initial F1 3 1 1 $0E[s[sMary Renault]] v0".to_string()).unwrap().string_representation);
         }
 
         #[test]
-        fn x_eval_numeric_repeatedly() {
+        fn x_eval_text_repeated_with_different_strings() {
+            assert_eq!("bbb".to_string(), Interpreter::execute_with_mocked_io("F(1 2 1 1 $0 ?=v1 1 §§aaa §§bbb $2 Ev0) v2".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_eval_numeric_repeated() {
             assert_eq!(6_f64, Interpreter::execute_with_mocked_io("$0 0 F1 3 1 1 $0E*v1 2 v0".to_string()).unwrap().numeric_value);
         }
 
