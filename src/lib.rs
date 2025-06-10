@@ -64,7 +64,7 @@ impl fmt::Debug for Atom {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Atom::Operator(c) => write!(f, "{}", c),
-            Atom::Number(ref n) => write!(f, "{} ", n),
+            Atom::Number(n) => write!(f, "{} ", n),
             Atom::String(_) => write!(f, "[s...]"),
             Atom::Comment(_) => write!(f, "[c...]"),
         }
@@ -117,8 +117,8 @@ impl ValueType {
 
     pub fn get_string_value(&self, default: String) -> String {
         match self {
-            ValueType::Text(ref txt) => txt.clone(),
-            ValueType::Number(ref num) => format!("{}", num),
+            ValueType::Text(txt) => txt.clone(),
+            ValueType::Number(num) => format!("{}", num),
             ValueType::Max => "ValueType::Max".to_string(),
             _ => default,
         }
@@ -130,7 +130,7 @@ impl PartialEq for ValueType {
         match (self, other) {
             (ValueType::Empty, ValueType::Empty) => true,
             (ValueType::Number(s), ValueType::Number(o)) => s == o,
-            (ValueType::Text(ref s), ValueType::Text(ref o)) => *s == *o,
+            (ValueType::Text(s), ValueType::Text(o)) => *s == *o,
             (ValueType::Max, ValueType::Max) => true,
             _ => false,
         }
