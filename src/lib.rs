@@ -33,6 +33,8 @@
 // TODO: remove our outcomment code reported as never used by the compiler.
 // TODO: include the explanations in analysis/laconic.txt in markdown format as documentation
 //      comments.
+// TODO: The ScriptError variants that carry an operator mark as char should carry a string
+//      so the full enumerated operator name can be passed, e.g.: "o,§dow".
 // TODO: use giantity ?
 // TODO: remove outcommented code.
 //}
@@ -303,7 +305,7 @@ impl NumberFormat {
         } else {
             self.base = 10f64;
         }
-    }
+    }    
 
     fn set_fractal_digits(&mut self, fractal_digits: f64) {
         self.fractal_digits = fractal_digits.abs().trunc();
@@ -356,7 +358,8 @@ impl Expression {
             '0' => &opr_funcs::nop,
             '§' => &opr_funcs::string_expr,
             '~' => &opr_funcs::unaryminus,
-            '+' => &opr_funcs::add,
+            '+' if alternative_marks_count == 0 => &opr_funcs::add,
+            '+' => &opr_funcs::add_concat_int,
             '-' => &opr_funcs::minus,
             '*' => &opr_funcs::multiply,
             '/' if alternative_marks_count == 0 => &opr_funcs::divide,
@@ -1363,7 +1366,7 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    pub fn add(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    fn add_base(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, do_truncate: bool) -> Result<(), ScriptError> {
         if operands.len() < 2 {
             return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
@@ -1376,6 +1379,7 @@ pub(crate) mod opr_funcs {
                 string_outcome.push_str(
                     (match op.get_value() {
                         ValueType::Empty => NO_VALUE.to_string(),   
+                        ValueType::Number(num) if do_truncate => format!("{}", num.trunc() as i64),
                         ValueType::Number(num) => shuttle.number_format.format(num),
                         ValueType::Text(txt) => txt,
                         ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
@@ -1397,6 +1401,14 @@ pub(crate) mod opr_funcs {
         }
 
         Ok(())
+    }
+
+    pub fn add(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        add_base(opr_mark, result_value, operands, shuttle, false)
+    }
+
+    pub fn add_concat_int(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        add_base(opr_mark, result_value, operands, shuttle, true)
     }
     
     pub fn multiply(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
@@ -2195,6 +2207,7 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "ucv".to_string() => get_unicode_value,
             ValueType::Text(name) if name == "len".to_string() => get_length,
             ValueType::Text(name) if name == "find".to_string() => find_in_string,
+            ValueType::Text(name) if name == "split".to_string() => split,
             ValueType::Text(name) if name == "sub".to_string() => substring,
             ValueType::Text(name) if name == "lower".to_string() => lower,
             ValueType::Text(name) if name == "upper".to_string() => upper,
@@ -2975,6 +2988,49 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Empty;
+
+        Ok(())
+    }
+
+    pub fn split(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 3 {
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
+        }
+
+        let mut source = "".to_string();
+        let mut separator = "".to_string();
+        let mut name_prefix = "".to_string();
+
+        for (count, opd) in operands.iter().enumerate() {
+            match opd.get_value() {
+                ValueType::Text(txt) => {
+                    match count {
+                        0 => source = txt,
+                        1 => separator = txt,
+                        2 => name_prefix = txt,
+                        _ => (),
+                    }
+                },
+                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            }
+        }
+
+        let is_separator_empty = separator.len() == 0;
+
+        let mut count = 0;
+
+        for fragment in source.split(separator.as_str()) {
+            if !((fragment.len() == 0) && is_separator_empty) {
+                count += 1;
+
+                shuttle.set_var(
+                    ValueType::Text(format!("{}{}", name_prefix, count)),
+                    ValueType::Text(fragment.to_string())
+                );
+            }
+        }
+
+        *result_value = ValueType::Number(count as f64);
 
         Ok(())
     }
@@ -4140,6 +4196,11 @@ mod tests {
         }
 
         #[test]
+        fn x_add_variant_2_numbers() {
+            assert_eq!(226f64, Interpreter::execute_with_mocked_io("+,111 115".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_add_1_op() {
             assert_eq!(Err(ScriptError::InsufficientOperands('+')), Interpreter::execute_with_mocked_io("+111".to_string()));
         }
@@ -4152,6 +4213,11 @@ mod tests {
         #[test]
         fn x_add_strings() {
             assert_eq!("23.750000 km.".to_string(), Interpreter::execute_with_mocked_io("+23.75 [s km.]".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_add_strings_truncating_numbers() {
+            assert_eq!("23 km.".to_string(), Interpreter::execute_with_mocked_io("+,23.75 [s km.]".to_string()).unwrap().string_representation);
         }
 
         #[test]
@@ -6808,6 +6874,141 @@ mod tests {
             assert_eq!(
                 Err(ScriptError::InvalidOperand('O')),
                 Interpreter::execute_with_mocked_io("O§gregn 1980 13".to_string())
+            );
+        }
+
+        #[test]
+        fn x_split_single_character_sepa() {
+            assert_eq!(
+                "E".to_string(),
+                Interpreter::execute_with_mocked_io(
+                    "$§pre §fragment o,§split [sA;B;C;D;E] §; v§pre v+,v§pre 5"
+                        .to_string()).unwrap().string_representation);
+
+            assert_eq!(
+                1_f64,
+                Interpreter::execute_with_mocked_io("
+                        $(1 §A §B §C §D §E)
+                        $§pre §fragment
+                        o,§split [sA;B;C;D;E] §; v§pre
+                        F
+                            1 5 1 20
+                            ?
+                                =
+                                    vv20
+                                    v+,v§pre v20
+                                $21 1
+                                ;
+                                    $21 0
+                                    B
+                        v21
+                    ".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_split_multi_character_sepa() {
+            assert_eq!(
+                "E".to_string(),
+                Interpreter::execute_with_mocked_io(
+                    "$§pre §fragment o,§split [sA--B--C--D--E] §-- v§pre v+,v§pre 5"
+                        .to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_split_sepa_at_start() {
+            assert_eq!(
+                "".to_string(),
+                Interpreter::execute_with_mocked_io(
+                    "$§pre §fragment o,§split [s--A--B--C--D--E] §-- v§pre v+,v§pre 1"
+                        .to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_split_sepa_at_end() {
+            assert_eq!(
+                "".to_string(),
+                Interpreter::execute_with_mocked_io(
+                    "$§pre §fragment o,§split [sA--B--C--D--E--] §-- v§pre v+,v§pre 6"
+                        .to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_split_sepa_not_in_source() {
+            assert_eq!(
+                "A--B--C--D--E".to_string(),
+                Interpreter::execute_with_mocked_io(
+                    "$§pre §fragment o,§split [sA--B--C--D--E] §| v§pre v+,v§pre 1"
+                        .to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_split_empty_fragment() {
+            assert_eq!(
+                "".to_string(),
+                Interpreter::execute_with_mocked_io(
+                    "$§pre §fragment o,§split [sA:B::C:D:E] §: v§pre v+,v§pre 3"
+                        .to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_split_empty_separator() {
+            assert_eq!(
+                1_f64,
+                Interpreter::execute_with_mocked_io("
+                        $(1 §A §B §C §D §E)
+                        $§pre §fragment
+                        $
+                            §count
+                            o,§split [sABCDE] § v§pre
+                        F
+                            1 v§count 1 20
+                            ?
+                                =
+                                    vv20
+                                    v+,v§pre v20
+                                $21 1
+                                ;
+                                    $21 0
+                                    B
+                        v21
+                        =(
+                            1
+                            v21
+                            =0 tv+,v§pre 6
+                            =5 v§count
+                        )
+                    ".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_split_empty_source() {
+            assert_eq!(
+                "".to_string(),
+                Interpreter::execute_with_mocked_io(
+                    "$§pre §fragment o,§split § §: v§pre v+,v§pre 1"
+                        .to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_split_empty_source_and_separator() {
+            assert_eq!(
+                0_f64,
+                Interpreter::execute_with_mocked_io(
+                    "$§pre §fragment o,§split § § v§pre tv+,v§pre 1"
+                        .to_string()).unwrap().numeric_value);
+
+            assert_eq!(
+                0_f64,
+                Interpreter::execute_with_mocked_io(
+                    "$§pre §fragment $§count o,§split § § v§pre v§count"
+                        .to_string()).unwrap().numeric_value);
+        }
+    
+        #[test]
+        fn x_split_numeric_separator() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("o,§split §A1B1C1D1E 1 §frag".to_string())
             );
         }
     }

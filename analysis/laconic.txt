@@ -396,6 +396,36 @@ Operators
 
 	Strings
 
+		+
+			The plus operator will concatenate strings if any of its operands is a string.
+			Concatenating with § or [s] (empty string) is a way of converting a number to a string.
+			Mind that the current number format will be used.
+			(This number format can be set using the o,§fmt command.)
+
+			E.g.:
+				+100 §€
+					yields "100.000000€"
+				o§fmt 0 +100 §€
+					yields "100€"
+				$0 79.2 +§ v0
+					yields "79.200000"
+
+		+,
+			This variant of the plus command will also concatenate strings
+			if any of its operands is a string,
+			but any number operand will be truncated towards zero to an integer
+			without any fractals or interpunction -
+			only the minus sign will be perserve, if any.
+
+			E.g.:
+				+,100 §€
+					yields "100€"
+				+,~5.785 §$
+					yields "-5$"
+
+			This variant is useful for iterating through a series of prefixed variables, like the ones
+			filled in by the o,§split operator.
+
 		o,§sub string start_position number_of_characters
 		o(§sub string start_position number_of_characters)
 
@@ -532,16 +562,45 @@ Operators
 						yields "Addis Abeba"
 
 		o,§split string separator varNamePrefix
-			(to be implemented)
 
 			Split a string in its fragments separated by a separator string.
 			The fragments will be stored in variables the names of which
 			consist of the given varNamePrefix + 0, 1, 2, 3 etc.
-			
-			The operator returns the number of the resulting fragments.
 
-				E.g.: $§nrCities o'§split [sBrugge,Arlon,Liège] §, §city F0 -v§nrCities 1 1 §count w+¶ v+§city v§count
+			All arguments should be strings.
+			
+			The operator returns the number of the resulting fragments, which will always be greater than zero.
+
+				E.g.:
+					$
+						§nrCities
+						o,
+							§split
+							[sBrugge,Arlon,Liège]
+							§,
+							§city
+					F
+						0
+						v
+							§nrCities
+						1
+						§count
+						w
+							+
+								v
+									+,
+										§city
+										v§count
+								¶
+
 					will write the three city names in the original string on separate lines.
+
+			If the separator is an empty string (§ or [s]), every character of the source string
+			will be copied to a variable.
+
+			Note that the numbers after the varNamePrefix will have no fractal part or interpunction.
+
+			In combination with the r, operator, this allows for awk-like file processing as well as reading of CSV files.
 
 	Constants (zero-operand operators)
 
