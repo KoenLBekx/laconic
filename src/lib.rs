@@ -2207,6 +2207,7 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "gregm".to_string() => gregorian_month,
             ValueType::Text(name) if name == "gregd".to_string() => gregorian_day,
             ValueType::Text(name) if name == "gregt".to_string() => gregorian_text,
+            ValueType::Text(name) if name == "gregn".to_string() => gregorian_days_in_month,
             ValueType::Text(name) if name == "version".to_string() => get_version,
             unknown =>  {
                 *result_value = default_outcome;
@@ -2400,6 +2401,30 @@ pub(crate) mod opr_funcs {
             12 => 31,
             _ => 0,
         }
+    }
+
+    pub fn gregorian_days_in_month(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
+        }
+
+        let year = match operands[0].get_value() {
+            ValueType::Number(num) => num,
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+        };
+
+        let month = match operands[1].get_value() {
+            ValueType::Number(num) => num,
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+        };
+
+        if (year < 0_f64) || (month < 1_f64) || (month > 12_f64) {
+            return Err(ScriptError::InvalidOperand(*opr_mark));
+        }
+
+        *result_value = ValueType::Number(days_in_month(month as u32, is_leap_year(year)) as f64);
+
+        Ok(())
     }
 
     fn day_of_week(year: u32, month: u32, day: u32) -> u32 {
@@ -6699,7 +6724,93 @@ mod tests {
                 Interpreter::execute_with_mocked_io("o,§fmt 3 §, §,".to_string())
             );
         }
-}
+
+        #[test]
+        fn x_gregn_30() {
+            assert_eq!(30_f64, Interpreter::execute_with_mocked_io("O§gregn 2000 4".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_gregn_31() {
+            assert_eq!(31_f64, Interpreter::execute_with_mocked_io("O§gregn 2000 12".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_gregn_month_1() {
+            assert_eq!(31_f64, Interpreter::execute_with_mocked_io("O§gregn 2000 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_gregn_year_0() {
+            assert_eq!(29_f64, Interpreter::execute_with_mocked_io("O§gregn 0 2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_gregn_feb_no_leap() {
+            assert_eq!(28_f64, Interpreter::execute_with_mocked_io("O§gregn 1900 2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_gregn_feb_leap() {
+            assert_eq!(29_f64, Interpreter::execute_with_mocked_io("O§gregn 1996 2".to_string()).unwrap().numeric_value);
+        }
+    
+        #[test]
+        fn x_gregn_0_operands() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o(§fmt)".to_string())
+            );
+        }
+    
+        #[test]
+        fn x_gregn_1_operand() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o§gregn 2000".to_string())
+            );
+        }
+    
+        #[test]
+        fn x_gregn_string_year() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('O')),
+                Interpreter::execute_with_mocked_io("O§gregn §2000 5".to_string())
+            );
+        }
+    
+        #[test]
+        fn x_gregn_string_month() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('O')),
+                Interpreter::execute_with_mocked_io("O§gregn 2000 §5".to_string())
+            );
+        }
+    
+        #[test]
+        fn x_gregn_year_negative() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('O')),
+                Interpreter::execute_with_mocked_io("O§gregn ~2 5".to_string())
+            );
+        }
+    
+        #[test]
+        fn x_gregn_month_0() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('O')),
+                Interpreter::execute_with_mocked_io("O§gregn 1980 0".to_string())
+            );
+        }
+    
+        #[test]
+        fn x_gregn_month_13() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('O')),
+                Interpreter::execute_with_mocked_io("O§gregn 1980 13".to_string())
+            );
+        }
+    }
 
     /*
     mod any_typeid_assumptions {

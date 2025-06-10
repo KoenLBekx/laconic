@@ -1250,7 +1250,7 @@ Operators
 
 							Note:
 							- Laconic won't allow the fractal and thousands separator to be equal.
-								A command to that effect will be ignored.
+								A command to that effect will raise an error.
 							- If you don't want a thousands separator, provide an empty string: [s] or §
 							- This formatting is strictly for output.
 								In Laconic script code and as input
@@ -1348,8 +1348,7 @@ Operators
 
 				Returns 1 if year is a leap year, else 0.
 
-			O§days year month
-				(to be implemented)
+			O§gregn year month
 
 				Days in month: returns the days in a given month in a given year.
 		
