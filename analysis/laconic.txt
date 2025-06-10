@@ -21,7 +21,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			`´#@£€µADdfGgHhIJjLPQqz
+			`´#@£€µ²³ADdfGgHhIJjLPQqz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -30,12 +30,14 @@ LACONIC
 			£ 00A3 Pound
 			§ 00A7 Section (paragraph) sign (Alt-Shift-S)
 			° 00B0 Degrees sign (Alt-Shift-:)
+			² 00B2 Squared
+			³ 00B3 Cubic
 			´ 00B4 Acute accent
 			µ 00B5 Mu
 			¶ 00B6 Pilcrow (AltGr-r)
-			€ 20AC Euro
-			ø 00F8 (Alt-l)
 			Ø 00D8 (Alt-Shift-L)
+			ø 00F8 (Alt-l)
+			€ 20AC Euro
 
 	General syntax
 
@@ -529,6 +531,18 @@ Operators
 					o§proper [sADDIS ABEBA]
 						yields "Addis Abeba"
 
+		o,§split string separator varNamePrefix
+			(to be implemented)
+
+			Split a string in its fragments separated by a separator string.
+			The fragments will be stored in variables the names of which
+			consist of the given varNamePrefix + 0, 1, 2, 3 etc.
+			
+			The operator returns the number of the resulting fragments.
+
+				E.g.: $§nrCities o'§split [sBrugge,Arlon,Liège] §, §city F0 -v§nrCities 1 1 §count w+¶ v+§city v§count
+					will write the three city names in the original string on separate lines.
+
 	Constants (zero-operand operators)
 
 		e Euler's number
@@ -652,40 +666,6 @@ Operators
 
 				where the v operator will yield variable 2's value (20), but assigns it also to variable 1 !
 				The + operator will then use v2 and v1 as its operands and yield 40.
-
-		u use variables array having given number for the next statement
-			(to be implemented)
-
-			Variables are stored in one of several arrays.
-			Each array has a number, or, in fact, a series of numbers as a designator.
-			Using the 'u' command, you can change the array of variables to be used
-			for the next single statement.
-
-			Default is array 0.
-
-			The u operator returns the value of the next statement, just like the ; operator.
-			This allows for expressions like u2v1 : register 1 from array 2.
-
-			$5 20 v5 yields 20, because the current variables array hasn't been changed.
-			$5 20 u1 v5 yields 0, because that's the default value for an unknown variable in an array.
-
-			u(4 19) switches to usage of array having designator (4,19) for the next $, : or v operator.
-
-		U use variables array having given number(s) for the subsequent statements
-			(to be implemented)
-
-			Variables are stored in one of several arrays.
-			Each array has a number, or, in fact, a series of numbers as a designator.
-			Using the 'U' command, you can change the array of variables to be used
-			for all subsequent variable-related operations.
-
-			Default is array 0.
-
-			The U operator returns the value of the next statement, just like the ; operator.
-			This allows for expressions like U2+v1 v2 : the sum of variables 1 and 2 from array 2.
-
-			$5 20 v5 yields 20, because the current variables array hasn't been changed.
-			$5 20 U1 v5 yields 0, because that's the default value for an unknown variable in an array.
 
 	Stack
 
@@ -835,6 +815,11 @@ Operators
 			;4 30 yields 30
 			;$2 10 v2 yields 10
 			;;$0 4+:0 5 51 return 51 after having affected variable number 0
+
+			Note:
+				;(...) can combine more than two statements.
+
+			The ; operator returns the value of the last statement or expression.
 
 		? "If a, then b, else c"
 

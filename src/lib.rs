@@ -1,9 +1,32 @@
 //{ TODO: resolve TODO's in code.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: implement all intended operators.
+// TODO: no parsing operation or operator should panic, lest applications using the library
+//      panic either.
+//      This means that operations that risk to overflow the f64 (or giantity) reach should
+//      use the try_ versions of these operations.
+// TODO: Add an Error(String) variant to the ValueType and ExecutionOutcome enums.
+//      (So no Result return values.)
+//      This avoids calling modules to have to test first for Result::Err and then for the
+//      ExecutionOutcome variant.
+// TODO: the characters for the operators should be hard-coded only once: in constants.
+//      These constants can figure in a constant array
+//      holding also other data like number of operands, operator function, e.a.
+//      (even data for documentation).
+//      The function isKnownOperator should also use this constant array.
+// TODO: other characters (like the bracket content markers, the § simple string prefix, etc),
+//      should also be hard-coded once in constants.
 // TODO: implement different variable arrays - see the 'u' operator.
 //      Default array: 0.
 //      This means that the key for HashMap Shuttle.nums has to be a (ValueType, ValueType) tuple.
+//      This becomes somewhat irrelevant as one can use strings+numbers as variable names.
+//      In fact, the 'u' and 'U' operators can be replaced by a P (prefix) operator,
+//      which prefixes all variable names used subsequently by a given string: e.g. P§primes
+//      This can even mimic object-oriented paradigms, as this could also work on routine names!
+//      (Inside routines, this shouldn't affect code outside of it, so a stack property
+//      would be needed on the Shuttle object for this: push the current one when calling a
+//      routine, have it replaced by a P command in the routine, and pop that value when the
+//      routine exits.)
 // TODO: have all operators have an acceptable behavior with less or more operands than standard.
 //      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
@@ -125,7 +148,7 @@ impl Hash for ValueType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct NumberFormat {
     base: f64,
     fractal_digits: f64,
@@ -291,9 +314,7 @@ impl NumberFormat {
             let proposed = separator.chars().nth(0)
                 .expect("A string of length > 0 should have a first character.");
 
-            if proposed != self.thousands_separator {
-                self.fractal_separator = proposed;
-            }
+            self.fractal_separator = proposed;
         }
     }
 
@@ -309,10 +330,8 @@ impl NumberFormat {
             let proposed = separator.chars().nth(0)
                 .expect("A string of length > 0 should have a first character.");
 
-            if proposed != self.fractal_separator {
-                self.thousands_separator = proposed;
-                self.use_thousands_separator = true;
-            }
+            self.thousands_separator = proposed;
+            self.use_thousands_separator = true;
         }
     }
 }
@@ -818,7 +837,7 @@ impl Interpreter {
                 if c == '_'{
                     // Ignore if not reading a string.
                     if reading_simple_string {
-                       current_string.push(c); 
+                       current_string.push(c);
                     }
                 } else if c.is_whitespace() {
                     if reading_number {
@@ -857,7 +876,7 @@ impl Interpreter {
 
                     result.push(Atom::Operator(c));
                 } else if reading_simple_string {
-                   current_string.push(c); 
+                   current_string.push(c);
                 } else if c.is_ascii_digit() {
                     reading_number = true;
 
@@ -1927,7 +1946,7 @@ pub(crate) mod opr_funcs {
                     is_numeric = first_type == 1f64;
                 },
                 _ => {
-                    op_value = op.get_value();       
+                    op_value = op.get_value();
 
                     if first_type != op_value.get_type_as_num() {
                         are_equal = false;
@@ -2226,6 +2245,8 @@ pub(crate) mod opr_funcs {
             return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
+        let prev_format = shuttle.number_format.clone();
+
         for (count, op) in operands.iter().enumerate() {
             match count {
                 0 => shuttle.number_format.set_fractal_digits(op.get_num_value(0f64)),
@@ -2233,6 +2254,13 @@ pub(crate) mod opr_funcs {
                 2 => shuttle.number_format.set_thousands_separator(op.get_string_value(",".to_string())),
                 _ => (),
             }
+        }
+
+        if (shuttle.number_format.fractal_separator == shuttle.number_format.thousands_separator)
+        || (shuttle.number_format.fractal_separator == shuttle.number_format.digit_separator)
+        || (shuttle.number_format.thousands_separator == shuttle.number_format.digit_separator) {
+            shuttle.number_format = prev_format;
+            return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
         /*
@@ -6658,7 +6686,20 @@ mod tests {
         fn x_newline_constant() {
             assert_eq!("\n".to_string(), Interpreter::execute_with_mocked_io("c§n".to_string()).unwrap().string_representation);
         }
-    }
+
+        #[test]
+        fn x_fmt_switch_chars() {
+            assert_eq!("4,25".to_string(), Interpreter::execute_with_mocked_io("o,§fmt 2 §, §. +§ 4.25".to_string()).unwrap().string_representation);
+        }
+    
+        #[test]
+        fn x_fmt_invalid() {
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("o,§fmt 3 §, §,".to_string())
+            );
+        }
+}
 
     /*
     mod any_typeid_assumptions {
