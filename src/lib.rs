@@ -408,7 +408,8 @@ impl Expression {
             'Z' => &opr_funcs::setting,
             'o' => &opr_funcs::enumerated_opr,
             'O' => &opr_funcs::enumerated_opr,
-            'w' => &opr_funcs::write,
+            'w' if alternative_marks_count == 0 => &opr_funcs::write,
+            'w' => &opr_funcs::write_file,
             'r' if alternative_marks_count == 0 => &opr_funcs::read,
             'r' => &opr_funcs::read_file,
             'n' => &opr_funcs::to_number,
@@ -3271,6 +3272,35 @@ pub(crate) mod opr_funcs {
 
                 match shuttle.text_io_handler.read_text(&os_path) {
                     Ok(content) => *result_value = ValueType::Text(content),
+                    Err(msg) => return Err(ScriptError::FileReadFailure{path: path, reason: msg.to_string()}),
+                }
+            },
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+        }
+
+        Ok(())
+    }
+
+    pub fn write_file(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
+        }
+
+        let content = match operands[1].get_value() {
+            ValueType::Text(txt) => txt,
+            ValueType::Number(num) => shuttle.number_format.format(num),
+            ValueType::Empty => NO_VALUE.to_string(),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+        };
+
+        let len = content.len();
+
+        match operands[0].get_value() {
+            ValueType::Text(path) => {
+                let os_path = OsStr::new(path.as_str());
+
+                match shuttle.text_io_handler.write_text(&os_path, content) {
+                    Ok(_) => *result_value = ValueType::Number(len as f64),
                     Err(msg) => return Err(ScriptError::FileReadFailure{path: path, reason: msg.to_string()}),
                 }
             },
@@ -6766,6 +6796,54 @@ mod tests {
                 content,
                 interpreter.execute_opts("r,§unitTests/test.input".to_string(), true, false, false)
                     .unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_write_file_no_args() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('w')),
+                Interpreter::execute_with_mocked_io("w,".to_string())
+            );
+        }
+
+        #[test]
+        fn x_write_file_new() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+
+            let new_content = "new content".to_string();
+            let file_name = OsStr::new("unitTests/test.output");
+            let mut text_io_handler = Box::new(MockTextHandler::new());
+
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+
+            assert_eq!(
+                11_f64,
+                interpreter.execute_opts("w,§unitTests/test.output [snew content]".to_string(), true, false, false)
+                    .unwrap().numeric_value);
+
+            assert_eq!(new_content, interpreter.shuttle.text_io_handler.read_text(&file_name).unwrap())
+        }
+
+        #[test]
+        fn x_write_file_existing() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+
+            let old_content = "previous content".to_string();
+            let new_content = "new content".to_string();
+            let file_name = OsStr::new("unitTests/test.output");
+            let mut text_io_handler = Box::new(MockTextHandler::new());
+            text_io_handler.write_text(&file_name, old_content.clone()).unwrap();
+
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+
+            assert_eq!(
+                11_f64,
+                interpreter.execute_opts("w,§unitTests/test.output [snew content]".to_string(), true, false, false)
+                    .unwrap().numeric_value);
+
+            assert_eq!(new_content, interpreter.shuttle.text_io_handler.read_text(&file_name).unwrap())
         }
 
         #[test]

@@ -1104,14 +1104,13 @@ Operators
 			If more than one argument is given, they are all written to standard output.
 
 		w, filepath expression
-			(to be implemented)
 
-			Writes the outcome of the expression to a file, appending to it.
+			Writes the outcome of the expression to a file, overwriting it.
 
 		w,, filepath expression
 			(to be implemented)
 
-			Writes the outcome of the expression to a file, overwriting it.
+			Writes the outcome of the expression to a file, appending to it.
 
 		r read a line from standard input.
 
