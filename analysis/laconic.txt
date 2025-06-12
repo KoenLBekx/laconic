@@ -7,21 +7,24 @@ LACONIC
 		// TODO: add a -h parameter to the executable that gives comprehensive info
 		//				about a specific operator (given in next parameter).
 
+		// TODO: provide calculations with complex numbers.
+
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():,;=<>!&|?°Ø¶aBbCcEeFiKklMmNnOopRrSsTtUuVvWwXxZ
+			~+-*/%^$():,;=<>!&|?°€¶aBbCcEeFiKklMmNnOopRrSsTtVvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():,;=<>!&|?°Ø¶aBbCcEeFiKklMmNnOopRrSsTt   vWwXxZ
+			~+-*/%^$():,;=<>!&|?°€¶aBbCcEeFiKklMmNnOopRrSsTt vWwXxZ
 
 		* Characters not to be used as operator:
-			' " \   	interfere with command line syntax or string literals
-								in Rust code or calling modules
-			. [ ] § _ have other meanings in Laconic.
-			{ }				can be used to delimit Laconic expressions in other contexts
+			' " \   	Interfere with command line syntax or string literals
+								in Rust code or calling modules.
+			. [ ] § _ Have other meanings in Laconic.
+			{ }				Can be used to delimit Laconic expressions in other contexts.
+			Ø					Capital O with stroke; looks too much like zero in most fonts.
 			whitespace
 
 		* Common characters not used yet:
-			`´#@£€µ²³ADdfGgHhIJjLPQqz
+			`´#@£€µ²³ADdfGgHhIJjLPQqUuz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -491,17 +494,14 @@ Operators
 
 			The position returned is zero-based: the first character has position 0.
 
-			If the substring is not found in string, this operator returns Ø:
+			If the substring is not found in string, this operator returns €:
 			the empty value.
-			
-			Note 0 (Zero, U+0030) is not Ø (capital letter O with stroke, U+00D8),
-			even if not all fonts show this clearly : 0Ø
 
 			e.g.
 				O§find §Samovar §a
 					yields 1
 				O§find [sNo hay remedio] §mejor
-					yields Ø
+					yields €
 				tO§find [sNo hay remedio] §mejor
 					yields 0
 				tO§find [sNo hay remedio] §hay
@@ -608,9 +608,7 @@ Operators
 
 		p Pi
 
-		Ø	the Empty value.
-			This is the upper-case O-with-stroke character (U+00D8),
-			not the zero character.
+		€	the Empty value.
 
 			This is the same as c§empty.
 
@@ -625,7 +623,7 @@ Operators
 			named constants
 
 			c§empty
-				The Empty value; the Ø character is not available on every keyboard.
+				The Empty value; the € character is not available on every keyboard.
 
 			c§gold
 				Golden Ratio (sectio aurea)
@@ -806,14 +804,11 @@ Operators
 
 	Logic
 
-		Note:
-
-			0 = false,
-			§ (empty string) = false,
+		Note: 0 = false, § (empty string) = false,
 			[s] (empty string) = false,
 			uninitialized variable (empty value) = false,
 			c§empty = false,
-			Ø (the empty value) = false
+			€ (the empty value) = false
 
 			everything else = true.
 
@@ -1233,11 +1228,8 @@ Operators
 				t [sWhat?]     yields 2 : string
 				t v§NotUsedYet yields 0 : empty or uninitialized : an empty expression will yield 0.
 
-		Ø
-				(Upper case Ø)
+		€
 				Returns the Empty value.
-
-				tØ	yields 0
 
 		n exp
 				Converts a string expression to a number.
@@ -1276,7 +1268,7 @@ Operators
 			The operator's name, which is the first operand of the o and O operators, can either be a number or a string.
 			For readability, however, strings are chosen for the implemented operators.
 
-			In addition from the named operators handling strings, the below named operators have been implemented:
+			In addition to the named operators handling strings, the below named operators have been implemented:
 
 			o§version num
 							Version of Laconic interpreter.
@@ -1456,7 +1448,6 @@ Operators
 
 			E.g.:
 				o,§fmt V§fractal_digits §. §_
-
 
 	Z Set options
 

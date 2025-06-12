@@ -1,6 +1,8 @@
 //{ TODO: resolve TODO's in code.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: implement all intended operators.
+// TODO: fn main should also accept a -q (quiet) parameter, which would prevent the output of the
+//      final value to stdin.
 // TODO: no parsing operation or operator should panic, lest applications using the library
 //      panic either.
 //      This means that operations that risk to overflow the f64 (or giantity) reach should
@@ -16,17 +18,6 @@
 //      The function isKnownOperator should also use this constant array.
 // TODO: other characters (like the bracket content markers, the § simple string prefix, etc),
 //      should also be hard-coded once in constants.
-// TODO: implement different variable arrays - see the 'u' operator.
-//      Default array: 0.
-//      This means that the key for HashMap Shuttle.nums has to be a (ValueType, ValueType) tuple.
-//      This becomes somewhat irrelevant as one can use strings+numbers as variable names.
-//      In fact, the 'u' and 'U' operators can be replaced by a P (prefix) operator,
-//      which prefixes all variable names used subsequently by a given string: e.g. P§primes
-//      This can even mimic object-oriented paradigms, as this could also work on routine names!
-//      (Inside routines, this shouldn't affect code outside of it, so a stack property
-//      would be needed on the Shuttle object for this: push the current one when calling a
-//      routine, have it replaced by a P command in the routine, and pop that value when the
-//      routine exits.)
 // TODO: have all operators have an acceptable behavior with less or more operands than standard.
 //      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
@@ -417,7 +408,7 @@ impl Expression {
             't' => &opr_funcs::get_type,
             'b' if alternative_marks_count == 0 => &opr_funcs::input_base,
             'b' => &opr_funcs::output_base,
-            'Ø' => &opr_funcs::empty,
+            '€' => &opr_funcs::empty,
             'E' => &opr_funcs::eval,
             '¶' => &opr_funcs::newline,
             _ => &opr_funcs::nop,
@@ -1100,7 +1091,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^lia%°SCTpec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRXØBE¶".contains(op)
+        "~+-*/^lia%°SCTpec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRX€BE¶".contains(op)
     }
 }
 
@@ -3591,7 +3582,7 @@ pub(crate) mod opr_funcs {
 
         // Returns empty value.
         let mut found_routine = Routine{
-            body: Expression::new('Ø', 0),
+            body: Expression::new('€', 0),
             in_new_variables_scope: true,
         };
 
@@ -5775,7 +5766,7 @@ mod tests {
 
         #[test]
         fn x_empty() {
-            assert_eq!(0f64, Interpreter::execute_with_mocked_io("tØ".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("t€".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -5814,12 +5805,12 @@ mod tests {
 
         #[test]
         fn x_routine_sharing_variables() {
-            assert_eq!(0f64, Interpreter::execute_with_mocked_io("R,(§empty_vars $§end k $§start k Fv§start v§end 1 §count $v§count Ø) $(11 5 5 5 5 5) K(11 15) X§empty_vars tv15".to_string()).unwrap().numeric_value);
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("R,(§empty_vars $§end k $§start k Fv§start v§end 1 §count $v§count €) $(11 5 5 5 5 5) K(11 15) X§empty_vars tv15".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_routine_new_scope() {
-            assert_eq!(5f64, Interpreter::execute_with_mocked_io("R(§empty_vars $§end k $§start k Fv§start v§end 1 §count $v§count Ø) $(11 5 5 5 5 5) K(11 15) X§empty_vars v15".to_string()).unwrap().numeric_value);
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("R(§empty_vars $§end k $§start k Fv§start v§end 1 §count $v§count €) $(11 5 5 5 5 5) K(11 15) X§empty_vars v15".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -5924,7 +5915,7 @@ mod tests {
 
         #[test]
         fn x_to_num_empty() {
-            assert!(Interpreter::execute_with_mocked_io("nØ".to_string()).unwrap().numeric_value.is_nan());
+            assert!(Interpreter::execute_with_mocked_io("n€".to_string()).unwrap().numeric_value.is_nan());
         }
 
         #[test]
@@ -5944,12 +5935,12 @@ mod tests {
 
         #[test]
         fn x_to_num_string_num_nan() {
-            assert!(Interpreter::execute_with_mocked_io("nnØ".to_string()).unwrap().numeric_value.is_nan());
+            assert!(Interpreter::execute_with_mocked_io("nn€".to_string()).unwrap().numeric_value.is_nan());
         }
 
         #[test]
         fn x_adding_nan() {
-            assert!(Interpreter::execute_with_mocked_io("+20 nØ".to_string()).unwrap().numeric_value.is_nan());
+            assert!(Interpreter::execute_with_mocked_io("+20 n€".to_string()).unwrap().numeric_value.is_nan());
         }
 
         #[test]
@@ -6186,7 +6177,7 @@ mod tests {
         fn x_find_empty_first_operand() {
             assert_eq!(
                 Err(ScriptError::InvalidOperand('o')),
-                Interpreter::execute_with_mocked_io("$0 Ø o,§find v0 §where 0".to_string()));
+                Interpreter::execute_with_mocked_io("$0 € o,§find v0 §where 0".to_string()));
         }
 
         #[test]
@@ -6813,7 +6804,7 @@ mod tests {
 
             let new_content = "new content".to_string();
             let file_name = OsStr::new("unitTests/test.output");
-            let mut text_io_handler = Box::new(MockTextHandler::new());
+            let text_io_handler = Box::new(MockTextHandler::new());
 
             let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
 
