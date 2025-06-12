@@ -363,12 +363,18 @@ impl Expression {
             'a' => &opr_funcs::abs,
             '°' if alternative_marks_count == 0 => &opr_funcs::degrees,
             '°' => &opr_funcs::radians,
-            'S' if alternative_marks_count == 0 => &opr_funcs::sine,
-            'S' => &opr_funcs::asin,
-            'C' if alternative_marks_count == 0 => &opr_funcs::cosine,
-            'C' => &opr_funcs::acos,
-            'T' if alternative_marks_count == 0 => &opr_funcs::tangent,
-            'T' => &opr_funcs::atan,
+            'S' if alternative_marks_count == 1 => &opr_funcs::asin,
+            'S' if alternative_marks_count == 2 => &opr_funcs::sinh,
+            'S' if alternative_marks_count == 3 => &opr_funcs::asinh,
+            'S' => &opr_funcs::sine,
+            'C' if alternative_marks_count == 1 => &opr_funcs::acos,
+            'C' if alternative_marks_count == 2 => &opr_funcs::cosh,
+            'C' if alternative_marks_count == 3 => &opr_funcs::acosh,
+            'C' => &opr_funcs::cosine,
+            'T' if alternative_marks_count == 1 => &opr_funcs::atan,
+            'T' if alternative_marks_count == 2 => &opr_funcs::tanh,
+            'T' if alternative_marks_count == 3 => &opr_funcs::atanh,
+            'T' => &opr_funcs::tangent,
             'A' => &opr_funcs::atan2,
             'p' => &opr_funcs::pi,
             'e' => &opr_funcs::euler_const,
@@ -1700,6 +1706,28 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
+    pub fn sinh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        *result_value = match operands.first() {
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
+            Some(e) => {
+                ValueType::Number(e.get_num_value(0f64).sinh())
+            },
+        };
+
+        Ok(())
+    }
+
+    pub fn asinh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        *result_value = match operands.first() {
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
+            Some(e) => {
+                ValueType::Number(e.get_num_value(0f64).asinh())
+            },
+        };
+
+        Ok(())
+    }
+
     pub fn cosine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
             None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
@@ -1722,6 +1750,28 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
+    pub fn cosh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        *result_value = match operands.first() {
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
+            Some(e) => {
+                ValueType::Number(e.get_num_value(0f64).cosh())
+            },
+        };
+
+        Ok(())
+    }
+
+    pub fn acosh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        *result_value = match operands.first() {
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
+            Some(e) => {
+                ValueType::Number(e.get_num_value(0f64).acosh())
+            },
+        };
+
+        Ok(())
+    }
+
     pub fn tangent(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match operands.first() {
             None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
@@ -1738,6 +1788,28 @@ pub(crate) mod opr_funcs {
             None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
                 ValueType::Number(e.get_num_value(0f64).atan())
+            },
+        };
+
+        Ok(())
+    }
+
+    pub fn tanh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        *result_value = match operands.first() {
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
+            Some(e) => {
+                ValueType::Number(e.get_num_value(0f64).tanh())
+            },
+        };
+
+        Ok(())
+    }
+
+    pub fn atanh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        *result_value = match operands.first() {
+            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
+            Some(e) => {
+                ValueType::Number(e.get_num_value(0f64).atanh())
             },
         };
 
@@ -5542,6 +5614,16 @@ mod tests {
         }
 
         #[test]
+        fn x_sinh() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§prec .00001 = S,,°,20 .356198".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_asinh() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§prec .00001 = S,,, .356198 °,20".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_cos() {
             assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§prec .00001 = C°,45 0.7071".to_string()).unwrap().numeric_value);
         }
@@ -5552,6 +5634,16 @@ mod tests {
         }
 
         #[test]
+        fn x_cosh() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§prec .00001 = C,,°,30 1.140237".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_acosh() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§prec .00001 = C,,,1.140237 °,30".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_tan() {
             assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§prec .00001 = T°,45 1".to_string()).unwrap().numeric_value);
         }
@@ -5559,6 +5651,16 @@ mod tests {
         #[test]
         fn x_arctan() {
             assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§prec .00001 = °T,1 45".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_tanh() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§prec .00001 = T,,°,160 .992521".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_atanh() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§prec .00001 = T,,, .992521 °,160".to_string()).unwrap().numeric_value);
         }
 
         #[test]

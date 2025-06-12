@@ -400,8 +400,6 @@ Operators
 			four quadrant arctangent of y and x in radians
 			(atan2)
 
-		(Also to be implemented :)
-
 		S,, hyperbolic sine (sinh)
 		S,,, inverse hyperbolic sine (asinh)
 		C,, hyperbolic cosine (cosinh)
@@ -474,6 +472,7 @@ Operators
 
 		O§ucv string position
 			Returns the unicode point value of the character at [position] in [string].
+			The position is zero-based!
 
 			e.g.
 				O§ucv §Союз 0
@@ -512,6 +511,8 @@ Operators
 			e.g.
 				O§find §Samovar §a
 					yields 1
+				o,§find §Samovar §a 3
+					yields 5
 				O§find [sNo hay remedio] §mejor
 					yields €
 				tO§find [sNo hay remedio] §mejor
