@@ -8,12 +8,13 @@ LACONIC
 		//				about a specific operator (given in next parameter).
 
 		// TODO: provide calculations with complex numbers.
+		// TODO: provide manipulation of bytes, so even non-text files can be read and written.
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():,;=<>!&|?°€¶aBbCcEeFiKklMmNnOopRrSsTtVvWwXxZ
+			~+-*/%^$():,;=<>!&|?°€¶AaBbCcEeFiKklMmNnOopRrSsTtvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():,;=<>!&|?°€¶aBbCcEeFiKklMmNnOopRrSsTt vWwXxZ
+			~+-*/%^$():,;=<>!&|?°€¶AaBbCcEeFiKklMmNnOopRrSsTtvWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   	Interfere with command line syntax or string literals
@@ -24,7 +25,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			`´#@£€µ²³ADdfGgHhIJjLPQqUuz
+			`´#@£€µ²³DdfGgHhIJjLPQqUuVz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -38,8 +39,8 @@ LACONIC
 			´ 00B4 Acute accent
 			µ 00B5 Mu
 			¶ 00B6 Pilcrow (AltGr-r)
-			Ø 00D8 (Alt-Shift-L)
-			ø 00F8 (Alt-l)
+			Ø 00D8 Uppercase stroked O
+			ø 00F8 Lowercase stroked o
 			€ 20AC Euro
 
 	General syntax
@@ -321,6 +322,12 @@ Operators
 			i,~.5 yields -1
 			i,3 yields 3
 
+		o§r num
+			round
+
+			Rounds num to the nearest integer.
+			If a number is halfway two integers, rounds away from 0.
+
 		a Absolute value
 
 			a8 yields 8
@@ -387,6 +394,11 @@ Operators
 		°, radians from degrees
 
 			°,180 yields 3.14159...
+
+		A	y x
+
+			four quadrant arctangent of y and x in radians
+			(atan2)
 
 		(Also to be implemented :)
 
@@ -1155,7 +1167,7 @@ Operators
 
 		) End of operand number override - see '('. 
 
-		, (comma) : modifies operation of previous operator:
+		, (comma) : variant operator: modifies operation of previous operator: E.g.:
 
 					° 1 yields the value of 1 radian in degrees.
 					°,1 yields the value of 1 degree in radians.
@@ -1181,6 +1193,8 @@ Operators
 					°,(1)
 
 						all yield the same result.
+
+					Some operators have more than one variant and take even more commas.
 
 		N : number of operands of the preceding same-level operator.
 
@@ -1443,12 +1457,6 @@ Operators
 			Otherwise, the hard-coded string will be interpreted as Laconic script code and executed, which will likely
 			result in UnknownOperator errors.
 
-		V reads an environment variable and returns its string content.
-			(to be implemented)
-
-			E.g.:
-				o,§fmt V§fractal_digits §. §_
-
 	Z Set options
 
 		Z optionNr value
@@ -1457,7 +1465,7 @@ Operators
 		If the first operand refers to an unknown option,
 		the operator and its operands are ignored.
 
-		Z§prec n : Precision "orb" for =-operator.
+		Z§prec n : Precision "orb" for = operator.
 					 Default : 0; if n is negative, this default is restored.
 
 		Z§loops n : maximum number of loops executed by F- or W-operator.

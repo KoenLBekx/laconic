@@ -369,6 +369,7 @@ impl Expression {
             'C' => &opr_funcs::acos,
             'T' if alternative_marks_count == 0 => &opr_funcs::tangent,
             'T' => &opr_funcs::atan,
+            'A' => &opr_funcs::atan2,
             'p' => &opr_funcs::pi,
             'e' => &opr_funcs::euler_const,
             'c' => &opr_funcs::constants,
@@ -995,11 +996,11 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:!w°SCTcstbKXnBE" .contains(chr) => 1,
-                        chr if "+-*/^l%&|x$W;mM=<>ZoR".contains(chr) => 2,
-                        chr if "?O"                   .contains(chr) => 3,
-                        chr if "F"                    .contains(chr) => 5,
-                        _                                            => 0,
+                        chr if "~iav:!w°SCTcstbKXnBE"  .contains(chr) => 1,
+                        chr if "+-*/^l%&|x$W;mM=<>ZoRA".contains(chr) => 2,
+                        chr if "?O"                    .contains(chr) => 3,
+                        chr if "F"                     .contains(chr) => 5,
+                        _                                             => 0,
                     };
 
                     match *c {
@@ -1091,7 +1092,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^lia%°SCTpec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRX€BE¶".contains(op)
+        "~+-*/^lia%°SCTApec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRX€BE¶".contains(op)
     }
 }
 
@@ -1743,6 +1744,26 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
+    pub fn atan2(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 2 {
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
+        }
+
+        let num_y = match operands[0].get_value() {
+            ValueType::Number(num) => num,
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+        };
+
+        let num_x = match operands[1].get_value() {
+            ValueType::Number(num) => num,
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+        };
+
+        *result_value = ValueType::Number(num_y.atan2(num_x));
+
+        Ok(())
+    }
+
     pub fn log(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.len() < 2 {
             *result_value = ValueType::Number(0f64);
@@ -2195,6 +2216,7 @@ pub(crate) mod opr_funcs {
         }
 
         let opr_func = match operands[0].get_value() {
+            ValueType::Text(name) if name == "r".to_string() => round,
             ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
             ValueType::Text(name) if name == "ucv".to_string() => get_unicode_value,
             ValueType::Text(name) if name == "len".to_string() => get_length,
@@ -2223,6 +2245,21 @@ pub(crate) mod opr_funcs {
         };
 
         (opr_func)(opr_mark, result_value, &mut operands[1..], shuttle)?;
+
+        Ok(())
+    }
+
+    pub fn round(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
+        }
+
+        *result_value = ValueType::Number(
+            match operands[0].get_value() {
+                ValueType::Number(num) => num.round(),
+                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            }
+        );
 
         Ok(())
     }
@@ -7079,6 +7116,46 @@ mod tests {
                 Err(ScriptError::InvalidOperand('o')),
                 Interpreter::execute_with_mocked_io("o,§split §A1B1C1D1E 1 §frag".to_string())
             );
+        }
+
+        #[test]
+        fn x_atan2() {
+            assert_eq!(1_f64, Interpreter::execute_with_mocked_io("Z§prec .000001 = 1.165904 A7 3".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_round_int() {
+            assert_eq!(8_f64, Interpreter::execute_with_mocked_io("o§r 8".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_round_pos_frac_lower() {
+            assert_eq!(8_f64, Interpreter::execute_with_mocked_io("o§r 8.3".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_round_pos_frac_higher() {
+            assert_eq!(8_f64, Interpreter::execute_with_mocked_io("o§r 7.6".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_round_pos_frac_halfway() {
+            assert_eq!(8_f64, Interpreter::execute_with_mocked_io("o§r 7.5".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_round_neg_frac_lower() {
+            assert_eq!(-8_f64, Interpreter::execute_with_mocked_io("o§r ~8.3".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_round_neg_frac_higher() {
+            assert_eq!(-8_f64, Interpreter::execute_with_mocked_io("o§r ~7.9".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_round_neg_frac_halfway() {
+            assert_eq!(-8_f64, Interpreter::execute_with_mocked_io("o§r ~7.5".to_string()).unwrap().numeric_value);
         }
     }
 
