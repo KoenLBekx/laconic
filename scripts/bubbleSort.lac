@@ -1,0 +1,43 @@
+[c
+	Sorts the items on the stack in such a way that the smallest item will be popped first.
+
+	System test:
+	target/release/laconic -i scripts/bubbleSort.lac 'K(20 5 60 19 §Hello 8 4 0) X§BubbleSort o§fmt 0 Wk, w+k§- w¶'
+]
+
+R(
+	§BubbleSort
+	$ §len k,
+	$ §count 0
+	W
+		k,
+		;
+			$ v§count k
+			+ :§count 1
+	$ §lastEl - v§len 2
+	W(
+		> v§lastEl 0
+		$ §el 0
+		W(
+			!> v§el v§lastEl
+			?
+				<
+					vv§el
+					v+v§el 1
+				;(
+					$ §tmp vv§el
+					$ v§el v+v§el 1
+					$ +v§el 1 v§tmp
+				)
+				€
+			+ :§el 1
+		)
+		- :§lastEl 1
+	)
+	F
+		0
+		- v§len 1
+		1
+		§count
+		K vv§count
+)
