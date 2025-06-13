@@ -2293,6 +2293,7 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "ucv".to_string() => get_unicode_value,
             ValueType::Text(name) if name == "len".to_string() => get_length,
             ValueType::Text(name) if name == "find".to_string() => find_in_string,
+            ValueType::Text(name) if name == "repl".to_string() => replace_in_string,
             ValueType::Text(name) if name == "split".to_string() => split,
             ValueType::Text(name) if name == "sub".to_string() => substring,
             ValueType::Text(name) if name == "lower".to_string() => lower,
@@ -3021,12 +3022,55 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
+    fn find_in_string_base(characters: &Vec<char>, find_characters: &Vec<char>, start_pos: usize) -> Option<usize> {
+        let source_len = characters.len();
+        let find_len = find_characters.len();
+
+        if (find_len == 0_usize) || (source_len == 0_usize) {
+            return None;
+        }
+
+        if find_len > source_len {
+            return None;
+        }
+
+        let last_start_pos = source_len - find_len;
+
+        if start_pos > last_start_pos {
+            return None;
+        }
+
+        for compare_start_pos in start_pos..=last_start_pos {
+            let mut matches = true;
+            let mut compare_find_pos = 0_usize;
+
+            for compare_source_pos in compare_start_pos..(compare_start_pos + find_len) {
+                matches = characters[compare_source_pos] == find_characters[compare_find_pos];
+
+                if !matches {
+                    break;
+                }
+
+                compare_find_pos += 1;
+            }
+
+            if matches {
+                return Some(compare_start_pos);
+            }
+        }
+
+        None
+    }
+
     pub fn find_in_string(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        // TODO: invalid, or impossible, operands shouldn't cause an Err to be returned, but a
+        // ValueType::Empty to be assigned.
+
         if operands.len() < 2 {
             return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
-        let characters: Vec::<char> = match operands[0].get_value() {
+        let characters: Vec<char> = match operands[0].get_value() {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
             _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
@@ -3034,7 +3078,7 @@ pub(crate) mod opr_funcs {
 
         let source_len = characters.len();
 
-        let find_characters: Vec::<char> = match operands[1].get_value() {
+        let find_characters: Vec<char> = match operands[1].get_value() {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
             _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
@@ -3061,34 +3105,138 @@ pub(crate) mod opr_funcs {
             return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
-        if source_len == 0_usize {
-            *result_value = ValueType::Number(0_f64);
+        if (find_len == 0_usize) || (source_len == 0_usize) {
+            *result_value = ValueType::Empty;
 
             return Ok(());
         }
 
-        for compare_start_pos in start_pos..=last_start_pos {
-            let mut matches = true;
-            let mut compare_find_pos = 0_usize;
+        *result_value = match find_in_string_base(&characters, &find_characters, start_pos) {
+            Some(pos) => ValueType::Number(pos as f64),
+            None => ValueType::Empty,
+        };
 
-            for compare_source_pos in compare_start_pos..(compare_start_pos + find_len) {
-                matches = characters[compare_source_pos] == find_characters[compare_find_pos];
+        Ok(())
+    }
 
-                if !matches {
-                    break;
-                }
+    pub fn replace_in_string(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.len() < 3 {
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
+        }
 
-                compare_find_pos += 1;
+        let use_condition = operands.len() > 3;
+
+        if use_condition && (operands.len() < 6) {
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
+        }
+
+        let characters: Vec<char> = match operands[0].get_value() {
+            ValueType::Text(txt) => txt.chars().collect(),
+            ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+        };
+
+        let source_len = characters.len();
+
+        let find_characters: Vec<char> = match operands[1].get_value() {
+            ValueType::Text(txt) => txt.chars().collect(),
+            ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+        };
+
+        let find_len = find_characters.len();
+
+        if find_len > source_len {
+            return Err(ScriptError::InvalidOperand(*opr_mark));
+        }
+
+        let repl_characters: Vec<char> = match operands[2].get_value() {
+            ValueType::Text(txt) => txt.chars().collect(),
+            ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+        };
+
+        let repl_len = repl_characters.len();
+
+        let pos_var = if use_condition {
+            match operands[3].get_value() {
+                ValueType::Text(content) => ValueType::Text(content),
+                ValueType::Number(content) => ValueType::Number(content),
+                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
             }
+        } else {
+            ValueType::Empty
+        };
 
-            if matches {
-                *result_value = ValueType::Number(compare_start_pos as f64);
+        let seq_var = if use_condition {
+            match operands[4].get_value() {
+                ValueType::Text(content) => ValueType::Text(content),
+                ValueType::Number(content) => ValueType::Number(content),
+                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            }
+        } else {
+            ValueType::Empty
+        };
 
-                return Ok(());
+        // Returns empty value.
+        let empty_routine = Routine{
+            body: Expression::new('€', 0),
+            in_new_variables_scope: true,
+        };
+
+        let mut found_routine = if use_condition {
+            let name = match operands[5].get_value() {
+                ValueType::Text(content) => ValueType::Text(content),
+                ValueType::Number(content) => ValueType::Number(content),
+                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            };
+
+            if let Some(ref rout) = shuttle.routines.get(&name) {
+                (*rout).clone()
+            } else {
+                empty_routine.clone()
+            }
+        } else {
+            empty_routine.clone()
+        };
+
+        let mut result_characters = characters.clone();
+        let mut start_pos = 0_usize;
+        let mut orig_pos = 0_usize;
+        // let mut end_pos = 0_usize;
+        let mut count = 0f64;
+
+        loop {
+            match find_in_string_base(&result_characters, &find_characters, start_pos) {
+                Some(found_pos) =>  {
+                    let end_pos = found_pos + find_len;
+                    orig_pos += found_pos - start_pos;
+
+                    let do_it = if use_condition {
+                        shuttle.set_var(pos_var.clone(), ValueType::Number(orig_pos as f64));
+                        shuttle.set_var(seq_var.clone(), ValueType::Number(count as f64));
+                        found_routine.body.operate(shuttle)?;
+
+                        found_routine.body.get_num_value(0_f64)
+                    } else {
+                        1_f64
+                    };
+
+                    if do_it != 0_f64 {
+                        result_characters.splice(found_pos..end_pos, repl_characters.clone());
+                        start_pos += repl_len;
+                    } else {
+                        start_pos += find_len;
+                    }
+
+                    orig_pos += find_len;
+                    count += 1_f64;
+                },
+                None => break,
             }
         }
 
-        *result_value = ValueType::Empty;
+        *result_value = ValueType::Text(result_characters.iter().collect());
 
         Ok(())
     }
@@ -6321,7 +6469,7 @@ mod tests {
 
         #[test]
         fn x_find_empty_find_string() {
-            assert_eq!(3_f64, Interpreter::execute_with_mocked_io("o,§find §aaabcabde § 3".to_string()).unwrap().numeric_value);
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("to,§find §aaabcabde § 3".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -7258,6 +7406,82 @@ mod tests {
         #[test]
         fn x_round_neg_frac_halfway() {
             assert_eq!(-8_f64, Interpreter::execute_with_mocked_io("o§r ~7.5".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_repl_no_condition() {
+            assert_eq!("filadelfia".to_string(), Interpreter::execute_with_mocked_io("o,§repl §philadelphia §ph §f".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_repl_condition_on_position_first() {
+            assert_eq!("filadelphia".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §philadelphia §ph §f §pos §seq R,§cond =v§pos 0".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_repl_condition_on_position_second() {
+            assert_eq!("philadelfia".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §philadelphia §ph §f §pos §seq R,§cond =v§pos 8".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_repl_condition_on_sequence_first() {
+            assert_eq!("filadelphia".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §philadelphia §ph §f §pos §seq R,§cond =v§seq 0".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_repl_condition_on_sequence_second() {
+            assert_eq!("philadelfia".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §philadelphia §ph §f §pos §seq R,§cond =v§seq 1".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_repl_condition_always_false() {
+            assert_eq!("philadelphia".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §philadelphia §ph §f §pos §seq R,§cond 0".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_repl_condition_pos_too_far() {
+            assert_eq!("philadelphia".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §philadelphia §ph §f §pos §seq R,§cond >v§pos 20".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_repl_condition_routine_not_found() {
+            assert_eq!("philadelphia".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §philadelphia §ph §f §pos §seq §inexistent".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_repl_condition_true_substring_not_found() {
+            assert_eq!("philadelphia".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §philadelphia §ch §f §pos §seq R,§cond 1".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_repl_condition_on_position_both_shorter_replacement() {
+            assert_eq!("filadelfia".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §philadelphia §ph §f §pos §seq R,§cond |=v§pos 8 =v§pos 0".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_repl_condition_on_position_both_longer_replacement() {
+            assert_eq!("fffiladelfffia".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §philadelphia §ph §fff §pos §seq R,§cond |=v§pos 8 =v§pos 0".to_string()).unwrap().string_representation);
+        }
+    
+        #[test]
+        fn x_repl_3_operands() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('O')),
+                Interpreter::execute_with_mocked_io("O§repl §Amsterdam §Ams".to_string())
+            );
+        }
+    
+        #[test]
+        fn x_repl_6_operands() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o,,§repl §Amsterdam §Ams §Rot §pos §seq".to_string())
+            );
+        }
+
+        #[test]
+        fn x_repl_condition_numeric_variables() {
+            assert_eq!("Amsterdam_Rotterdam".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §Amsterdam_Amsterdam §Ams §Rot 0 1 R,2 =v1 1".to_string()).unwrap().string_representation);
         }
     }
 

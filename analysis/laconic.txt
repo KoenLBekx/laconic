@@ -7,8 +7,22 @@ LACONIC
 		// TODO: add a -h parameter to the executable that gives comprehensive info
 		//				about a specific operator (given in next parameter).
 
-		// TODO: provide calculations with complex numbers.
-		// TODO: provide manipulation of bytes, so even non-text files can be read and written.
+		Ideas for later versions:
+		- provide calculations with complex numbers.
+		- embed data about the first n prime numbers.
+		- provide manipulation of bytes, so even non-text files can be read and written.
+		- A second period in a number can be considered to be the start of the repeating part of a number:
+			12.3.8 would interpreted as 12.3888...
+			so
+			12.3.9 yields 12.4
+			(See 
+				Su, Francis E., et al. “Why Does 0.999… = 1?.” Math Fun Facts
+				https://math.hmc.edu/funfacts/why-does-0-999-1/
+			)
+		- provide an
+				o§fib n
+			operator that yields the nth Fibonacci number.
+		- provide RegEx functionality in finding and replacing substrings.
 
 		* Characters assigned (or to be assigned) to operators:
 			~+-*/%^$():,;=<>!&|?°€¶AaBbCcEeFiKklMmNnOopRrSsTtvWwXxZ
@@ -112,19 +126,6 @@ LACONIC
 
 			. = 0
 
-		Note that a second period in a number is considered to be the start of the repeating part of a number:
-				 (To be implemented.)
-
-			12.3.8 is interpreted as 12.3888...
-
-			so
-
-			12.3.9 yields 12.4
-
-			(See 
-				Su, Francis E., et al. “Why Does 0.999… = 1?.” Math Fun Facts
-				https://math.hmc.edu/funfacts/why-does-0-999-1/
-			)
 
 		Surplus periods in a number will be ignored:
 
@@ -236,7 +237,6 @@ LACONIC
 
 		Other numerical operators, or other combinations of number and string operands,
 		will throw errors.
-			(To be implemented)
 
 	Comment brackets content
 
@@ -524,30 +524,92 @@ Operators
 				O(§find §Samovar §a 3)
 					yields 5
 
-		o§(repl string substring replacement count)
-			(to be implemented)
-			Question: What is most needed:
-				- replace all occurrences
-				- replace nth occurrence
-				- replace all occurences after position x
-				- replace nth occurrence after position x
-				All of these use cases can be scripted using other operators!
+		O,,§repl string substring replacement varPos varSeq conditionRoutineName
 
-						Replaces the [count] first occurrences of [substring] in [string] with [replacement].
-						If the [count] operand is negative, all occurrences are replaced.
-						If the [count] operand is ommitted, all occurrences are replaced.
+			Replaces an occurrence of substring in string with replacement
+			if the condition evaluates to a value that is not 0 (zero) or € (the Empty value).
 
-								e.g.
-									o(§repl §philadelphia §ph §f 1)
-										yields "filadelphia"
-									o(§repl §philadelphia §ph §f 2)
-										yields "filadelfia"
-									o(§repl §philadelphia §ph §f ~1)
-										yields "filadelfia"
-									o(§repl §philadelphia §ph §f)
-										yields "filadelfia"
+			The condition has to be passed as the name of a routine
+			defined previously using the R, operator -
+			the variant that accesses the calling code's memory.
 
-						(Note that all string operations are case-sensitive.)
+			The condition routine can make use of two variables, the names or number
+			of which are passed in the varPos and varSeq operands.
+
+			(The names varSeq and varPos are examples. You can choose any name or number.)
+
+			If the condition routine hasn't been defined before,
+			no replacement is performed.
+
+			varPos :
+			When the condition routine is called,
+			varPos will hold the (zero-based) start of the occurrence
+			of substring found in the original string.
+
+			varSeq:
+			When the condition routine is called,
+			varSeq will hold the (zero-based) sequence number of the occurrence.
+
+			If the varPos, varNum and condition operands are ommitted,
+			all occurrences of substring will be replaced.
+
+			The operator returns a string
+			in which the requested replacements have been performed.
+
+					e.g.
+						$§replaced o,§repl §philadelphia §ph §f
+							puts "filadelfia" in variable §replaced.
+
+						R,§replCond =v§seq 0
+						$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond
+							puts "filadelphia" in variable §replaced.
+
+						R,§replCond >v§seq 0
+						$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond
+							puts "philadelfia" in variable §replaced.
+
+						R,§replCond >v§seq 5
+						$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond
+							puts "philadelphia" in variable §replaced.
+
+						R,§replCond =v§pos 0
+						$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond
+							puts "filadelphia" in variable §replaced.
+
+						R,§replCond >v§pos 4
+						$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond
+							puts "philadelfia" in variable §replaced.
+
+						R,§replCond 1
+						$§replaced O,,§repl §philadelphia §ph §f §pos $seq §replCond
+							puts "filadelfia" in variable §replaced.
+
+						R,§replCond 0
+						$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond
+							puts "philadelphia" in variable §replaced.
+
+						R,§replCond =v§pos 0
+						$§myCity §philadelphia
+						O,,§repl :§myCity §p §P §pos §seq §replCond
+							puts "Philadelphia" in variable §myCity.
+
+				(Note that all string operations are case-sensitive.)
+
+				Note: as the R, operator returns the name of the routine itself,
+				it can be used as the routine-name operand:
+
+						$
+							§replaced
+							O,,
+								§repl
+								§philadelphia
+								§ph
+								§f
+								§pos
+								§seq
+								R,
+									§replCond
+									=v§pos 0
 
 		o§lower string
 
