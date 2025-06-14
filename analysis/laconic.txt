@@ -8,21 +8,23 @@ LACONIC
 		//				about a specific operator (given in next parameter).
 
 		Ideas for later versions:
-		- provide calculations with complex numbers.
-		- embed data about the first n prime numbers.
-		- provide manipulation of bytes, so even non-text files can be read and written.
-		- A second period in a number can be considered to be the start of the repeating part of a number:
-			12.3.8 would interpreted as 12.3888...
-			so
-			12.3.9 yields 12.4
-			(See 
-				Su, Francis E., et al. “Why Does 0.999… = 1?.” Math Fun Facts
-				https://math.hmc.edu/funfacts/why-does-0-999-1/
-			)
-		- provide an
-				o§fib n
-			operator that yields the nth Fibonacci number.
-		- provide RegEx functionality in finding and replacing substrings.
+			- provide calculations with complex numbers.
+			- embed data about the first n prime numbers.
+			- provide manipulation of bytes, so even non-text files can be read and written.
+			- A second period in a number can be considered to be the start of the repeating part of a number:
+				12.3.8 would interpreted as 12.3888...
+				so
+				12.3.9 yields 12.4
+				(See 
+					Su, Francis E., et al. “Why Does 0.999… = 1?.” Math Fun Facts
+					https://math.hmc.edu/funfacts/why-does-0-999-1/
+				)
+			- provide RegEx functionality in finding and replacing substrings.
+			- provide an operator
+					w,, filepath expression
+
+						Writes the outcome of the expression to a file, appending to it
+						(instead of overwriting it).
 
 		* Characters assigned (or to be assigned) to operators:
 			~+-*/%^$():,;=<>!&|?°€¶AaBbCcEeFiKklMmNnOopRrSsTtvWwXxZ
@@ -704,6 +706,10 @@ Operators
 				Golden Ratio (sectio aurea)
 				Calculated as (1 + sqrt(5))/2
 
+			c§cogold
+				Conjugate of the Golden Ratio
+				Calculated as (1 - sqrt(5))/2
+
 			c§n
 				newline character
 				This is the same as ¶
@@ -1177,11 +1183,6 @@ Operators
 
 			Writes the outcome of the expression to a file, overwriting it.
 
-		w,, filepath expression
-			(to be implemented)
-
-			Writes the outcome of the expression to a file, appending to it.
-
 		r read a line from standard input.
 
 			This command reads a line of text from standard input and returns the result:
@@ -1390,13 +1391,14 @@ Operators
 								o(§fmt 3 §, §) 1200.2526    returns 1200,253
 								o(§fmt 6 §. §___) 1200.2526 returns 1_200.252_6
 
-			o§fib  seq
+			o§fib seq
 
-							Fibonacci number
-								(to be implemented)
+							Fibonacci seq
 
-								The seq(uence number) operand is truncated to an integer and converted to its
-								absolute value before being used to get a Fibonacci number.
+								The seq(uence number) operand is truncated (not rounded) towards zero to an integer
+								before being used as a Fibonacci index.
+							
+								If the sequence number is negative, the empty value (€) is returned.
 								
 								e.g.
 									o §fib 0 yields 0
@@ -1407,7 +1409,18 @@ Operators
 									o §fib 5 yields 5
 									o §fib 6 yields 8
 									o §fib 6.1 yields 8
-									o §fib ~6.1 yields 8
+									o §fib 6.9 yields 8
+									o §fib ~6.1 yields €
+									o §fib ~6.9 yields €
+
+								Implemented as
+
+								Fib(n) = for n > 0:  round((φⁿ - ψⁿ) / sqrt(5))
+
+									where	φ = golden ratio: (1 + sqrt(5)) / 2
+									and		ψ = conjugate of φ: (1 - sqrt(5) / 2
+
+								(See https://en.wikipedia.org/wiki/Fibonacci_sequence#Relation_to_the_golden_ratio)
 
 			o,§dow year month day
 

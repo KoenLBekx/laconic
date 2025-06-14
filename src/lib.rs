@@ -679,6 +679,7 @@ struct Shuttle {
     max_iterations: f64,
     orb: f64,
     golden_ratio: Option<f64>,
+    conjug_gold: Option<f64>,
     input_base: f64,
     number_format: NumberFormat,
     writer: Box<dyn output::EchoingWriter>,
@@ -705,6 +706,7 @@ impl Shuttle {
             max_iterations: 10_000f64,
             orb: 0.000_000_01f64,
             golden_ratio: None,
+            conjug_gold: None,
             input_base: 10f64,
             number_format: NumberFormat::new(),
             writer,
@@ -1868,6 +1870,35 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
+    fn get_golden_ratio_from_shuttle(shuttle: &mut Shuttle) -> f64 {
+        match shuttle.golden_ratio {
+            Some(gr) => gr,
+            None => {
+                let golden_ratio = (1f64 + 5f64.sqrt()) / 2f64;
+                shuttle.golden_ratio = Some(golden_ratio);
+
+                #[cfg(test)]
+                {
+                    shuttle.golden_ratio_calculations += 1u8;
+                }
+
+                golden_ratio
+            },
+        }
+    }
+
+    fn get_conjugate_golden_ratio_from_shuttle(shuttle: &mut Shuttle) -> f64 {
+        match shuttle.conjug_gold {
+            Some(cjgr) => cjgr,
+            None => {
+                let conjug = (1f64 - 5f64.sqrt()) / 2f64;
+                shuttle.conjug_gold = Some(conjug);
+
+                conjug
+            },
+        }
+    }
+
     pub fn constants(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
             return Err(ScriptError::InsufficientOperands(*opr_mark));
@@ -1876,22 +1907,10 @@ pub(crate) mod opr_funcs {
         let const_index = operands[0].get_value();
 
         *result_value = match const_index {
-            ValueType::Text(name) if name == "gold".to_string() =>  {
-                match shuttle.golden_ratio {
-                    Some(gr) => ValueType::Number(gr),
-                    None => {
-                        let golden_ratio = (1f64 + 5f64.sqrt()) / 2f64;
-                        shuttle.golden_ratio = Some(golden_ratio);
-
-                        #[cfg(test)]
-                        {
-                            shuttle.golden_ratio_calculations += 1u8;
-                        }
-
-                        ValueType::Number(golden_ratio)
-                    },
-                }
-            },
+            ValueType::Text(name) if name == "gold".to_string() =>
+                ValueType::Number(get_golden_ratio_from_shuttle(shuttle)) ,
+            ValueType::Text(name) if name == "cogold".to_string() =>
+                ValueType::Number(get_conjugate_golden_ratio_from_shuttle(shuttle)),
             ValueType::Text(name) if name == "n".to_string() => ValueType::Text("\n".to_string()),
             ValueType::Text(name) if name == "empty".to_string() => ValueType::Empty,
             _ => return Err(ScriptError::UnknownConstant(const_index.get_string_value("???".to_string()))),
@@ -2289,6 +2308,7 @@ pub(crate) mod opr_funcs {
 
         let opr_func = match operands[0].get_value() {
             ValueType::Text(name) if name == "r".to_string() => round,
+            ValueType::Text(name) if name == "fib".to_string() => fibonacci,
             ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
             ValueType::Text(name) if name == "ucv".to_string() => get_unicode_value,
             ValueType::Text(name) if name == "len".to_string() => get_length,
@@ -2333,6 +2353,28 @@ pub(crate) mod opr_funcs {
                 _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
             }
         );
+
+        Ok(())
+    }
+
+    pub fn fibonacci(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        if operands.is_empty() {
+            return Err(ScriptError::InsufficientOperands(*opr_mark));
+        }
+
+        *result_value = match operands[0].get_value() {
+            ValueType::Number(num) if num >= 0_f64 => {
+                let index = num.trunc() as i32;
+                let golden_ratio = get_golden_ratio_from_shuttle(shuttle);
+                let conjug = get_conjugate_golden_ratio_from_shuttle(shuttle);
+
+                ValueType::Number(
+                    ((golden_ratio.powi(index) - conjug.powi(index)) / 5_f64.sqrt()).round()
+                )
+            }
+            ValueType::Number(_negative_num) => ValueType::Empty,
+            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+        };
 
         Ok(())
     }
@@ -5861,6 +5903,11 @@ mod tests {
         }
 
         #[test]
+        fn x_consts_conjugate_golden_ratio() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§prec .000001 = c§cogold /-1 ^5 .5 2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_consts_empty() {
             assert_eq!(0_f64, Interpreter::execute_with_mocked_io("tc§empty".to_string()).unwrap().numeric_value);
         }
@@ -7482,6 +7529,49 @@ mod tests {
         #[test]
         fn x_repl_condition_numeric_variables() {
             assert_eq!("Amsterdam_Rotterdam".to_string(), Interpreter::execute_with_mocked_io("O,,§repl §Amsterdam_Amsterdam §Ams §Rot 0 1 R,2 =v1 1".to_string()).unwrap().string_representation);
+        }
+    
+        #[test]
+        fn x_fibonacci_missing_index() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('o')),
+                Interpreter::execute_with_mocked_io("o(§fib)".to_string())
+            );
+        }
+
+        #[test]
+        fn x_fibonacci_0() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("o§fib 0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_fibonacci_greater_than_0() {
+            assert_eq!(144_f64, Interpreter::execute_with_mocked_io("o§fib 12".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_fibonacci_1() {
+            assert_eq!(1_f64, Interpreter::execute_with_mocked_io("o§fib 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_fibonacci_2() {
+            assert_eq!(1_f64, Interpreter::execute_with_mocked_io("o§fib 2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_fibonacci_3() {
+            assert_eq!(2_f64, Interpreter::execute_with_mocked_io("o§fib 3".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_fibonacci_fractal_index() {
+            assert_eq!(832_040_f64, Interpreter::execute_with_mocked_io("o§fib 30.99".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_fibonacci_negative_index() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("to§fib ~20".to_string()).unwrap().numeric_value);
         }
     }
 
