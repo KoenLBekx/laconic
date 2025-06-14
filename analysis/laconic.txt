@@ -1,5 +1,7 @@
 LACONIC
 
+		// TODO: explain the consequences of using floating-point numbers only.
+		//			(precision).
 		// TODO: explain standard number of operands and how to deviate from it.
 		// TODO: indicate the standard number of operands for every operator.
 		// TODO: add a -o parameter to the executable that gives an overview
@@ -8,6 +10,8 @@ LACONIC
 		//				about a specific operator (given in next parameter).
 
 		Ideas for later versions:
+			- provide operators or constants for conversion between imperial and continental
+				quantities for size, volume, speed, temperature, weight e.a.
 			- provide calculations with complex numbers.
 			- embed data about the first n prime numbers.
 			- provide manipulation of bytes, so even non-text files can be read and written.
@@ -25,6 +29,10 @@ LACONIC
 
 						Writes the outcome of the expression to a file, appending to it
 						(instead of overwriting it).
+			- Provide an operator that writes an SVG file containing a graph
+				based on arrays of variables.
+			- Provide an operator that outputs if there is precision loss
+				after a floating-point operation, and how much.
 
 		* Characters assigned (or to be assigned) to operators:
 			~+-*/%^$():,;=<>!&|?°€¶AaBbCcEeFiKklMmNnOopRrSsTtvWwXxZ
