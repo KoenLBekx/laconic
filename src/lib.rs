@@ -1,18 +1,14 @@
 //{ TODO: resolve TODO's in code.
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
-// TODO: implement all intended operators.
 // TODO: fn main should also accept a -q (quiet) parameter, which would prevent the output of the
 //      final value to stdin.
-// TODO: no parsing operation or operator should panic, lest applications using the library
-//      panic either.
-//      This means that operations that risk to overflow the f64 (or giantity) reach should
-//      use the try_ versions of these operations.
 // TODO: Add an Error(String) variant to the ValueType and ExecutionOutcome enums.
 //      (So no Result return values.)
 //      This avoids calling modules to have to test first for Result::Err and then for the
 //      ExecutionOutcome variant.
 // TODO: the characters for the operators should be hard-coded only once: in constants.
-//      These constants can figure in a constant array
+//      (done; not done follows below:)
+//      These constants can figure in a constant array of tuples
 //      holding also other data like number of operands, operator function, e.a.
 //      (even data for documentation).
 //      The function isKnownOperator should also use this constant array.
@@ -21,13 +17,12 @@
 // TODO: have all operators have an acceptable behavior with less or more operands than standard.
 //      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
-// TODO: remove our outcomment code reported as never used by the compiler.
 // TODO: include the explanations in analysis/laconic.txt in markdown format as documentation
 //      comments.
 // TODO: The ScriptError variants that carry an operator mark as char should carry a string
 //      so the full enumerated operator name can be passed, e.g.: "o,§dow".
+// TODO: check using cargo clippy.
 // TODO: use giantity ?
-// TODO: remove outcommented code.
 //}
 
 use std::collections::HashMap;
@@ -37,11 +32,84 @@ use string_io_and_mock::{MockTextHandler, TextIOHandler};
 
 // Static lifetime: justified, because the functions referenced
 // are compiled into the application and live as long as it runs.
-// The first parameter should pass the character that encoded the expression,
+// The first parameter should pass a mutable reference to the character that encoded the expression,
 // The second one to an Expression's value property,
 // the third one to a Expression's operands property (operands are Expression objects),
 // the fourth one to the Shuttle containing other state.
 type OperatorFunc = &'static dyn Fn(&mut char, &mut ValueType, &mut [Expression], &mut Shuttle) -> Result<(), ScriptError>;
+
+const OPNUM: char = '0';
+const OPSTR: char = '§';
+const OPNEG: char = '~';
+const OPPLS: char = '+';
+const OPMNS: char = '-';
+const OPMUL: char = '*';
+const OPDIV: char = '/';
+const OPMOD: char = '%';
+const OPEXP: char = '^';
+const OPLOG: char = 'l';
+const OPINT: char = 'i';
+const OPABS: char = 'a';
+const OPDEG: char = '°';
+const OPSIN: char = 'S';
+const OPCOS: char = 'C';
+const OPTAN: char = 'T';
+const OPAT2: char = 'A';
+const OPPII: char = 'p';
+const OPEUL: char = 'e';
+const OPCON: char = 'c';
+const OPCMB: char = ';';
+const OPMIN: char = 'm';
+const OPMAX: char = 'M';
+const OPNRO: char = 'N';
+const OPWHI: char = 'W';
+const OPFOR: char = 'F';
+const OPBRK: char = 'B';
+const OPRTN: char = 'R';
+const OPEXR: char = 'X';
+const OPASG: char = '$';
+const OPVAR: char = 'v';
+const OPMAS: char = ':';
+const OPSTK: char = 'K';
+const OPPOP: char = 'k';
+const OPEQU: char = '=';
+const OPLSS: char = '<';
+const OPGRT: char = '>';
+const OPNOT: char = '!';
+const OPAND: char = '&';
+const OPOR_: char = '|';
+const OPXOR: char = 'x';
+const OPIF_: char = '?';
+const OPSET: char = 'Z';
+const OPOP1: char = 'o';
+const OPOP2: char = 'O';
+const OPWRT: char = 'w';
+const OPREA: char = 'r';
+const OP2NR: char = 'n';
+const OPSIG: char = 's';
+const OPTYP: char = 't';
+const OPBAS: char = 'b';
+const OPEMP: char = '€';
+const OPEVL: char = 'E';
+const OPNLN: char = '¶';
+const OPALT: char = ',';
+
+// CH_SEPA_NUM can't be used as match pattern.
+const CH_NUM_SEPA: char = '_';
+
+const CH_DOT: char = '.';
+const CH_SEPA_VERSION: char = '.';
+const CH_THOUSANDS: char = ',';
+const CH_SEPA_DIGITS: char = ' ';
+const CH_OVR_START: char = '(';
+const CH_OVR_END: char = ')';
+const CH_UNKNOWN_CHAR_CODE: char = '?';
+const CH_CLAUSE_START: char = '[';
+const CH_CLAUSE_END: char = ']';
+
+const MARK_STRING: char = 's';
+const MARK_COMMENT: char = 'c';
+const MARK_NUMBER: char = 'n';
 
 #[derive(PartialEq)]
 enum Atom {
@@ -69,6 +137,7 @@ pub enum ScriptError {
     FileReadFailure{path: String, reason: String},
     InsufficientOperands(char),
     InvalidOperand(char),
+    InvalidOperandMax(char),
     UnclosedBracketsAtEnd,
     UnexpectedClosingBracket{position: usize},
     UnexpectedClosingParenthesis,
@@ -158,10 +227,10 @@ impl NumberFormat {
         NumberFormat {
             base: 10f64,
             fractal_digits: 6f64,
-            fractal_separator: '.',
+            fractal_separator: CH_DOT,
             use_thousands_separator: false,
-            thousands_separator: ',',
-            digit_separator: ' ',
+            thousands_separator: CH_THOUSANDS,
+            digit_separator: CH_SEPA_DIGITS,
         }
     }
 
@@ -177,9 +246,8 @@ impl NumberFormat {
                     char_val = char_val + diff_a - 10;
                 }
 
-                String::from(
-                    char::from_u32(char_val)
-                    .expect("Function format_digit should always be able to convert a number to a character."))
+                // No panic!, no expect => if Err, return '?'
+                String::from(char::from_u32(char_val).unwrap_or(CH_UNKNOWN_CHAR_CODE))
             },
             37f64.. => {
                 format!("{}", digit.trunc())
@@ -304,8 +372,7 @@ impl NumberFormat {
 
     fn set_fractal_separator(&mut self, separator: String) {
         if !separator.is_empty() {
-            let proposed = separator.chars().nth(0)
-                .expect("A string of length > 0 should have a first character.");
+            let proposed = separator.chars().nth(0).unwrap_or(CH_DOT);
 
             self.fractal_separator = proposed;
         }
@@ -320,8 +387,7 @@ impl NumberFormat {
         if separator.is_empty() {
             self.use_thousands_separator = false;
         } else {
-            let proposed = separator.chars().nth(0)
-                .expect("A string of length > 0 should have a first character.");
+            let proposed = separator.chars().nth(0).unwrap_or(CH_THOUSANDS);
 
             self.thousands_separator = proposed;
             self.use_thousands_separator = true;
@@ -343,81 +409,79 @@ struct Expression
 
 impl Expression {
     pub fn new(opr_mark: char, alternative_marks_count: u8) -> Self {
-        // '"' is used for an E-expression after its first operation
-
-        let opr: OperatorFunc = match opr_mark {
-            '0' => &opr_funcs::nop,
-            '§' => &opr_funcs::string_expr,
-            '~' => &opr_funcs::unaryminus,
-            '+' if alternative_marks_count == 0 => &opr_funcs::add,
-            '+' => &opr_funcs::add_concat_int,
-            '-' => &opr_funcs::minus,
-            '*' => &opr_funcs::multiply,
-            '/' if alternative_marks_count == 0 => &opr_funcs::divide,
-            '/' => &opr_funcs::int_div,
-            '%' => &opr_funcs::modulo,
-            '^' => &opr_funcs::power,
-            'l' => &opr_funcs::log,
-            'i' if alternative_marks_count == 0 => &opr_funcs::intgr,
-            'i' => &opr_funcs::ceiling,
-            'a' => &opr_funcs::abs,
-            '°' if alternative_marks_count == 0 => &opr_funcs::degrees,
-            '°' => &opr_funcs::radians,
-            'S' if alternative_marks_count == 1 => &opr_funcs::asin,
-            'S' if alternative_marks_count == 2 => &opr_funcs::sinh,
-            'S' if alternative_marks_count == 3 => &opr_funcs::asinh,
-            'S' => &opr_funcs::sine,
-            'C' if alternative_marks_count == 1 => &opr_funcs::acos,
-            'C' if alternative_marks_count == 2 => &opr_funcs::cosh,
-            'C' if alternative_marks_count == 3 => &opr_funcs::acosh,
-            'C' => &opr_funcs::cosine,
-            'T' if alternative_marks_count == 1 => &opr_funcs::atan,
-            'T' if alternative_marks_count == 2 => &opr_funcs::tanh,
-            'T' if alternative_marks_count == 3 => &opr_funcs::atanh,
-            'T' => &opr_funcs::tangent,
-            'A' => &opr_funcs::atan2,
-            'p' => &opr_funcs::pi,
-            'e' => &opr_funcs::euler_const,
-            'c' => &opr_funcs::constants,
-            ';' => &opr_funcs::combine,
-            'm' => &opr_funcs::min,
-            'M' => &opr_funcs::max,
-            'N' => &opr_funcs::preceding_nr_operands,
-            'W' => &opr_funcs::exec_while,
-            'F' => &opr_funcs::exec_for,
-            'B' => &opr_funcs::set_break,
-            'R' if alternative_marks_count == 0 => &opr_funcs::define_routine_with_new_scope,
-            'R' => &opr_funcs::define_routine_sharing_variables,
-            'X' => &opr_funcs::exec_routine,
-            '$' => &opr_funcs::assign_number_register,
-            'v' => &opr_funcs::get_number_register,
-            ':' => &opr_funcs::assignment_maker,
-            'K' => &opr_funcs::push_stack,
-            'k' if alternative_marks_count == 0 => &opr_funcs::pop_stack,
-            'k' => &opr_funcs::stack_depth,
-            '=' => &opr_funcs::equals,
-            '<' => &opr_funcs::less,
-            '>' => &opr_funcs::greater,
-            '!' => &opr_funcs::not,
-            '&' => &opr_funcs::and,
-            '|' => &opr_funcs::or,
-            'x' => &opr_funcs::xor,
-            '?' => &opr_funcs::exec_if,
-            'Z' => &opr_funcs::setting,
-            'o' => &opr_funcs::enumerated_opr,
-            'O' => &opr_funcs::enumerated_opr,
-            'w' if alternative_marks_count == 0 => &opr_funcs::write,
-            'w' => &opr_funcs::write_file,
-            'r' if alternative_marks_count == 0 => &opr_funcs::read,
-            'r' => &opr_funcs::read_file,
-            'n' => &opr_funcs::to_number,
-            's' => &opr_funcs::sign,
-            't' => &opr_funcs::get_type,
-            'b' if alternative_marks_count == 0 => &opr_funcs::input_base,
-            'b' => &opr_funcs::output_base,
-            '€' => &opr_funcs::empty,
-            'E' => &opr_funcs::eval,
-            '¶' => &opr_funcs::newline,
+        let opr: OperatorFunc = match (opr_mark, alternative_marks_count) {
+            (OPNUM, _) => &opr_funcs::nop,
+            (OPSTR, _) => &opr_funcs::string_expr,
+            (OPNEG, _) => &opr_funcs::unaryminus,
+            (OPPLS, 0) => &opr_funcs::add,
+            (OPPLS, 1) => &opr_funcs::add_concat_int,
+            (OPMNS, _) => &opr_funcs::minus,
+            (OPMUL, _) => &opr_funcs::multiply,
+            (OPDIV, 0) => &opr_funcs::divide,
+            (OPDIV, 1) => &opr_funcs::int_div,
+            (OPMOD, _) => &opr_funcs::modulo,
+            (OPEXP, _) => &opr_funcs::power,
+            (OPLOG, _) => &opr_funcs::log,
+            (OPINT, 0) => &opr_funcs::intgr,
+            (OPINT, 1) => &opr_funcs::ceiling,
+            (OPABS, _) => &opr_funcs::abs,
+            (OPDEG, 0) => &opr_funcs::degrees,
+            (OPDEG, 1) => &opr_funcs::radians,
+            (OPSIN, 0) => &opr_funcs::sine,
+            (OPSIN, 1) => &opr_funcs::asin,
+            (OPSIN, 2) => &opr_funcs::sinh,
+            (OPSIN, 3) => &opr_funcs::asinh,
+            (OPCOS, 0) => &opr_funcs::cosine,
+            (OPCOS, 1) => &opr_funcs::acos,
+            (OPCOS, 2) => &opr_funcs::cosh,
+            (OPCOS, 3) => &opr_funcs::acosh,
+            (OPTAN, 0) => &opr_funcs::tangent,
+            (OPTAN, 1) => &opr_funcs::atan,
+            (OPTAN, 2) => &opr_funcs::tanh,
+            (OPTAN, 3) => &opr_funcs::atanh,
+            (OPAT2, _) => &opr_funcs::atan2,
+            (OPPII, _) => &opr_funcs::pi,
+            (OPEUL, _) => &opr_funcs::euler_const,
+            (OPCON, _) => &opr_funcs::constants,
+            (OPCMB, _) => &opr_funcs::combine,
+            (OPMIN, _) => &opr_funcs::min,
+            (OPMAX, _) => &opr_funcs::max,
+            (OPNRO, _) => &opr_funcs::preceding_nr_operands,
+            (OPWHI, _) => &opr_funcs::exec_while,
+            (OPFOR, _) => &opr_funcs::exec_for,
+            (OPBRK, _) => &opr_funcs::set_break,
+            (OPRTN, 0) => &opr_funcs::define_routine_with_new_scope,
+            (OPRTN, 1) => &opr_funcs::define_routine_sharing_variables,
+            (OPEXR, _) => &opr_funcs::exec_routine,
+            (OPASG, _) => &opr_funcs::assign_number_register,
+            (OPVAR, _) => &opr_funcs::get_number_register,
+            (OPMAS, _) => &opr_funcs::assignment_maker,
+            (OPSTK, _) => &opr_funcs::push_stack,
+            (OPPOP, 0) => &opr_funcs::pop_stack,
+            (OPPOP, 1) => &opr_funcs::stack_depth,
+            (OPEQU, _) => &opr_funcs::equals,
+            (OPLSS, _) => &opr_funcs::less,
+            (OPGRT, _) => &opr_funcs::greater,
+            (OPNOT, _) => &opr_funcs::not,
+            (OPAND, _) => &opr_funcs::and,
+            (OPOR_, _) => &opr_funcs::or,
+            (OPXOR, _) => &opr_funcs::xor,
+            (OPIF_, _) => &opr_funcs::exec_if,
+            (OPSET, _) => &opr_funcs::setting,
+            (OPOP1, _) => &opr_funcs::enumerated_opr,
+            (OPOP2, _) => &opr_funcs::enumerated_opr,
+            (OPWRT, 0) => &opr_funcs::write,
+            (OPWRT, 1) => &opr_funcs::write_file,
+            (OPREA, 0) => &opr_funcs::read,
+            (OPREA, 1) => &opr_funcs::read_file,
+            (OP2NR, _) => &opr_funcs::to_number,
+            (OPSIG, _) => &opr_funcs::sign,
+            (OPTYP, _) => &opr_funcs::get_type,
+            (OPBAS, 0) => &opr_funcs::input_base,
+            (OPBAS, 1) => &opr_funcs::output_base,
+            (OPEMP, _) => &opr_funcs::empty,
+            (OPEVL, _) => &opr_funcs::eval,
+            (OPNLN, _) => &opr_funcs::newline,
             _ => &opr_funcs::nop,
         };
 
@@ -437,33 +501,19 @@ impl Expression {
             operator: &opr_funcs::nop,
             operands: Vec::<Expression>::new(),
             value: ValueType::Text(string_representation),
-            opr_mark: '0',
+            opr_mark: OPNUM,
             is_last_of_override: false,
             has_overridden_nr_of_ops: false,
             alternative_marks_count: 0,
         }
     }
 
-    /*
-        pub fn new_number_resolved(num: f64) -> Self {
-            Expression {
-                operator: &opr_funcs::nop,
-                operands: Vec::<Expression>::new(),
-                value: ValueType::Number(num),
-                opr_mark: '0',
-                is_last_of_override: false,
-                has_overridden_nr_of_ops: false,
-                alternative_marks_count: 0,
-            }
-        }
-    */
-
     pub fn new_text(txt: String) -> Self {
         Expression {
             operator: &opr_funcs::string_expr,
             operands: Vec::<Expression>::new(),
             value: ValueType::Text(txt),
-            opr_mark: '§',
+            opr_mark: OPSTR,
             is_last_of_override: false,
             has_overridden_nr_of_ops: false,
             alternative_marks_count: 0,
@@ -479,13 +529,6 @@ impl Expression {
     }
 
     pub fn get_num_value(&self, default: f64) -> f64 {
-        /*
-        match self.value {
-            ValueType::Number(num) => num,
-            _ => default,
-        }
-        */
-
         self.value.get_num_value(default)
     }
 
@@ -494,10 +537,8 @@ impl Expression {
     }
 
     pub fn operate(&mut self, shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        /*
         #[cfg(test)]
         println!("operate {}", self.opr_mark);
-        */
 
         shuttle.assignment_indexes_stack.push(Vec::<ValueType>::new());
 
@@ -511,13 +552,10 @@ impl Expression {
 
         (self.operator)(&mut self.opr_mark, &mut self.value, &mut self.operands, shuttle)?;
 
-        let assignment_indexes = shuttle.assignment_indexes_stack.pop()
-            .expect("fn operate should always find elements in shuttle.assignment_indexes_stack after execution of the operator.");
+        let assignment_indexes = shuttle.assignment_indexes_stack.pop().unwrap_or(Vec::<ValueType>::new());
 
-        /*
         #[cfg(test)]
         println!("operate {}, assignment_indexes: {:?}", self.opr_mark, assignment_indexes);
-        */
 
         for index in assignment_indexes {
             // Assign the resulting value to the variable
@@ -529,43 +567,40 @@ impl Expression {
             shuttle.preceding_nr_operands = self.operands.len() as f64;
         }
 
-        /*
         #[cfg(test)]
         println!("operate {} ==> {:?}", self.opr_mark, self.get_value());
-        */
 
         Ok(())
     }
 
     pub fn get_representation(&self) -> String {
         let mut exp_rep = match self.opr_mark {
-            '0' => match self.value {
+            OPNUM => match self.value {
                 ValueType::Empty => "empty_num".to_string(),
                 ValueType::Number(num) => num.to_string(),
 
                 // ValueType::Text: for numbers in routine definitions.
                 ValueType::Text(ref txt) => txt.clone(),
-
-                _ => panic!("An expression with opr_mark '0' should have a ValueType::Number, ValueType::Text or ValueType::Empty"),
+                _ => "(invalid)".to_string(),
             },
-            '§' => match self.value {
+            OPSTR => match self.value {
                 ValueType::Empty => "no_value".to_string(),
                 ValueType::Text(ref txt) => txt.clone(),
-                _ => panic!("An expression with opr_mark '§' should either have a ValueType::Text or ValueType::Empty"),
+                _ => "(invalid)".to_string(),
             },
             oth => oth.to_string(),
         };
 
         for _ in 0..self.alternative_marks_count {
-            exp_rep.push(',');
+            exp_rep.push(OPALT);
         }
 
         if self.has_overridden_nr_of_ops {
-            exp_rep.push('(');
+            exp_rep.push(CH_OVR_START);
         }
 
         if self.is_last_of_override {
-            exp_rep.push(')');
+            exp_rep.push(CH_OVR_END);
 
         }
 
@@ -586,13 +621,12 @@ impl Expression {
         if !("0§".contains(self.opr_mark)) {
             // Vim folding fix braces: {{
             exp_rep.push_str("\n\u{0_2514}\u{0_2500}> ");
-            // exp_rep.push_str(format!("{:?}", self.value).as_str());
 
             let val_rep = match self.value {
                 ValueType::Empty => "no_value".to_string(),
                 ValueType::Number(num) => num.to_string(),
                 ValueType::Text(ref txt) => txt.clone(),
-                ValueType::Max => panic!("An Expression having opr_mark 0 or § should not have a value of ValueType::Max."),
+                _ => "(invalid)".to_string(),
             };
 
             exp_rep.push_str(val_rep.as_str());
@@ -600,36 +634,13 @@ impl Expression {
 
         exp_rep
     }
-
-    /*
-        pub fn is_empty(&self) -> bool {
-            match self.value {
-                ValueType::Empty => true,
-                _ => false,
-            }
-        }
-
-        pub fn is_numeric(&self) -> bool {
-            match self.value {
-                ValueType::Number(_) => true,
-                _ => false,
-            }
-        }
-
-        pub fn is_text(&self) -> bool {
-            match self.value {
-                ValueType::Text(_) => true,
-                _ => false,
-            }
-        }
-    */
 }
 
 impl fmt::Debug for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let representation = match self.opr_mark  {
-            '0' => format!("{}", self.get_num_value(0f64)),
-            '§' => self.get_string_value("(no_value)".to_string()),
+            OPNUM => format!("{}", self.get_num_value(0f64)),
+            OPSTR => self.get_string_value("(no_value)".to_string()),
             _   => String::new(),
         };
 
@@ -728,7 +739,9 @@ impl Shuttle {
             self.nums.push(HashMap::<ValueType, ValueType>::new());
         }
 
-        self.nums.last_mut().expect("The Shuttle.nums stack vector should always have at least one HashMap element.")
+        // Not using self.nums.last_mut(), as that would necessitate an .expect() call.
+        let last_index = self.nums.len() -1;
+        &mut self.nums[last_index]
     }
 
     fn set_var(&mut self, name: ValueType, value: ValueType) {
@@ -813,7 +826,7 @@ impl Interpreter {
             ValueType::Number(ref n) => ExecutionOutcome::new(*n, self.shuttle.number_format.format(*n)),
             ValueType::Text(ref s) => ExecutionOutcome::new(0f64, s.clone()),
             ValueType::Empty => ExecutionOutcome::new(0f64, NO_VALUE.to_string()),
-            ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+            ValueType::Max => ExecutionOutcome::new(0f64, "(invalid:Max)".to_string()),
         })
     }
 
@@ -838,7 +851,7 @@ impl Interpreter {
             pos += 1;
 
             if bracket_nesting == 0 {
-                if c == '_'{
+                if c == CH_NUM_SEPA{
                     // Ignore if not reading a string.
                     if reading_simple_string {
                        current_string.push(c);
@@ -854,7 +867,7 @@ impl Interpreter {
                     reading_number = false;
                     reading_simple_string = false;
                     current_num = String::new();
-                } else if c == '[' {
+                } else if c == CH_CLAUSE_START {
                     if reading_number {
                         result.push(Atom::Number(current_num));
                         reading_number = false;
@@ -887,12 +900,12 @@ impl Interpreter {
                     // Simply push the character to the current_num string; parsing happens in
                     // opr_funcs::nop.
                     current_num.push(c);
-                } else if c == '.' {
+                } else if c == CH_DOT {
                     reading_number = true;
                     current_num.push(c);
-                } else if c == ']' {
+                } else if c == CH_CLAUSE_END {
                     return Err(ScriptError::UnexpectedClosingBracket{position: pos});
-                } else if c == '§' {
+                } else if c == OPSTR {
                     if reading_simple_string {
                         current_string.push(c);
                     } else {
@@ -919,12 +932,12 @@ impl Interpreter {
                 }
             } else {
                 match c {
-                    '[' => {
+                    CH_CLAUSE_START => {
                         bracket_nesting += 1;
                         current_bracket_content.push(c);
                         opening_bracket_pos.push(pos);
                     },
-                    ']' => {
+                    CH_CLAUSE_END => {
                         bracket_nesting -= 1;
 
                         if bracket_nesting == 0 {
@@ -938,9 +951,9 @@ impl Interpreter {
                                         };
 
                                         match first {
-                                            's' => result.push(Atom::String(rest)),
-                                            'c' => result.push(Atom::Comment(rest)),
-                                            'n' => result.push(Atom::Number(rest)),
+                                            MARK_STRING => result.push(Atom::String(rest)),
+                                            MARK_COMMENT => result.push(Atom::Comment(rest)),
+                                            MARK_NUMBER => result.push(Atom::Number(rest)),
                                             _ => (),
                                         }
                                     },
@@ -988,10 +1001,8 @@ impl Interpreter {
 
         for exp in atoms.iter().rev() {
 
-            /*
             #[cfg(test)]
             println!("exp_stack: {:?}", exp_stack);
-            */
 
             match exp {
                 Atom::Number(string_rep) => {
@@ -1004,27 +1015,37 @@ impl Interpreter {
                 },
                 Atom::Operator(c) => {
                     needed_ops = match *c {
-                        chr if "~iav:!w°SCTcstbKXnBE"  .contains(chr) => 1,
-                        chr if "+-*/^l%&|x$W;mM=<>ZoRA".contains(chr) => 2,
-                        chr if "?O"                    .contains(chr) => 3,
-                        chr if "F"                     .contains(chr) => 5,
-                        _                                             => 0,
+                        OPNEG | OPINT | OPABS | OPVAR | OPMAS | OPNOT |
+                        OPWRT | OPDEG | OPSIN | OPCOS | OPTAN | OPCON |
+                        OPSIG | OPTYP | OPBAS | OPSTK | OPEXR | OP2NR |
+                        OPBRK | OPEVL
+                            => 1,
+                        OPPLS | OPMNS | OPMUL | OPDIV | OPEXP | OPLOG |
+                        OPMOD | OPAND | OPOR_ | OPXOR | OPASG | OPWHI |
+                        OPCMB | OPMIN | OPMAX | OPEQU | OPLSS | OPGRT |
+                        OPSET | OPOP1 | OPRTN | OPAT2
+                            => 2,
+                        OPIF_ | OPOP2
+                            => 3,
+                        OPFOR
+                            => 5,
+                        _
+                            => 0,
                     };
 
                     match *c {
-                        '(' => override_start_found = true,
-                        ',' =>  {
+                        CH_OVR_START => override_start_found = true,
+                        OPALT =>  {
                             if alternative_marks_count < u8::MAX {
                                 alternative_marks_count += 1;
                             }
-                        }
-                        // ')' => override_end_found = true,
+                        },
                         op_for_stack => {
-                            if "oO".contains(op_for_stack) {
+                            if [OPOP1, OPOP2].contains(&op_for_stack) {
                                 needed_ops += (2 * alternative_marks_count) as usize;
-                            } else if (op_for_stack == 'w') && (alternative_marks_count > 0) {
+                            } else if (op_for_stack == OPWRT) && (alternative_marks_count > 0) {
                                 needed_ops = 2;
-                            } else if (op_for_stack == 'r') && (alternative_marks_count > 0) {
+                            } else if (op_for_stack == OPREA) && (alternative_marks_count > 0) {
                                 needed_ops = 1;
                             }
 
@@ -1041,7 +1062,7 @@ impl Interpreter {
                                 override_start_found = false;
 
                                 while let Some(e) = exp_stack.pop() {
-                                    if e.opr_mark == ')' {
+                                    if e.opr_mark == CH_OVR_END {
                                         match new_exp.operands.last_mut() {
                                             None =>  (),
                                             Some(ref mut op) => op.is_last_of_override = true,
@@ -1059,7 +1080,7 @@ impl Interpreter {
                                     i += 1;
 
                                     if let Some(e) = exp_stack.pop() {
-                                        if e.opr_mark == ')' {
+                                        if e.opr_mark == CH_OVR_END {
                                             return Err(ScriptError::UnexpectedClosingParenthesis);
                                         }
 
@@ -1076,9 +1097,9 @@ impl Interpreter {
             }
         }
 
-        // If the stack has any expression having opr_mark ')', return an error.
+        // If the stack has any expression having opr_mark CH_OVR_END, return an error.
         for exp in exp_stack.iter() {
-            if exp.opr_mark == ')' {
+            if exp.opr_mark == CH_OVR_END {
                 return Err(ScriptError::UnexpectedClosingParenthesis);
             }
         }
@@ -1086,9 +1107,9 @@ impl Interpreter {
         // If the stack has more than one expression, put whatever remains on the stack as operands in a ; - expression.
         Ok(match exp_stack.len() {
             0 => Expression::new_number("0".to_string()),
-            1 => exp_stack.pop().expect("Is should be possible to pop the single Expression from the expression stack."),
+            1 => exp_stack.pop().unwrap_or(Expression::new(OPEMP, 0)),
             _ => {
-                let mut result = Expression::new(';', 0);
+                let mut result = Expression::new(OPCMB, 0);
 
                 for exp in exp_stack.into_iter().rev() {
                     result.push_operand(exp);
@@ -1103,16 +1124,6 @@ impl Interpreter {
         "~+-*/^lia%°SCTApec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRX€BE¶".contains(op)
     }
 }
-
-/*
-impl Default for Interpreter {
-    fn default() -> Self {
-        let mut writer = Box::new(Vec::<u8>::new());
-        let mut reader = Box::new(input::MockByString::new(Vec::<String>::new()));
-        Self::new(writer, reader)
-    }
-}
-*/
 
 fn are_near(num1: f64, num2: f64, precision: f64) -> bool {
     (num1 - num2).abs() <= precision
@@ -1193,6 +1204,7 @@ pub mod output {
 }
 
 pub(crate) mod opr_funcs {
+    use crate::{CH_DOT, CH_SEPA_DIGITS, CH_SEPA_VERSION, OPCMB, OPEMP, OPMNS, OPNEG};
     use std::collections::HashMap;
     use std::ffi::OsStr;
     use super::{DateInfoItem, Expression, GregorianDateInfo, Interpreter, NO_VALUE, Routine, ScriptError, Shuttle, ValueType, are_near};
@@ -1233,7 +1245,7 @@ pub(crate) mod opr_funcs {
 
     fn parse_number(string_rep: &String, input_base: f64, ignore_non_numeric_chars: bool) -> Result<f64, String> {
         let mut string_rep_ext = string_rep.clone().trim().to_string();
-        string_rep_ext.push(' ');
+        string_rep_ext.push(CH_SEPA_DIGITS);
 
         let mut num = 0f64;
         let mut sign_factor = 1f64;
@@ -1254,14 +1266,14 @@ pub(crate) mod opr_funcs {
         // Compose an array of u32 digit values.
         for (char_count, c) in string_rep_ext.to_uppercase().chars().enumerate() {
             match c {
-                '-' | '~' => {
+                OPMNS | OPNEG => {
                     if char_count == 0 {
                         sign_factor = -1f64;
                     } else {
                         return Err("Non-leading sign indicator".to_string());
                     }
                 }
-                '.' => {
+                CH_DOT => {
                     if using_multichar_digits && has_pending_digit {
                         digits.push(digit_value);
                         digit_value = 0u32;
@@ -1291,7 +1303,7 @@ pub(crate) mod opr_funcs {
                     }
                 },
                 // Ignore spaces if single-character digits are used (base <= 36).
-                ' ' => {
+                CH_SEPA_DIGITS => {
                     if using_multichar_digits && has_pending_digit {
                         digits.push(digit_value);
                         digit_value = 0u32;
@@ -1314,7 +1326,6 @@ pub(crate) mod opr_funcs {
             first_frac = digits.len();
         }
 
-        // TODO : treat a second period as the start of the repeated numbers sequence.
         for (dcount, d) in digits.into_iter().enumerate() {
             digit_value = if (d as f64) >= input_base {
                 if ignore_non_numeric_chars {
@@ -1337,16 +1348,14 @@ pub(crate) mod opr_funcs {
         Ok(num * sign_factor)
     }
 
-    pub fn nop(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn nop(opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         // If still needed, parse the string representation to a number.
-        // TODO : for now, invalid strings are parsed to NaN; later on, a
-        // ScriptError::InvalidNumber is needed.
-
         match result_value {
             ValueType::Text(string_rep) => {
-
-                *result_value = ValueType::Number(parse_number(&string_rep, shuttle.input_base, true).
-                    expect("Function parse_number should never fail when called from function nop."));
+                match parse_number(&string_rep, shuttle.input_base, true) {
+                    Ok(num) => *result_value = ValueType::Number(num),
+                    Err(_) => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                }
             },
             _ => (),
         }
@@ -1361,7 +1370,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn string_expr(_opr_mark: &mut char, _result_value: &mut ValueType, _operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        // Don't do anything.
+        // No need to do anything.
         // Meant for Expressions that contain a fixed string value from creation.
 
         Ok(())
@@ -1383,7 +1392,7 @@ pub(crate) mod opr_funcs {
                         ValueType::Number(num) if do_truncate => format!("{}", num.trunc() as i64),
                         ValueType::Number(num) => shuttle.number_format.format(num),
                         ValueType::Text(txt) => txt,
-                        ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+                        ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                     }).as_str()
                 );
             }
@@ -1927,11 +1936,6 @@ pub(crate) mod opr_funcs {
         let name_is_string = operands[0].get_value().get_type_as_num() == 2f64;
         let mut name = operands[0].get_value();
 
-        /*
-        #[cfg(test)]
-        println!("fn assign...: name_is_string={}", name_is_string);
-        */
-
         let mut name_base = String::new();
         let mut index = 0f64;
 
@@ -1941,20 +1945,10 @@ pub(crate) mod opr_funcs {
             index = name.get_num_value(0f64);
         }
 
-        /*
-        #[cfg(test)]
-        println!("fn assign...: name_base={}", name_base.clone());
-        */
-
         let mut counter = 0f64;
         let mut reg_val = ValueType::Number(0f64);
 
         for opd in &operands[1..operands.len()] {
-            /*
-            #[cfg(test)]
-            println!("fn assign...: name={:?}", name.clone());
-            */
-
             reg_val = opd.get_value();
             shuttle.set_var(name, reg_val.clone());
 
@@ -1978,11 +1972,6 @@ pub(crate) mod opr_funcs {
         }
 
         let index = operands[0].get_value();
-
-        /*
-        #[cfg(test)]
-        println!("fn get_number_register: index={:?}", index.clone());
-        */
 
         *result_value = shuttle.get_var(&index);
 
@@ -2174,7 +2163,7 @@ pub(crate) mod opr_funcs {
                 ValueType::Empty => (),
                 ValueType::Text(ref s) => outcome &= s.len() == 0,
                 ValueType::Number(n) => outcome &= are_near(0f64, n, shuttle.orb),
-                ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2199,7 +2188,7 @@ pub(crate) mod opr_funcs {
                 ValueType::Empty => outcome = false,
                 ValueType::Text(ref s) => outcome &= s.len() > 0,
                 ValueType::Number(n) => outcome &= !are_near(0f64, n, shuttle.orb),
-                ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2224,7 +2213,7 @@ pub(crate) mod opr_funcs {
                 ValueType::Empty => (),
                 ValueType::Text(ref s) => outcome |= s.len() > 0,
                 ValueType::Number(n) => outcome |= !are_near(0f64, n, shuttle.orb),
-                ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2257,7 +2246,7 @@ pub(crate) mod opr_funcs {
                       trues += 1;
                     }
                 },
-                ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2381,7 +2370,7 @@ pub(crate) mod opr_funcs {
 
     pub fn get_version(_opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-        let version_nums: Vec<&str> = VERSION.split('.').collect();
+        let version_nums: Vec<&str> = VERSION.split(CH_SEPA_VERSION).collect();
 
         *result_value = if operands.len() == 0 {
             ValueType::Text(VERSION.to_string())
@@ -2420,11 +2409,6 @@ pub(crate) mod opr_funcs {
             shuttle.number_format = prev_format;
             return Err(ScriptError::InvalidOperand(*opr_mark));
         }
-
-        /*
-        #[cfg(test)]
-        println!("Number format: {:?}", shuttle.number_format);
-        */
 
         *result_value = ValueType::Empty;
 
@@ -2801,9 +2785,9 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub(crate) fn greg_sequence_to_date(seq_nr: f64) -> Result<GregorianDateInfo, ()> {
+    pub(crate) fn greg_sequence_to_date(seq_nr: f64) -> Result<GregorianDateInfo, String> {
         if seq_nr < 1_f64 {
-            return Err(());
+            return Err("greg_sequence_to_date: sequence number should be > 0.".to_string());
         }
 
         // One leap year
@@ -2909,7 +2893,7 @@ pub(crate) mod opr_funcs {
                     month += 1;
 
                     if month == 13 {
-                        panic!("greg_sequence_to_date: month can never be 13.");
+                        return Err("greg_sequence_to_date: month can never be 13.".to_string());
                     }
 
                     seq -= month_days;
@@ -2954,21 +2938,22 @@ pub(crate) mod opr_funcs {
             shuttle.date_item_calculations = 0;
         }
 
-        let date_info = if date_info_opt.is_some() {
-            date_info_opt.expect("One should always be able to unwrap an Option::Some(_)")
-        } else {
+        let date_info = match date_info_opt {
+            Some(di) => di,
+            None => {
 
-            #[cfg(test)]
-            {
-                shuttle.date_item_calculations += 1;
-            }
+                #[cfg(test)]
+                {
+                    shuttle.date_item_calculations += 1;
+                }
 
-            match greg_sequence_to_date(seq_nr) {
-                Ok(date_info) => {
-                    shuttle.last_calculated_gregorian_day = Some(date_info.clone());
-                    date_info
-                },
-                Err(_) => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                match greg_sequence_to_date(seq_nr) {
+                    Ok(date_info) => {
+                        shuttle.last_calculated_gregorian_day = Some(date_info.clone());
+                        date_info
+                    },
+                    Err(_) => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                }
             }
         };
 
@@ -3222,7 +3207,7 @@ pub(crate) mod opr_funcs {
 
         // Returns empty value.
         let empty_routine = Routine{
-            body: Expression::new('€', 0),
+            body: Expression::new(OPEMP, 0),
             in_new_variables_scope: true,
         };
 
@@ -3245,7 +3230,6 @@ pub(crate) mod opr_funcs {
         let mut result_characters = characters.clone();
         let mut start_pos = 0_usize;
         let mut orig_pos = 0_usize;
-        // let mut end_pos = 0_usize;
         let mut count = 0f64;
 
         loop {
@@ -3480,13 +3464,6 @@ pub(crate) mod opr_funcs {
     
     pub fn write(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
-            /*
-            let _ = shuttle.writer.write(b"(empty output)\n");
-            let _ = shuttle.writer.flush();
-            
-            *result_value = ValueType::Text(String::new());
-            */
-
             return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
@@ -3496,11 +3473,9 @@ pub(crate) mod opr_funcs {
                     ValueType::Empty => NO_VALUE.to_string(),   
                     ValueType::Number(num) => shuttle.number_format.format(num),
                     ValueType::Text(txt) => txt,
-                    ValueType::Max => panic!("An Expression should not have a value of ValueType::Max."),
+                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 }).as_bytes()
             );
-
-            // let _ = shuttle.writer.write(b"\n");
         }
 
         let _ = shuttle.writer.flush();
@@ -3542,7 +3517,6 @@ pub(crate) mod opr_funcs {
             None => String::new(),
         };
         
-        // TODO: Err-values should result in a ScriptError Result of fn read.
         *result_value = match parse_number(&input_string, shuttle.input_base, false) {
             Ok(num) => ValueType::Number(num),
             Err(_) => ValueType::Text(input_string),
@@ -3854,16 +3828,18 @@ pub(crate) mod opr_funcs {
             }
         }
 
-        let body = if expressions.len() > 1 {
-            let mut combinator = Expression::new(';', 0);
+        let body = match expressions.len() {
+            0 => Expression::new(OPEMP, 0), // Should never occur after test on operands.len() above
+            1 => expressions.pop().unwrap_or(Expression::new(OPEMP, 0)),
+            _ => {
+                let mut combinator = Expression::new(OPCMB, 0);
 
-            for expr in expressions.into_iter() {
-                combinator.operands.push(expr);
-            }
+                for expr in expressions.into_iter() {
+                    combinator.operands.push(expr);
+                }
 
-            combinator
-        } else {
-            expressions.pop().expect("A one-element vector should support a pop() call.")
+                combinator
+            },
         };
 
         shuttle.routines.insert(name.clone(), Routine{body, in_new_variables_scope,});
@@ -3881,7 +3857,7 @@ pub(crate) mod opr_funcs {
 
         // Returns empty value.
         let mut found_routine = Routine{
-            body: Expression::new('€', 0),
+            body: Expression::new(OPEMP, 0),
             in_new_variables_scope: true,
         };
 
@@ -3910,7 +3886,7 @@ pub(crate) mod opr_funcs {
         found_routine.body.operate(shuttle)?;
 
         if found_routine.in_new_variables_scope {
-            shuttle.nums.pop().expect("Popping a pushed Hashmap from Shuttle.nums should always succeed.");
+            shuttle.nums.pop().unwrap_or(HashMap::<ValueType, ValueType>::new());
         }
 
         *result_value = found_routine.body.get_value();
@@ -4894,7 +4870,7 @@ mod tests {
 
         #[test]
         fn x_int_alt_alt_fract() {
-            assert_eq!(6f64, Interpreter::execute_with_mocked_io("i,,5.7".to_string()).unwrap().numeric_value);
+            assert_eq!(6f64, Interpreter::execute_with_mocked_io("i,5.7".to_string()).unwrap().numeric_value);
         }
 
         #[test]
