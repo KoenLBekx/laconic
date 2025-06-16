@@ -1,0 +1,21 @@
+$
+	§input
+	[s
+		+(
+			[sLACONIC EXPRESSION INTERPRETER]
+			¶
+			[sEnter "q" to quit.]
+			¶
+		)
+	]
+$ §isTitle 1
+W
+	!= v§input §q
+	;(
+		w+
+				?  v§isTitle § [s	]
+				Ev§input
+		$ §isTitle 0
+		w + ¶ [sEnter an expression: ]
+		$ §input r
+	)
