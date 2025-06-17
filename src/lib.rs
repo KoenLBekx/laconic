@@ -2,6 +2,10 @@
 // TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: fn main should also accept a -q (quiet) parameter, which would prevent the output of the
 //      final value to stdin.
+//      (Same as Z§quiet 1)
+// TODO: fn main should also accept a -c (continue) parameter, which would prevent an error
+//      condition to bubble up to the topmost operator and stop execution immediately.
+//      (Same as Z§errhd 1).
 // TODO: Add an Error(String) variant to the ValueType and ExecutionOutcome enums.
 //      (So no Result return values.)
 //      This avoids calling modules to have to test first for Result::Err and then for the
@@ -19,6 +23,7 @@
 // TODO: make private whatever can remain private.
 // TODO: include the explanations in analysis/laconic.txt in markdown format as documentation
 //      comments.
+// TODO: Replace ScriptError::InvalidOperand by a series of way more specific errors.
 // TODO: The ScriptError variants that carry an operator mark as char should carry a string
 //      so the full enumerated operator name can be passed, e.g.: "o,§dow".
 // TODO: check using cargo clippy.

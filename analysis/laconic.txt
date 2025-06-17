@@ -1555,3 +1555,20 @@ Operators
 		Z§loops n : maximum number of loops executed by F- or W-operator.
 					 If 0, no maximum is imposed, which removes the protection against infinite loops.
 					 Default : 10,000.
+
+		Z§quiet n : quiet execution
+
+				(to be implemented)
+
+					If n = 0 (default), Laconic will output the value of its topmost operator after execution
+					to standard output.
+					Otherwise, nothing will be output.
+
+		Z§errhd n : error handling.
+
+				(to be implemented)
+
+					If 0 (default), any error in any operation immediately stops execution
+					of the entire script or expression.
+					If not 0, the current operator yields an Error(...) value, but execution continues.
+					This way, loops with user input in every iteration can continue.
