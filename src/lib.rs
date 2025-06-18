@@ -10,11 +10,8 @@
 //      having ValueType::Error(...) in an appropriate way,
 //      not always just return the ScriptError again.
 //      E.g. the w operator outputs the string representation of the ScriptError;
-//      the + operator should simply return the ScriptError again.
-// TODO: Add an Error(String) variant to the ValueType and ExecutionOutcome enums.
-//      (So no Result return values.)
-//      This avoids calling modules to have to test first for Result::Err and then for the
-//      ExecutionOutcome variant.
+//      the + operator should simply return the ScriptError again
+//      if all other operators are either Number or also Error.
 // TODO: the characters for the operators should be hard-coded only once: in constants.
 //      (done; not done follows below:)
 //      These constants can figure in a constant array of tuples
@@ -30,6 +27,12 @@
 // TODO: The ScriptError variants that carry an operator mark as char should carry a string
 //      so the full enumerated operator name can be passed, e.g.: "o,§dow".
 // TODO: check using cargo clippy.
+// TODO: ^~8 /1 3 yields NaN, while it should yield -2.
+//          Is this due to f64 not being able to represent 1/3 exactly ?
+//      (The same goes for
+//          ^~32 /1 5
+//          ^~27 /1 3
+//      )
 // TODO: use giantity ?
 //}
 
@@ -102,6 +105,7 @@ const OPEMP: char = '€';
 const OPEVL: char = 'E';
 const OPNLN: char = '¶';
 const OPALT: char = ',';
+const OPUER: char = 'U';
 
 // CH_SEPA_NUM can't be used as match pattern.
 const CH_NUM_SEPA: char = '_';
@@ -144,10 +148,12 @@ impl fmt::Debug for Atom {
 pub enum ScriptError {
     DigitParsingFailure{position: usize, reason: String},
     DivideByZero(char),
+    EmptyOperand(char),
     FileReadFailure{path: String, reason: String},
     InsufficientOperands(char),
     InvalidOperand(char),
     InvalidOperandMax(char),
+    NonNumericOperand(char),
     UnclosedBracketsAtEnd,
     UnexpectedClosingBracket{position: usize},
     UnexpectedClosingParenthesis,
@@ -156,6 +162,7 @@ pub enum ScriptError {
     UnknownNamedOperator(String),
     UnknownOperator{position: usize, operator: char},
     UnknownRoutine(String),
+    UserDefinedError(String),
 }
 
 #[derive(Clone, Debug, PartialOrd)]
@@ -193,9 +200,23 @@ impl ValueType {
             ValueType::Number(num) => format!("{}", num),
             ValueType::Error(script_err) => format!("{:?}", script_err), 
             ValueType::Max => "ValueType::Max".to_string(),
-            _ => default,
+            ValueType::Empty => default,
         }
     }
+
+    /*
+    pub fn push_str(&mut self, pushed: &str) {
+        let opt_text = match self {
+            ValueType::Text(txt) => Some(txt.clone()),
+            _ => None,
+        };
+
+        if let Some(mut txt) = opt_text {
+            txt.push_str(pushed);
+            *self = ValueType::Text(txt);
+        }
+    }
+    */
 }
 
 impl PartialEq for ValueType {
@@ -496,6 +517,7 @@ impl Expression {
             (OPEMP, _) => &opr_funcs::empty,
             (OPEVL, _) => &opr_funcs::eval,
             (OPNLN, _) => &opr_funcs::newline,
+            (OPUER, _) => &opr_funcs::user_error,
             _ => &opr_funcs::nop,
         };
 
@@ -1045,7 +1067,7 @@ impl Interpreter {
                         OPNEG | OPINT | OPABS | OPVAR | OPMAS | OPNOT |
                         OPWRT | OPDEG | OPSIN | OPCOS | OPTAN | OPCON |
                         OPSIG | OPTYP | OPBAS | OPSTK | OPEXR | OP2NR |
-                        OPBRK | OPEVL
+                        OPBRK | OPEVL | OPUER
                             => 1,
                         OPPLS | OPMNS | OPMUL | OPDIV | OPEXP | OPLOG |
                         OPMOD | OPAND | OPOR_ | OPXOR | OPASG | OPWHI |
@@ -1148,7 +1170,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^lia%°SCTApec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRX€BE¶".contains(op)
+        "~+-*/^lia%°SCTApec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRX€BE¶U".contains(op)
     }
 }
 
@@ -1247,6 +1269,14 @@ pub(crate) mod opr_funcs {
         "THU",
         "FRI",
     ];
+
+    fn check_nr_operands(opr_mark: &char, operands: &[Expression], nr_required: usize) -> Result<(), ScriptError> {
+        if operands.len() < nr_required {
+            Err(ScriptError::InsufficientOperands(*opr_mark))
+        } else {
+            Ok(())
+        }
+    }
 
     fn has_any_string_operands(operands: &[Expression]) -> bool {
         let mut opd_count = 0usize;
@@ -1404,22 +1434,19 @@ pub(crate) mod opr_funcs {
     }
     
     fn add_base(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, do_truncate: bool) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         if has_any_string_operands(operands) {
-            let mut string_outcome = String::new();
+            let mut string_outcome = "".to_string();
 
-            // &* : fresh borrow avoids move of the operands.
-            for op in &*operands {
+            for op in operands {
                 string_outcome.push_str(
                     (match op.get_value() {
                         ValueType::Empty => NO_VALUE.to_string(),   
                         ValueType::Number(num) if do_truncate => format!("{}", num.trunc() as i64),
                         ValueType::Number(num) => shuttle.number_format.format(num),
                         ValueType::Text(txt) => txt,
-                        ValueType::Error(s_err) => return Err(s_err),
+                        ValueType::Error(_) => op.get_string_value("Error".to_string()),
                         ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                     }).as_str()
                 );
@@ -1430,9 +1457,15 @@ pub(crate) mod opr_funcs {
         } else {
             let mut num_outcome = 0f64;
 
-            // &* : fresh borrow avoids move of the operands.
-            for op in &*operands {
-                num_outcome += op.get_num_value(0f64);
+            for op in operands {
+                match op.get_value() {
+                    ValueType::Number(num) => num_outcome += num,
+                    ValueType::Error(s_err) => {
+                        return Err(s_err);
+                    },
+                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+                    _ => (),
+                }
             }
 
             *result_value = ValueType::Number(num_outcome);
@@ -1450,16 +1483,18 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn multiply(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
+        let mut outcome = 1f64;
 
-        let mut outcome = 0f64;
-
-        for (count, op) in operands.iter().enumerate() {
-            match count {
-                0 => outcome += op.get_num_value(0f64),
-                _ => outcome *= op.get_num_value(1f64),
+        for op in operands {
+            match op.get_value() {
+                ValueType::Number(num) => outcome *= num,
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => {
+                    return Err(s_err);
+                },
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+                _ => (),
             }
         }
 
@@ -1469,16 +1504,19 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn power(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
-
-        let mut outcome = 0f64;
+        check_nr_operands(opr_mark, operands, 2)?;
+        let mut outcome = 1f64;
 
         for (count, op) in operands.iter().enumerate() {
-            match count {
-                0 => outcome += op.get_num_value(0f64),
-                _ => outcome = outcome.powf(op.get_num_value(1f64)),
+            match op.get_value() {
+                ValueType::Number(num) => match count {
+                    0 => outcome = num,
+                    _ => outcome = outcome.powf(num),
+                },
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+                _ => (),
             }
         }
 
@@ -1486,18 +1524,21 @@ pub(crate) mod opr_funcs {
 
         Ok(())
     }
-    
-    pub fn minus(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
 
+    pub fn minus(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        check_nr_operands(opr_mark, operands, 2)?;
         let mut outcome = 0f64;
 
         for (count, op) in operands.iter().enumerate() {
-            match count {
-                0 => outcome += op.get_num_value(0f64),
-                _ => outcome -= op.get_num_value(0f64),
+            match op.get_value() {
+                ValueType::Number(num) => match count {
+                    0 => outcome = num,
+                    _ => outcome -= num,
+                },
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+                _ => (),
             }
         }
 
@@ -1507,25 +1548,25 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn divide(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
-
+        check_nr_operands(opr_mark, operands, 2)?;
         let mut outcome = 0f64;
-        let mut num_val: f64;
 
         for (count, op) in operands.iter().enumerate() {
-            match count {
-                0 => outcome += op.get_num_value(0f64),
-                _ => {
-                    num_val = op.get_num_value(1f64);
+            match op.get_value() {
+                ValueType::Number(num) => match count {
+                    0 => outcome = num,
+                    _ =>  {
+                        if num == 0f64 {
+                            return Err(ScriptError::DivideByZero(*opr_mark));
+                        }
 
-                    if num_val == 0f64 {
-                        return Err(ScriptError::DivideByZero(*opr_mark));
-                    }
-
-                    outcome /= op.get_num_value(1f64);
+                        outcome /= num;
+                    },
                 },
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+                _ => (),
             }
         }
 
@@ -3943,6 +3984,18 @@ pub(crate) mod opr_funcs {
 
         Ok(())
     }
+
+    pub fn user_error(opr_mark: &mut char, _result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        check_nr_operands(opr_mark, operands, 1)?;
+
+        match operands[0].get_value() {
+            ValueType::Empty => Err(ScriptError::UserDefinedError("(no reason)".to_string())),
+            ValueType::Number(num) => Err(ScriptError::UserDefinedError(shuttle.number_format.format(num))),
+            ValueType::Text(msg) => Err(ScriptError::UserDefinedError(msg.clone())),
+            ValueType::Error(s_err) => Err(s_err),
+            ValueType::Max => Err(ScriptError::InvalidOperandMax(*opr_mark)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -4542,6 +4595,11 @@ mod tests {
         }
 
         #[test]
+        fn x_add_2_op_one_is_error() {
+            assert_eq!("DivideByZero('/')", Interpreter::execute_with_mocked_io("Z§errhd 1 +111 /1 0".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
         fn x_add_variant_2_numbers() {
             assert_eq!(226f64, Interpreter::execute_with_mocked_io("+,111 115".to_string()).unwrap().numeric_value);
         }
@@ -4572,6 +4630,11 @@ mod tests {
         }
 
         #[test]
+        fn x_add_strings_one_is_error() {
+            assert_eq!("Result:DivideByZero('/')".to_string(), Interpreter::execute_with_mocked_io("Z§errhd 1 + §Result: /38 0".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
         fn x_minus_3_op() {
             assert_eq!(-9f64, Interpreter::execute_with_mocked_io("-(111 115 +3 2)".to_string()).unwrap().numeric_value);
         }
@@ -4593,6 +4656,23 @@ mod tests {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('-')),
                 Interpreter::execute_with_mocked_io("-".to_string()));
+        }
+
+        #[test]
+        fn x_minus_string_no_stop() {
+            assert_eq!(38_f64, Interpreter::execute_with_mocked_io("Z§errhd 1 -4 /5 0 38".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_minus_string_stop_on_error() {
+            assert_eq!(
+                Err(ScriptError::DivideByZero('/')),
+                Interpreter::execute_with_mocked_io("Z§errhd 0 -9 /5 0 44".to_string()));
+        }
+
+        #[test]
+        fn x_minus_empty() {
+            assert_eq!(-38_f64, Interpreter::execute_with_mocked_io("-€ 38".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -4685,6 +4765,23 @@ mod tests {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('*')),
                 Interpreter::execute_with_mocked_io("+ 10 *".to_string()));
+        }
+
+        #[test]
+        fn x_multiply_no_stop_on_err() {
+            assert_eq!("DivideByZero('/')", Interpreter::execute_with_mocked_io("Z§errhd 1 *111 /8 0".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_multiply_stop_on_err() {
+            assert_eq!(
+                Err(ScriptError::DivideByZero('/')),
+                Interpreter::execute_with_mocked_io("Z§errhd 0 *111 /8 0".to_string()));
+        }
+
+        #[test]
+        fn x_multiply_empty() {
+            assert_eq!(100_f64, Interpreter::execute_with_mocked_io("* € 100".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -4862,6 +4959,20 @@ mod tests {
         }
 
         #[test]
+        fn x_power_error_no_stop() {
+            assert_eq!(
+                "Outcome: DivideByZero('/')".to_string(),
+                Interpreter::execute_with_mocked_io("Z§errhd 1 +[sOutcome: ] ^/4 0 2".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_power_stop_on_err() {
+            assert_eq!(
+                Err(ScriptError::DivideByZero('/')),
+                Interpreter::execute_with_mocked_io("Z§errhd 0 ^/8 0 2".to_string()));
+        }
+
+        #[test]
         fn x_unaryminus_3_op() {
             assert_eq!(-5.02f64, Interpreter::execute_with_mocked_io("~(5.02 8 3)".to_string()).unwrap().numeric_value);
         }
@@ -4969,6 +5080,11 @@ mod tests {
         #[test]
         fn x_min_num_and_string() {
             assert_eq!(-31f64, Interpreter::execute_with_mocked_io("m§Voilà ~31".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_min_string_and_error() {
+            assert_eq!("Voilà".to_string(), Interpreter::execute_with_mocked_io("Z§errhd 1 m§Voilà /1 0".to_string()).unwrap().string_representation);
         }
 
         #[test]
@@ -5801,7 +5917,7 @@ mod tests {
             let reader = Box::new(StdinReader::new());
             let text_io_handler = Box::new(MockTextHandler::new());
             let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
-            interpreter.execute_opts("w[sEnter a number: ] $0r w(+[sYou entered: ]v0) w(+¶[sDouble is: ] *v0 2 ¶)".to_string(), true, false, false).unwrap();
+            interpreter.execute_opts("Z§errhd 1 w[sEnter a number: ] $0r w(+[sYou entered: ]v0) w(+¶[sDouble is: ] *v0 2 ¶)".to_string(), true, false, false).unwrap();
         }
 
         #[test]
@@ -7649,6 +7765,19 @@ mod tests {
             assert_eq!(
                 Err(ScriptError::UnknownBracketContentTypeMarker { position: 2, marker: '?' }),
                 Interpreter::execute_with_mocked_io("Z§errhd 0 ;E[s[?___]] +5 5".to_string())
+            );
+        }
+
+        #[test]
+        fn x_user_error_no_stop() {
+            assert_eq!(r#"UserDefinedError("I failed")"#.to_string(), Interpreter::execute_with_mocked_io("Z§errhd 1 +8 U[sI failed]".to_string()).unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_user_error_stop() {
+            assert_eq!(
+                Err(ScriptError::UserDefinedError("I failed".to_string())),
+                Interpreter::execute_with_mocked_io("Z§errhd 0 +8 U[sI failed]".to_string())
             );
         }
     }
