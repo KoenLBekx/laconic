@@ -6,6 +6,11 @@
 // TODO: fn main should also accept a -c (continue) parameter, which would prevent an error
 //      condition to bubble up to the topmost operator and stop execution immediately.
 //      (Same as Z§errhd 1).
+// TODO: all operator functions in mod opr_funcs should handle an operand
+//      having ValueType::Error(...) in an appropriate way,
+//      not always just return the ScriptError again.
+//      E.g. the w operator outputs the string representation of the ScriptError;
+//      the + operator should simply return the ScriptError again.
 // TODO: Add an Error(String) variant to the ValueType and ExecutionOutcome enums.
 //      (So no Result return values.)
 //      This avoids calling modules to have to test first for Result::Err and then for the
@@ -16,8 +21,6 @@
 //      holding also other data like number of operands, operator function, e.a.
 //      (even data for documentation).
 //      The function isKnownOperator should also use this constant array.
-// TODO: other characters (like the bracket content markers, the § simple string prefix, etc),
-//      should also be hard-coded once in constants.
 // TODO: have all operators have an acceptable behavior with less or more operands than standard.
 //      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
@@ -43,6 +46,7 @@ use string_io_and_mock::{MockTextHandler, TextIOHandler};
 // the fourth one to the Shuttle containing other state.
 type OperatorFunc = &'static dyn Fn(&mut char, &mut ValueType, &mut [Expression], &mut Shuttle) -> Result<(), ScriptError>;
 
+// --------------------------- Operator constants {
 const OPNUM: char = '0';
 const OPSTR: char = '§';
 const OPNEG: char = '~';
@@ -115,6 +119,7 @@ const CH_CLAUSE_END: char = ']';
 const MARK_STRING: char = 's';
 const MARK_COMMENT: char = 'c';
 const MARK_NUMBER: char = 'n';
+// ---------------------------------- }
 
 #[derive(PartialEq)]
 enum Atom {
@@ -135,7 +140,7 @@ impl fmt::Debug for Atom {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum ScriptError {
     DigitParsingFailure{position: usize, reason: String},
     DivideByZero(char),
@@ -158,6 +163,7 @@ enum ValueType {
     Empty,
     Number(f64),
     Text(String),
+    Error(ScriptError),
 
     /// Only to be used to serve functionality like opr_funcs::min.
     Max,
@@ -166,10 +172,11 @@ enum ValueType {
 impl ValueType {
     fn get_type_as_num(&self) -> f64 {
         match self {
-            ValueType::Empty => 0f64,
-            ValueType::Number(_) => 1f64,
-            ValueType::Text(_) => 2f64,
-            ValueType::Max => 99f64,
+            ValueType::Empty => 0_f64,
+            ValueType::Number(_) => 1_f64,
+            ValueType::Text(_) => 2_f64,
+            ValueType::Error(_) => 90_f64,
+            ValueType::Max => 99_f64,
         }
     }
 
@@ -184,6 +191,7 @@ impl ValueType {
         match self {
             ValueType::Text(txt) => txt.clone(),
             ValueType::Number(num) => format!("{}", num),
+            ValueType::Error(script_err) => format!("{:?}", script_err), 
             ValueType::Max => "ValueType::Max".to_string(),
             _ => default,
         }
@@ -210,6 +218,7 @@ impl Hash for ValueType {
             ValueType::Empty => 0u8.hash(state),
             ValueType::Text(s) => s.hash(state),
             ValueType::Number(f) => f.to_be_bytes().hash(state),
+            ValueType::Error(_) => self.get_string_value("Error".to_string()).hash(state),
             ValueType::Max => 99u8.hash(state),
         };
     }
@@ -555,9 +564,19 @@ impl Expression {
             }
         }
 
-        (self.operator)(&mut self.opr_mark, &mut self.value, &mut self.operands, shuttle)?;
-
+        let operator_result = (self.operator)(&mut self.opr_mark, &mut self.value, &mut self.operands, shuttle);
         let assignment_indexes = shuttle.assignment_indexes_stack.pop().unwrap_or(Vec::<ValueType>::new());
+
+        match operator_result {
+            Ok(_) => (),
+            Err(script_error) =>  {
+                if shuttle.error_breaks {
+                    return Err(script_error);
+                } else {
+                    self.value = ValueType::Error(script_error);
+                }
+            },
+        }
 
         #[cfg(test)]
         println!("operate {}, assignment_indexes: {:?}", self.opr_mark, assignment_indexes);
@@ -694,6 +713,7 @@ struct Shuttle {
     preceding_nr_operands: f64,
     max_iterations: f64,
     orb: f64,
+    error_breaks: bool,
     golden_ratio: Option<f64>,
     conjug_gold: Option<f64>,
     input_base: f64,
@@ -721,6 +741,7 @@ impl Shuttle {
             preceding_nr_operands: 0f64,
             max_iterations: 10_000f64,
             orb: 0.000_000_01f64,
+            error_breaks: true,
             golden_ratio: None,
             conjug_gold: None,
             input_base: 10f64,
@@ -828,9 +849,10 @@ impl Interpreter {
         }
 
         Ok(match tree.get_value() {
+            ValueType::Empty => ExecutionOutcome::new(0f64, NO_VALUE.to_string()),
             ValueType::Number(ref n) => ExecutionOutcome::new(*n, self.shuttle.number_format.format(*n)),
             ValueType::Text(ref s) => ExecutionOutcome::new(0f64, s.clone()),
-            ValueType::Empty => ExecutionOutcome::new(0f64, NO_VALUE.to_string()),
+            ValueType::Error(ref s_err) => ExecutionOutcome::new(0f64, format!("{:?}", s_err)),
             ValueType::Max => ExecutionOutcome::new(0f64, "(invalid:Max)".to_string()),
         })
     }
@@ -1397,6 +1419,7 @@ pub(crate) mod opr_funcs {
                         ValueType::Number(num) if do_truncate => format!("{}", num.trunc() as i64),
                         ValueType::Number(num) => shuttle.number_format.format(num),
                         ValueType::Text(txt) => txt,
+                        ValueType::Error(s_err) => return Err(s_err),
                         ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                     }).as_str()
                 );
@@ -2168,6 +2191,7 @@ pub(crate) mod opr_funcs {
                 ValueType::Empty => (),
                 ValueType::Text(ref s) => outcome &= s.len() == 0,
                 ValueType::Number(n) => outcome &= are_near(0f64, n, shuttle.orb),
+                ValueType::Error(s_err) => return Err(s_err),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
@@ -2193,6 +2217,7 @@ pub(crate) mod opr_funcs {
                 ValueType::Empty => outcome = false,
                 ValueType::Text(ref s) => outcome &= s.len() > 0,
                 ValueType::Number(n) => outcome &= !are_near(0f64, n, shuttle.orb),
+                ValueType::Error(s_err) => return Err(s_err),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
@@ -2218,6 +2243,7 @@ pub(crate) mod opr_funcs {
                 ValueType::Empty => (),
                 ValueType::Text(ref s) => outcome |= s.len() > 0,
                 ValueType::Number(n) => outcome |= !are_near(0f64, n, shuttle.orb),
+                ValueType::Error(s_err) => return Err(s_err),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
@@ -2251,6 +2277,7 @@ pub(crate) mod opr_funcs {
                       trues += 1;
                     }
                 },
+                ValueType::Error(s_err) => return Err(s_err),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
@@ -2283,6 +2310,7 @@ pub(crate) mod opr_funcs {
         match setting_name {
             ValueType::Text(name) if name ==  "prec".to_string() => shuttle.orb = setting_value.get_num_value(0f64),
             ValueType::Text(name) if name == "loops".to_string() => shuttle.max_iterations = setting_value.get_num_value(0f64),
+            ValueType::Text(name) if name == "errhd".to_string() => shuttle.error_breaks = setting_value.get_num_value(0f64) == 0_f64,
             _ => (),
         }
 
@@ -3478,6 +3506,7 @@ pub(crate) mod opr_funcs {
                     ValueType::Empty => NO_VALUE.to_string(),   
                     ValueType::Number(num) => shuttle.number_format.format(num),
                     ValueType::Text(txt) => txt,
+                    ValueType::Error(s_err) => format!("{:?}", s_err),
                     ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 }).as_bytes()
             );
@@ -3502,14 +3531,30 @@ pub(crate) mod opr_funcs {
         // Only the first operand is used; subsequent ones are completely ignored.
         match operands[0].get_value() {
             ValueType::Text(program) => {
-                let atoms = Interpreter::split_atoms(&program)?;
-                let mut tree: Expression = Interpreter::make_tree(atoms)?;
-                tree.operate(shuttle)?;
-
-                *result_value = tree.get_value();
+                match Interpreter::split_atoms(&program) {
+                    Ok(atoms) =>  {
+                        match Interpreter::make_tree(atoms) {
+                            Ok(mut tree) => {
+                                tree.operate(shuttle)?;
+                                *result_value = tree.get_value();
+                            },
+                            Err(s_err) => if shuttle.error_breaks {
+                                return Err(s_err);
+                            } else {
+                                *result_value = ValueType::Error(s_err);
+                            },
+                        }
+                    },
+                    Err(s_err) => if shuttle.error_breaks {
+                        return Err(s_err);
+                    } else {
+                        *result_value = ValueType::Error(s_err);
+                    },
+                }
             },
             ValueType::Number(num) => *result_value = ValueType::Number(num),
             ValueType::Empty => *result_value = ValueType::Empty,
+            ValueType::Error(s_err) => *result_value = ValueType::Error(s_err),
             _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
         }
         
@@ -5909,6 +5954,11 @@ mod tests {
         }
 
         #[test]
+        fn x_get_type_error() {
+            assert_eq!(90f64, Interpreter::execute_with_mocked_io("Z§errhd 1 t*(7)".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_var_having_string_name() {
             assert_eq!(5f64, Interpreter::execute_with_mocked_io("$0 11 $[sMy Number] 3 +v[sMy Number] 2".to_string()).unwrap().numeric_value);
         }
@@ -7553,6 +7603,53 @@ mod tests {
         #[test]
         fn x_fibonacci_negative_index() {
             assert_eq!(0_f64, Interpreter::execute_with_mocked_io("to§fib ~20".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_set_errhd_1() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            interpreter.execute_opts("Z§errhd 1".to_string(), true, false, false).unwrap();
+
+            assert!(!interpreter.shuttle.error_breaks);
+        }
+
+        #[test]
+        fn x_set_errhd_0() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            interpreter.execute_opts("Z§errhd 0".to_string(), true, false, false).unwrap();
+
+            assert!(interpreter.shuttle.error_breaks);
+        }
+
+        #[test]
+        fn x_combine_stop_on_error() {
+            assert_eq!(
+                Err(ScriptError::DivideByZero('/')),
+                Interpreter::execute_with_mocked_io("Z§errhd 0 ;/4 0 +8 2".to_string()));
+        }
+
+        #[test]
+        fn x_combine_no_stop_on_error() {
+            assert_eq!(10_f64, Interpreter::execute_with_mocked_io("Z§errhd 1 ;/4 0 +8 2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_eval_no_stop_on_error() {
+            assert_eq!(10_f64, Interpreter::execute_with_mocked_io("Z§errhd 1 ;E[s[?___]] +5 5".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_eval_stop_on_error() {
+            assert_eq!(
+                Err(ScriptError::UnknownBracketContentTypeMarker { position: 2, marker: '?' }),
+                Interpreter::execute_with_mocked_io("Z§errhd 0 ;E[s[?___]] +5 5".to_string())
+            );
         }
     }
 

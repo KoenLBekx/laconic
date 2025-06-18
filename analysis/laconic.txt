@@ -1310,9 +1310,10 @@ Operators
 		t exp
 				Returns type of expression
 
-				t 39           yields 1 : numeric
-				t [sWhat?]     yields 2 : string
-				t v§NotUsedYet yields 0 : empty or uninitialized : an empty expression will yield 0.
+				t v§NotUsedYet     yields  0 : empty or uninitialized : an empty expression will yield 0.
+				t 39               yields  1 : numeric
+				t [sWhat?]         yields  2 : string
+				Z§errhd 1 t*(7)    yields 90: error (to wit, InsufficientOperands('*')).
 
 		€
 				Returns the Empty value.
@@ -1566,9 +1567,9 @@ Operators
 
 		Z§errhd n : error handling.
 
-				(to be implemented)
-
 					If 0 (default), any error in any operation immediately stops execution
 					of the entire script or expression.
-					If not 0, the current operator yields an Error(...) value, but execution continues.
+					If not 0, the failing operator yields an Error(...) value, but execution continues.
 					This way, loops with user input in every iteration can continue.
+
+					Note: a script can test if a variable holds an Error value using the t operator.
