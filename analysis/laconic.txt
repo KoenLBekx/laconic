@@ -1407,14 +1407,12 @@ Operators
 								o(§fmt 3 §, §) 1200.2526    returns 1200,253
 								o(§fmt 6 §. §___) 1200.2526 returns 1_200.252_6
 
-			o§fib seq
+			o§fib index
 
-							Fibonacci seq
+							Fibonacci number from index.
 
-								The seq(uence number) operand is truncated (not rounded) towards zero to an integer
+								The index operand is truncated (not rounded) towards zero to an integer
 								before being used as a Fibonacci index.
-							
-								If the sequence number is negative, the empty value (€) is returned.
 								
 								e.g.
 									o §fib 0 yields 0
@@ -1426,17 +1424,24 @@ Operators
 									o §fib 6 yields 8
 									o §fib 6.1 yields 8
 									o §fib 6.9 yields 8
-									o §fib ~6.1 yields €
-									o §fib ~6.9 yields €
+									o §fib ~1 yields 1
+									o §fib ~2 yields -1
+									o §fib ~3 yields 2
 
-								Implemented as
+								For positive indexes, the calculation is implemented as
 
-								Fib(n) = for n > 0:  round((φⁿ - ψⁿ) / sqrt(5))
+									Fib(n) = for n > 0:  round((φⁿ - ψⁿ) / sqrt(5))
 
-									where	φ = golden ratio: (1 + sqrt(5)) / 2
-									and		ψ = conjugate of φ: (1 - sqrt(5) / 2
+										where	φ = golden ratio: (1 + sqrt(5)) / 2
+										and		ψ = conjugate of φ: (1 - sqrt(5) / 2
 
-								(See https://en.wikipedia.org/wiki/Fibonacci_sequence#Relation_to_the_golden_ratio)
+									(See https://en.wikipedia.org/wiki/Fibonacci_sequence#Relation_to_the_golden_ratio)
+
+								For negative indexes, see
+
+									https://en.wikipedia.org/wiki/Generalizations_of_Fibonacci_numbers
+
+								(Generalized using F(n-2) = F(n) - F(n-1))
 
 			o,§dow year month day
 

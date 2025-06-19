@@ -1278,6 +1278,20 @@ pub(crate) mod opr_funcs {
         }
     }
 
+    fn single_number_operation<F: FnMut(f64) -> f64>(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], mut operation: F) -> Result<(), ScriptError> {
+        check_nr_operands(opr_mark, operands, 1)?;
+
+        *result_value = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Number(num) => ValueType::Number(operation(num)),
+            ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+        };
+
+        Ok(())
+    }
+
     fn has_any_string_operands(operands: &[Expression]) -> bool {
         let mut opd_count = 0usize;
 
@@ -1576,31 +1590,35 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn int_div(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut dividend = 0f64;
         let mut outcome = 0f64;
         let mut divisor: f64;
 
         for (count, op) in operands.iter().enumerate() {
-            match count {
-                0 => dividend = op.get_num_value(0f64),
-                1 => {
-                    divisor = op.get_num_value(1f64);
+            match op.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Number(num) => match count {
+                    0 => dividend = num,
+                    1 => {
+                        divisor = num;
 
-                    if divisor == 0f64 {
-                        return Err(ScriptError::DivideByZero(*opr_mark));
-                    }
+                        if divisor == 0f64 {
+                            return Err(ScriptError::DivideByZero(*opr_mark));
+                        }
 
-                    let result_sign = dividend.signum() * divisor.signum();
-                    dividend = dividend.abs();
-                    divisor = divisor.abs();
-                    outcome = dividend.div_euclid(divisor) * result_sign;
-                    shuttle.stack.push(ValueType::Number(dividend.rem_euclid(divisor) * result_sign));
+                        let result_sign = dividend.signum() * divisor.signum();
+                        dividend = dividend.abs();
+                        divisor = divisor.abs();
+                        outcome = dividend.div_euclid(divisor) * result_sign;
+                        shuttle.stack.push(ValueType::Number(dividend.rem_euclid(divisor) * result_sign));
+                    },
+                    _ => (),
                 },
-                _ => (),
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -1610,25 +1628,25 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn modulo(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
-
+        check_nr_operands(opr_mark, operands, 2)?;
         let mut outcome = 0f64;
-        let mut num_val: f64;
 
         for (count, op) in operands.iter().enumerate() {
-            match count {
-                0 => outcome += op.get_num_value(0f64),
-                _ => {
-                    num_val = op.get_num_value(1f64);
+            match op.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Number(num) => match count {
+                    0 => outcome = num,
+                    _ => {
+                        if num == 0_f64 {
+                            return Err(ScriptError::DivideByZero(*opr_mark));
+                        }
 
-                    if num_val == 0f64 {
-                        return Err(ScriptError::DivideByZero(*opr_mark));
-                    }
-
-                    outcome %= op.get_num_value(1f64);
+                        outcome %= num;
+                    },
                 },
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -1647,9 +1665,7 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn min(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut outcome = ValueType::Max;
         let mut current: ValueType;
@@ -1672,9 +1688,7 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn max(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut outcome = ValueType::Empty;
         let mut current: ValueType;
@@ -1693,207 +1707,85 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn unaryminus(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => ValueType::Number(- e.get_num_value(0f64)),
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| -n)
     }
 
     pub fn intgr(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = ValueType::Number(
-            match operands.first() {
-                None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-                Some(e) => {
-                    e.get_num_value(0f64).trunc()
-                },
-            }
-        );
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.trunc())
     }
 
     pub fn ceiling(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = ValueType::Number(
-            match operands.first() {
-                None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-                Some(e) => {
-                    let num = e.get_num_value(0f64);
-
-                    if num.is_sign_positive() {
-                        num.ceil()
-                    } else {
-                        num.floor()
-                    }
-                },
-            }
-        );
-
-        Ok(())
+        single_number_operation(
+            opr_mark,
+            result_value,
+            operands,
+            |n|  {
+                if n.is_sign_positive() {
+                    n.ceil()
+                } else {
+                    n.floor()
+                }
+            })
     }
 
     pub fn abs(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => ValueType::Number(e.get_num_value(0f64).abs()),
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.abs())
     }
 
     pub fn degrees(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).to_degrees())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.to_degrees())
     }
 
     pub fn radians(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).to_radians())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.to_radians())
     }
 
     pub fn sine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).sin())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.sin())
     }
 
     pub fn asin(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).asin())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.asin())
     }
 
     pub fn sinh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).sinh())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.sinh())
     }
 
     pub fn asinh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).asinh())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.asinh())
     }
 
     pub fn cosine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).cos())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.cos())
     }
 
     pub fn acos(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).acos())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.acos())
     }
 
     pub fn cosh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).cosh())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.cosh())
     }
 
     pub fn acosh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).acosh())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.acosh())
     }
 
     pub fn tangent(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).tan())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.tan())
     }
 
     pub fn atan(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).atan())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.atan())
     }
 
     pub fn tanh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).tanh())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.tanh())
     }
 
     pub fn atanh(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                ValueType::Number(e.get_num_value(0f64).atanh())
-            },
-        };
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.atanh())
     }
 
     pub fn atan2(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
@@ -2406,40 +2298,28 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn round(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
-
-        *result_value = ValueType::Number(
-            match operands[0].get_value() {
-                ValueType::Number(num) => num.round(),
-                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
-            }
-        );
-
-        Ok(())
+        single_number_operation(opr_mark, result_value, operands, |n| n.round())
     }
 
     pub fn fibonacci(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
-
-        *result_value = match operands[0].get_value() {
-            ValueType::Number(num) if num >= 0_f64 => {
-                let index = num.trunc() as i32;
+        single_number_operation(
+            opr_mark,
+            result_value,
+            operands,
+            |n| {
+                let sig = n.signum();
+                let index = n.abs().trunc() as i32;
                 let golden_ratio = get_golden_ratio_from_shuttle(shuttle);
                 let conjug = get_conjugate_golden_ratio_from_shuttle(shuttle);
 
-                ValueType::Number(
-                    ((golden_ratio.powi(index) - conjug.powi(index)) / 5_f64.sqrt()).round()
-                )
-            }
-            ValueType::Number(_negative_num) => ValueType::Empty,
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
-        };
+                let mut fib = ((golden_ratio.powi(index) - conjug.powi(index)) / 5_f64.sqrt()).round();
 
-        Ok(())
+                if (sig < 0_f64) && (n < -1_f64) && (n % 2_f64 == 0_f64) {
+                   fib = -fib; 
+                }
+
+                fib
+            })
     }
 
     pub fn get_version(_opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
@@ -2579,24 +2459,17 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn opr_leap(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
-
-        *result_value = ValueType::Number(
-            match operands[0].get_value() {
-                ValueType::Number(year) => {
-                   if is_leap_year(year) {
-                       1_f64
-                    } else {
-                        0_f64
-                    }
-                },
-                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
-            }
-        );
-
-        Ok(())
+        single_number_operation(
+            opr_mark,
+            result_value,
+            operands,
+            |n| 
+                if is_leap_year(n) {
+                   1_f64
+                } else {
+                    0_f64
+                }
+            )
     }
 
     pub(crate) fn days_in_month(month: u32, is_leap_year: bool) -> u32 {
@@ -3508,6 +3381,7 @@ pub(crate) mod opr_funcs {
             Some(e) => {
                 let num_val = e.get_num_value(0f64).trunc();
 
+                // TODO: return Err if invalid base.
                 if (num_val > 1f64) && (num_val < f64::INFINITY) {
                     shuttle.input_base = num_val;
                 }
@@ -3525,6 +3399,7 @@ pub(crate) mod opr_funcs {
             Some(e) => {
                 let num_val = e.get_num_value(0f64).trunc();
 
+                // TODO: return Err if invalid base.
                 if (num_val > 1f64) && (num_val < f64::INFINITY) {
                     shuttle.number_format.set_base(num_val);
                 }
@@ -7717,8 +7592,18 @@ mod tests {
         }
 
         #[test]
-        fn x_fibonacci_negative_index() {
-            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("to§fib ~20".to_string()).unwrap().numeric_value);
+        fn x_fibonacci_negative_index_1() {
+            assert_eq!(1_f64, Interpreter::execute_with_mocked_io("o§fib ~1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_fibonacci_negative_index_2() {
+            assert_eq!(-1_f64, Interpreter::execute_with_mocked_io("o§fib ~2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_fibonacci_negative_index_5() {
+            assert_eq!(5_f64, Interpreter::execute_with_mocked_io("o§fib ~5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
