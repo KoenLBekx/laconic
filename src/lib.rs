@@ -1,11 +1,123 @@
+//! # Operators
+//! <style>td:first-child{font-size: 2.2rem;}</style>
+//! ## Basic arithmetic operators
+//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |~|unary<br/>minus|1|ignored|number|error|error|
+//! |+|addition<br/>if no string<br/>operands|2|added|number|0|error|
+//! |+|concatenation<br/>if at least 1<br/>string<br/>operand|2|added|string;<br/>numbers are<br/>formatted<br/>as per<br/>o,§fmt command|empty<br/>string|string|
+//! |+,|concatenation<br/>if at least 1<br/>string<br/>operand|2|added|string;<br/>numbers are<br/>truncated<br/>to integers|empty<br/>string|string|
+//! |-|subtraction|2|subtracted|number|1|error|
+//! |*|multiplication|2|multiplied|number|1|error|
+//! |/|division|2|new<br/>division|number|1|error|
+//! |/,|integer<br/>division;<br>remainder<br/>is pushed<br/>to stack|2|ignored|number:<br>quotient|1|error|
+//! |%|modulo|2|modulo<br/>from<br/>modulo...|number|ignored|error|
+//! |^|exponen-<br/>tiation|2|new<br/>exponen-<br/>tiation|number|1|error|
+//! |i|integer|1|ignored|number<br/>truncated<br/>towards<br/>zero|error|error|
+//! |i,|ceiling|1|ignored|number<br/>filled<br/>towards<br/>nearest<br/>integer<br/>away from<br/>zero|error|error|
+//! |a|abs|1|ignored|number<br/>absolute<br/>value|error|error|
+//! |l|logarithm<br/>from 2nd<br/>operand<br/>in base<br/>1st operand|2|ignored|number|error|error|
+//!
+//! ## Trigonometric operators
+//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |p|Pi|0|ignored|number|n/a|n/a|
+//! |°|degrees<br/>from<br/>radians|1|ignored|number|error|error|
+//! |°,|radians<br/>from<br/>degrees|1|ignored|number|error|error|
+//! |S|sine<br/>from<br/>radians|1|ignored|number|error|error|
+//! |S,|arcsine<br/>in<br/>radians|1|ignored|number|error|error|
+//! |S,,|hyperbolic<br/>sine|1|ignored|number|error|error|
+//! |S,,,|inverse<br/>hyperbolic<br/>sine|1|ignored|number|error|error|
+//! |C|cosine<br/>from<br/>radians|1|ignored|number|error|error|
+//! |C,|arccosine<br/>in<br/>radians|1|ignored|number|error|error|
+//! |C,,|hyperbolic<br/>cosine|1|ignored|number|error|error|
+//! |C,,,|inverse<br/>hyperbolic<br/>cosine|1|ignored|number|error|error|
+//! |T|tangent<br/>from<br/>radians|1|ignored|number|error|error|
+//! |T,|arctangent<br/>in<br/>radians|1|ignored|number|error|error|
+//! |T,,|hyperbolic<br/>tangent|1|ignored|number|error|error|
+//! |T,,,|inverse<br/>hyperbolic<br/>tangent|1|ignored|number|error|error|
+//! |A|four quadrant<br/>arctangent<br/>of 1st arg (y)<br/>and 2nd arg (x)<br/>given in<br/>radians|2|ignored|number|error|error|
+//!
+//! ## Logical operators
+//!
+//! There are no boolean values.<br/>
+//! As return value, 0 is false and 1 is true.<br/>
+//! As input value, falsy are: 0, empty string, empty value and any error.<br/>
+//! All other values are truthy.
+//!
+//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |!|not|1|are<br/>checked<br/>also|1 if all<br/>operands<br/>are falsy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
+//! |&|and|1|are<br/>checked<br/>also|1 if all<br/>operands<br/>are truthy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
+//! |\||or|1|are<br/>checked<br/>also|1 if 1 or more<br/>operands<br/>are truthy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
+//! |x|xor|1|are<br/>checked<br/>also|1 if only 1<br/>operand<br/>is truthy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
+//!
+//! ## Comparison operators
+//!
+//! empty < any number < any string < any error<br/>
+//!
+//! The < and > operators can be combined with the negation operator:<br/>
+//! !< and !><br/>
+//! so as to obtain greater-or-equal or less-or-equal expressions with 2 operands.
+//!
+//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |=|equals|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are equal;<br/>else 0|empty|depends<br/>on Z§ign|
+//! |<|is less|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are an<br/>increasing<br/>series;<br/>else 0|empty|depends<br/>on Z§ign|
+//! |>|is greater|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are a<br/>decreasing<br/>series;<br/>else 0|empty|depends<br/>on Z§ign|
+//! |m|minimum|2|used|value of<br/>the smallest<br/>operand|empty|depends<br/>on<br/>Z§ign|
+//! |M|maximum|2|used|value of<br/>the greates<br/>operand|empty|depends<br/>on<br/>Z§ign|
+//!
+//! ## Constant operators
+//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |p|pi|0|ignored|number|n/a|n/a|
+//! |e|Euler's<br/>constant|0|ignored|number|n/a|n/a|
+//! |¶|newline<br/>character<br/>=<br/>c§n|0|ignored|string|n/a|n/a|
+//! |€|empty<br/>value<br/>=<br/>c§empty|0|ignored|Empty|n/a|n/a|
+//! |c|named<br/>constant:|1|ignored|several|error|error|
+//! |c§gold|golden<br/>ratio|0|ignored|several|error|error|
+//! |c§cogold|conjugate<br/>of golden<br/>ratio|0|ignored|several|error|error|
+//! |c§n|newline<br/>character<br/>=<br/>¶|0|ignored|several|error|error|
+//! |c§empty|empty<br/>value<br/>=<br/>€|0|ignored|several|error|error|
+//!
+//! ## Variable-related operators
+//!
+//! Note: variables are stored in a HashTable; their key or "name" can be a number or a string ("text")
+//!
+//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |$|assignment<br/>of 2nd<br/>operand<br/>to variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|2|assigned to<br/>subsequent<br/>variables|assigned<br/>value|error<br/>if 1st<br/>operand;<br/>empty if 2nd|error<br/>if 1st<br/>operand;<br/>if 2nd, depends<br/>on Z§ign|
+//! |v|value of<br/>variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|1|ignored|any type of<br/>expression<br/>value<br/>(including<br/>empty and<br/>error)|error|error|
+//! |:|like v<br/>but has result<br/>of parent operator<br/>assigned to that<br/>variable|1|ignored|like v|error|error|
+//!
+//! ## Stack-related operators
+//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |K|push to<br/>LIFO<br/>stack|1|pushed<br/>also|value of<br/>last<br/>operand|empty|depends<br/>on Z§ign|
+//! |k|pop from<br/>LIFO<br/>stack|0|ignored|value of<br/>top stack<br/>item;<br/>empty<br/>if none|n/a|n/a|
+//! |k,|stack<br/>height|0|ignored|number<br/>of stack<br/>items|n/a|n/a|
+//!
+//! ## Other operators
+//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |;|combines<br/>expressions|2|used|value of<br/>last one|empty|error|
+//! ||||||||
+//! ||||||||
+//! ||||||||
+
 //{ TODO: resolve TODO's in code.
-// TODO: take ValueType::Text and ValueType::Empty into account for all operators.
 // TODO: fn main should also accept a -q (quiet) parameter, which would prevent the output of the
 //      final value to stdin.
 //      (Same as Z§quiet 1)
 // TODO: fn main should also accept a -c (continue) parameter, which would prevent an error
 //      condition to bubble up to the topmost operator and stop execution immediately.
-//      (Same as Z§errhd 1).
+//      (Same as Z§ign 1).
+// TODO: have all operators have an acceptable behavior with less or more operands than standard.
+//      (Special attention for ':' !)
+// TODO: take ValueType::Text, ValueType::Error and ValueType::Empty into account for all operators.
+// TODO: If a sensible default or neutral value is available, accept empty value operands.
+//      (Like 0 for +, 1 for *, "" for + of strings, etc.)
 // TODO: all operator functions in mod opr_funcs should handle an operand
 //      having ValueType::Error(...) in an appropriate way,
 //      not always just return the ScriptError again.
@@ -18,8 +130,6 @@
 //      holding also other data like number of operands, operator function, e.a.
 //      (even data for documentation).
 //      The function isKnownOperator should also use this constant array.
-// TODO: have all operators have an acceptable behavior with less or more operands than standard.
-//      (Special attention for ':' !)
 // TODO: make private whatever can remain private.
 // TODO: include the explanations in analysis/laconic.txt in markdown format as documentation
 //      comments.
@@ -35,6 +145,7 @@
 //      )
 // TODO: use giantity ?
 //}
+
 
 use std::collections::HashMap;
 use std::fmt;
@@ -225,6 +336,7 @@ impl PartialEq for ValueType {
             (ValueType::Empty, ValueType::Empty) => true,
             (ValueType::Number(s), ValueType::Number(o)) => s == o,
             (ValueType::Text(s), ValueType::Text(o)) => *s == *o,
+            (ValueType::Error(s), ValueType::Error(o)) => *s == *o,
             (ValueType::Max, ValueType::Max) => true,
             _ => false,
         }
@@ -489,7 +601,7 @@ impl Expression {
             (OPRTN, 1) => &opr_funcs::define_routine_sharing_variables,
             (OPEXR, _) => &opr_funcs::exec_routine,
             (OPASG, _) => &opr_funcs::assign_number_register,
-            (OPVAR, _) => &opr_funcs::get_number_register,
+            (OPVAR, _) => &opr_funcs::get_register,
             (OPMAS, _) => &opr_funcs::assignment_maker,
             (OPSTK, _) => &opr_funcs::push_stack,
             (OPPOP, 0) => &opr_funcs::pop_stack,
@@ -1456,7 +1568,7 @@ pub(crate) mod opr_funcs {
             for op in operands {
                 string_outcome.push_str(
                     (match op.get_value() {
-                        ValueType::Empty => NO_VALUE.to_string(),   
+                        ValueType::Empty => "".to_string(),   
                         ValueType::Number(num) if do_truncate => format!("{}", num.trunc() as i64),
                         ValueType::Number(num) => shuttle.number_format.format(num),
                         ValueType::Text(txt) => txt,
@@ -1474,9 +1586,7 @@ pub(crate) mod opr_funcs {
             for op in operands {
                 match op.get_value() {
                     ValueType::Number(num) => num_outcome += num,
-                    ValueType::Error(s_err) => {
-                        return Err(s_err);
-                    },
+                    ValueType::Error(s_err) => return Err(s_err),
                     ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                     _ => (),
                 }
@@ -1504,9 +1614,7 @@ pub(crate) mod opr_funcs {
             match op.get_value() {
                 ValueType::Number(num) => outcome *= num,
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
-                ValueType::Error(s_err) => {
-                    return Err(s_err);
-                },
+                ValueType::Error(s_err) => return Err(s_err),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 _ => (),
             }
@@ -1563,7 +1671,7 @@ pub(crate) mod opr_funcs {
     
     pub fn divide(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         check_nr_operands(opr_mark, operands, 2)?;
-        let mut outcome = 0f64;
+        let mut outcome = 1f64;
 
         for (count, op) in operands.iter().enumerate() {
             match op.get_value() {
@@ -1592,13 +1700,13 @@ pub(crate) mod opr_funcs {
     pub fn int_div(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         check_nr_operands(opr_mark, operands, 2)?;
 
-        let mut dividend = 0f64;
+        let mut dividend = 1f64;
         let mut outcome = 0f64;
         let mut divisor: f64;
 
         for (count, op) in operands.iter().enumerate() {
             match op.get_value() {
-                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Empty => (),
                 ValueType::Number(num) => match count {
                     0 => dividend = num,
                     1 => {
@@ -1789,9 +1897,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn atan2(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let num_y = match operands[0].get_value() {
             ValueType::Number(num) => num,
@@ -1809,14 +1915,25 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn log(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            *result_value = ValueType::Number(0f64);
+        check_nr_operands(opr_mark, operands, 2)?;
 
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
+        let mut base = 10_f64;
+        let mut product = 1_f64;
+
+        for (count, op) in operands.iter().enumerate() {
+            match op.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Number(num) => match count {
+                    0 => base = num,
+                    1 => product = num,
+                    _ => (),
+                },
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+            }
         }
 
-        let base = operands[0].get_num_value(0f64);
-        let product = operands[1].get_num_value(0f64);
         *result_value = ValueType::Number(product.log(base));
 
         Ok(())
@@ -1883,6 +2000,9 @@ pub(crate) mod opr_funcs {
                 ValueType::Number(get_conjugate_golden_ratio_from_shuttle(shuttle)),
             ValueType::Text(name) if name == "n".to_string() => ValueType::Text("\n".to_string()),
             ValueType::Text(name) if name == "empty".to_string() => ValueType::Empty,
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             _ => return Err(ScriptError::UnknownConstant(const_index.get_string_value("???".to_string()))),
         };
 
@@ -1890,24 +2010,31 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn assign_number_register(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
-        let name_is_string = operands[0].get_value().get_type_as_num() == 2f64;
-        let mut name = operands[0].get_value();
+        let mut name_is_string = false;
+        let mut name: ValueType;
 
         let mut name_base = String::new();
         let mut index = 0f64;
 
-        if name_is_string {
-            name_base = name.get_string_value("void".to_string());
-        } else {
-            index = name.get_num_value(0f64);
+        match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Number(num) =>  {
+                name = ValueType::Number(num);
+                index = num;
+            },
+            ValueType::Text(txt) => {
+                name = ValueType::Text(txt.clone());
+                name_base = txt;
+                name_is_string = true;
+            }
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }
 
         let mut counter = 0f64;
-        let mut reg_val = ValueType::Number(0f64);
+        let mut reg_val = ValueType::Empty;
 
         for opd in &operands[1..operands.len()] {
             reg_val = opd.get_value();
@@ -1927,12 +2054,16 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn get_number_register(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+    pub fn get_register(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        check_nr_operands(opr_mark, operands, 1)?;
 
-        let index = operands[0].get_value();
+        let index = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Number(num) => ValueType::Number(num),
+            ValueType::Text(txt) => ValueType::Text(txt),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+        };
 
         *result_value = shuttle.get_var(&index);
 
@@ -1940,11 +2071,16 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn assignment_maker(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
-        let index = operands[0].get_value();
+        let index = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Number(num) => ValueType::Number(num),
+            ValueType::Text(txt) => ValueType::Text(txt),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+        };
+
         let stack_len = shuttle.assignment_indexes_stack.len();
 
         // Add the variable's index to the list of variables to be assigned to
@@ -1962,9 +2098,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn push_stack(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let mut outcome = ValueType::Empty;
 
@@ -1994,9 +2128,7 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn equals(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut are_equal = true;
         let mut is_numeric = true;
@@ -2035,12 +2167,10 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn less(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut outcome = true;
-        let mut first = ValueType::Empty;
+        let mut previous = ValueType::Empty;
         let mut current: ValueType;
         let mut ops = operands.iter().enumerate();
 
@@ -2048,11 +2178,11 @@ pub(crate) mod opr_funcs {
             match ops.next(){
                 Some((count, op)) => {
                     match count {
-                        0 => first = op.get_value(),
+                        0 => previous = op.get_value(),
                         _ => {
                             current = op.get_value();
-                            outcome = outcome && (first < current);
-                            first = current;
+                            outcome = outcome && (previous < current);
+                            previous = current;
                         },
                     }
 
@@ -2074,12 +2204,10 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn greater(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut outcome = true;
-        let mut first = ValueType::Empty;
+        let mut previous = ValueType::Max;
         let mut current: ValueType;
         let mut ops = operands.iter().enumerate();
 
@@ -2087,11 +2215,11 @@ pub(crate) mod opr_funcs {
             match ops.next(){
                 Some((count, op)) => {
                     match count {
-                        0 => first = op.get_value(),
+                        0 => previous = op.get_value(),
                         _ => {
                             current = op.get_value();
-                            outcome = outcome && (first > current);
-                            first = current;
+                            outcome = outcome && (previous > current);
+                            previous = current;
                         },
                     }
 
@@ -2113,18 +2241,16 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn not(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let mut outcome = true;
 
         for op in operands {
             match op.get_value() {
-                ValueType::Empty => (),
+                ValueType::Empty => (), // Empty is considered a falsy value.
                 ValueType::Text(ref s) => outcome &= s.len() == 0,
                 ValueType::Number(n) => outcome &= are_near(0f64, n, shuttle.orb),
-                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Error(_) => (), // an Error is considered a falsy value.
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
@@ -2139,9 +2265,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn and(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let mut outcome = true;
 
@@ -2150,7 +2274,7 @@ pub(crate) mod opr_funcs {
                 ValueType::Empty => outcome = false,
                 ValueType::Text(ref s) => outcome &= s.len() > 0,
                 ValueType::Number(n) => outcome &= !are_near(0f64, n, shuttle.orb),
-                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Error(_) => outcome = false,
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
@@ -2165,9 +2289,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn or(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let mut outcome = false;
 
@@ -2176,7 +2298,7 @@ pub(crate) mod opr_funcs {
                 ValueType::Empty => (),
                 ValueType::Text(ref s) => outcome |= s.len() > 0,
                 ValueType::Number(n) => outcome |= !are_near(0f64, n, shuttle.orb),
-                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Error(_) => (),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
@@ -2191,9 +2313,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn xor(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let mut trues = 0usize;
 
@@ -2210,7 +2330,7 @@ pub(crate) mod opr_funcs {
                       trues += 1;
                     }
                 },
-                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Error(_) => (),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
@@ -2243,7 +2363,7 @@ pub(crate) mod opr_funcs {
         match setting_name {
             ValueType::Text(name) if name ==  "prec".to_string() => shuttle.orb = setting_value.get_num_value(0f64),
             ValueType::Text(name) if name == "loops".to_string() => shuttle.max_iterations = setting_value.get_num_value(0f64),
-            ValueType::Text(name) if name == "errhd".to_string() => shuttle.error_breaks = setting_value.get_num_value(0f64) == 0_f64,
+            ValueType::Text(name) if name == "ign".to_string() => shuttle.error_breaks = setting_value.get_num_value(0f64) == 0_f64,
             _ => (),
         }
 
@@ -4471,7 +4591,7 @@ mod tests {
 
         #[test]
         fn x_add_2_op_one_is_error() {
-            assert_eq!("DivideByZero('/')", Interpreter::execute_with_mocked_io("Z§errhd 1 +111 /1 0".to_string()).unwrap().string_representation);
+            assert_eq!("DivideByZero('/')", Interpreter::execute_with_mocked_io("Z§ign 1 +111 /1 0".to_string()).unwrap().string_representation);
         }
 
         #[test]
@@ -4506,7 +4626,7 @@ mod tests {
 
         #[test]
         fn x_add_strings_one_is_error() {
-            assert_eq!("Result:DivideByZero('/')".to_string(), Interpreter::execute_with_mocked_io("Z§errhd 1 + §Result: /38 0".to_string()).unwrap().string_representation);
+            assert_eq!("Result:DivideByZero('/')".to_string(), Interpreter::execute_with_mocked_io("Z§ign 1 + §Result: /38 0".to_string()).unwrap().string_representation);
         }
 
         #[test]
@@ -4535,14 +4655,14 @@ mod tests {
 
         #[test]
         fn x_minus_string_no_stop() {
-            assert_eq!(38_f64, Interpreter::execute_with_mocked_io("Z§errhd 1 -4 /5 0 38".to_string()).unwrap().numeric_value);
+            assert_eq!(38_f64, Interpreter::execute_with_mocked_io("Z§ign 1 -4 /5 0 38".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_minus_string_stop_on_error() {
             assert_eq!(
                 Err(ScriptError::DivideByZero('/')),
-                Interpreter::execute_with_mocked_io("Z§errhd 0 -9 /5 0 44".to_string()));
+                Interpreter::execute_with_mocked_io("Z§ign 0 -9 /5 0 44".to_string()));
         }
 
         #[test]
@@ -4644,14 +4764,14 @@ mod tests {
 
         #[test]
         fn x_multiply_no_stop_on_err() {
-            assert_eq!("DivideByZero('/')", Interpreter::execute_with_mocked_io("Z§errhd 1 *111 /8 0".to_string()).unwrap().string_representation);
+            assert_eq!("DivideByZero('/')", Interpreter::execute_with_mocked_io("Z§ign 1 *111 /8 0".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_multiply_stop_on_err() {
             assert_eq!(
                 Err(ScriptError::DivideByZero('/')),
-                Interpreter::execute_with_mocked_io("Z§errhd 0 *111 /8 0".to_string()));
+                Interpreter::execute_with_mocked_io("Z§ign 0 *111 /8 0".to_string()));
         }
 
         #[test]
@@ -4837,14 +4957,14 @@ mod tests {
         fn x_power_error_no_stop() {
             assert_eq!(
                 "Outcome: DivideByZero('/')".to_string(),
-                Interpreter::execute_with_mocked_io("Z§errhd 1 +[sOutcome: ] ^/4 0 2".to_string()).unwrap().string_representation);
+                Interpreter::execute_with_mocked_io("Z§ign 1 +[sOutcome: ] ^/4 0 2".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_power_stop_on_err() {
             assert_eq!(
                 Err(ScriptError::DivideByZero('/')),
-                Interpreter::execute_with_mocked_io("Z§errhd 0 ^/8 0 2".to_string()));
+                Interpreter::execute_with_mocked_io("Z§ign 0 ^/8 0 2".to_string()));
         }
 
         #[test]
@@ -4959,7 +5079,7 @@ mod tests {
 
         #[test]
         fn x_min_string_and_error() {
-            assert_eq!("Voilà".to_string(), Interpreter::execute_with_mocked_io("Z§errhd 1 m§Voilà /1 0".to_string()).unwrap().string_representation);
+            assert_eq!("Voilà".to_string(), Interpreter::execute_with_mocked_io("Z§ign 1 m§Voilà /1 0".to_string()).unwrap().string_representation);
         }
 
         #[test]
@@ -4992,6 +5112,22 @@ mod tests {
             assert_eq!(
                 " Huh?".to_string(),
                 Interpreter::execute_with_mocked_io("M(128 v§notUsedYet [s Huh?] 277 ~31 5)".to_string())
+                    .unwrap().string_representation);
+        }
+
+        #[test]
+        fn x_max_error_stop_on_error() {
+            assert_eq!(
+                Err(ScriptError::UserDefinedError("myError".to_string())),
+                Interpreter::execute_with_mocked_io("M(128 U§myError [s Huh?] 277 ~31 5)".to_string())
+            );
+        }
+
+        #[test]
+        fn x_max_error_no_stop() {
+            assert_eq!(
+                r#"UserDefinedError("myError")"#.to_string(),
+                Interpreter::execute_with_mocked_io("Z§ign 1 M(128 U§myError [s Huh?] 277 ~31 5)".to_string())
                     .unwrap().string_representation);
         }
 
@@ -5131,6 +5267,28 @@ mod tests {
         }
 
         #[test]
+        fn x_equality_error_and_same_error_no_stop() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§ign 1 = /4 0 /4 0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_equality_error_and_same_error_stop_on_error() {
+            assert_eq!(
+                Err(ScriptError::UserDefinedError(r#"aaa"#.to_string())),
+                Interpreter::execute_with_mocked_io("Z§ign 0 = U§aaa U§aaa".to_string()));
+        }
+
+        #[test]
+        fn x_equality_error_and_other_error() {
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("Z§ign 1 = U§aaa U§bbb".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_equality_error_and_other_type() {
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("Z§ign 1 = U§aaa 25".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
         fn x_less_true() {
             assert_eq!(1f64, Interpreter::execute_with_mocked_io("< 5.000001 5.000002".to_string()).unwrap().numeric_value);
         }
@@ -5237,6 +5395,18 @@ mod tests {
         }
 
         #[test]
+        fn x_not_error_no_stop() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§ign 1 !U§aaa".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_not_error_stop_on_error() {
+            assert_eq!(
+                Err(ScriptError::NonNumericOperand('*')),
+                Interpreter::execute_with_mocked_io("Z§ign 0 * 2 §one_and_twenty".to_string()));
+        }
+
+        #[test]
         fn x_and_0_operands() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('&')),
@@ -5289,6 +5459,18 @@ mod tests {
         }
 
         #[test]
+        fn x_and_error_no_stop() {
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("Z§ign 1 & §Nostromo U§failed".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_and_error_stop_on_error() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('=')),
+                Interpreter::execute_with_mocked_io("Z§ign 0&1=".to_string()));
+        }
+
+        #[test]
         fn x_or_0() {
             assert_eq!(
                 Err(ScriptError::InsufficientOperands('|')),
@@ -5338,6 +5520,18 @@ mod tests {
         #[test]
         fn x_or_string() {
             assert_eq!(1f64, Interpreter::execute_with_mocked_io("| 9 §Nostromo".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_or_error_no_stop() {
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("Z§ign 1 | U§failed 0".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_or_error_stop_on_error() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('=')),
+                Interpreter::execute_with_mocked_io("Z§ign 0|0=".to_string()));
         }
 
         #[test]
@@ -5405,6 +5599,18 @@ mod tests {
         #[test]
         fn x_xor_string() {
             assert_eq!(0f64, Interpreter::execute_with_mocked_io("x 9 §Nostromo".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_xor_error_no_stop() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§ign 1 x U§failed 1".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_xor_error_stop_on_error() {
+            assert_eq!(
+                Err(ScriptError::InsufficientOperands('=')),
+                Interpreter::execute_with_mocked_io("Z§ign 0x1=".to_string()));
         }
 
         #[test]
@@ -5792,7 +5998,7 @@ mod tests {
             let reader = Box::new(StdinReader::new());
             let text_io_handler = Box::new(MockTextHandler::new());
             let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
-            interpreter.execute_opts("Z§errhd 1 w[sEnter a number: ] $0r w(+[sYou entered: ]v0) w(+¶[sDouble is: ] *v0 2 ¶)".to_string(), true, false, false).unwrap();
+            interpreter.execute_opts("Z§ign 1 w[sEnter a number: ] $0r w(+[sYou entered: ]v0) w(+¶[sDouble is: ] *v0 2 ¶)".to_string(), true, false, false).unwrap();
         }
 
         #[test]
@@ -5946,7 +6152,7 @@ mod tests {
 
         #[test]
         fn x_get_type_error() {
-            assert_eq!(90f64, Interpreter::execute_with_mocked_io("Z§errhd 1 t*(7)".to_string()).unwrap().numeric_value);
+            assert_eq!(90f64, Interpreter::execute_with_mocked_io("Z§ign 1 t*(7)".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -7607,23 +7813,23 @@ mod tests {
         }
 
         #[test]
-        fn x_set_errhd_1() {
+        fn x_set_ign_1() {
             let writer = Box::new(Vec::<u8>::new());
             let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let text_io_handler = Box::new(MockTextHandler::new());
             let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
-            interpreter.execute_opts("Z§errhd 1".to_string(), true, false, false).unwrap();
+            interpreter.execute_opts("Z§ign 1".to_string(), true, false, false).unwrap();
 
             assert!(!interpreter.shuttle.error_breaks);
         }
 
         #[test]
-        fn x_set_errhd_0() {
+        fn x_set_ign_0() {
             let writer = Box::new(Vec::<u8>::new());
             let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let text_io_handler = Box::new(MockTextHandler::new());
             let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
-            interpreter.execute_opts("Z§errhd 0".to_string(), true, false, false).unwrap();
+            interpreter.execute_opts("Z§ign 0".to_string(), true, false, false).unwrap();
 
             assert!(interpreter.shuttle.error_breaks);
         }
@@ -7632,37 +7838,37 @@ mod tests {
         fn x_combine_stop_on_error() {
             assert_eq!(
                 Err(ScriptError::DivideByZero('/')),
-                Interpreter::execute_with_mocked_io("Z§errhd 0 ;/4 0 +8 2".to_string()));
+                Interpreter::execute_with_mocked_io("Z§ign 0 ;/4 0 +8 2".to_string()));
         }
 
         #[test]
         fn x_combine_no_stop_on_error() {
-            assert_eq!(10_f64, Interpreter::execute_with_mocked_io("Z§errhd 1 ;/4 0 +8 2".to_string()).unwrap().numeric_value);
+            assert_eq!(10_f64, Interpreter::execute_with_mocked_io("Z§ign 1 ;/4 0 +8 2".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_eval_no_stop_on_error() {
-            assert_eq!(10_f64, Interpreter::execute_with_mocked_io("Z§errhd 1 ;E[s[?___]] +5 5".to_string()).unwrap().numeric_value);
+            assert_eq!(10_f64, Interpreter::execute_with_mocked_io("Z§ign 1 ;E[s[?___]] +5 5".to_string()).unwrap().numeric_value);
         }
 
         #[test]
         fn x_eval_stop_on_error() {
             assert_eq!(
                 Err(ScriptError::UnknownBracketContentTypeMarker { position: 2, marker: '?' }),
-                Interpreter::execute_with_mocked_io("Z§errhd 0 ;E[s[?___]] +5 5".to_string())
+                Interpreter::execute_with_mocked_io("Z§ign 0 ;E[s[?___]] +5 5".to_string())
             );
         }
 
         #[test]
         fn x_user_error_no_stop() {
-            assert_eq!(r#"UserDefinedError("I failed")"#.to_string(), Interpreter::execute_with_mocked_io("Z§errhd 1 +8 U[sI failed]".to_string()).unwrap().string_representation);
+            assert_eq!(r#"UserDefinedError("I failed")"#.to_string(), Interpreter::execute_with_mocked_io("Z§ign 1 +8 U[sI failed]".to_string()).unwrap().string_representation);
         }
 
         #[test]
         fn x_user_error_stop() {
             assert_eq!(
                 Err(ScriptError::UserDefinedError("I failed".to_string())),
-                Interpreter::execute_with_mocked_io("Z§errhd 0 +8 U[sI failed]".to_string())
+                Interpreter::execute_with_mocked_io("Z§ign 0 +8 U[sI failed]".to_string())
             );
         }
     }

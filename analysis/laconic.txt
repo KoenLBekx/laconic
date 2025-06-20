@@ -947,6 +947,10 @@ Operators
 			x(0 5 5) yields 0
 			x(5 5 5) yields 0
 
+		x,
+			(to be implemented)
+			Returns the number of operands that are truthy.
+
 	Flow
 
 		; two statement combinator
@@ -1313,7 +1317,7 @@ Operators
 				t v§NotUsedYet     yields  0 : empty or uninitialized : an empty expression will yield 0.
 				t 39               yields  1 : numeric
 				t [sWhat?]         yields  2 : string
-				Z§errhd 1 t*(7)    yields 90: error (to wit, InsufficientOperands('*')).
+				Z§ign 1 t*(7)    yields 90: error (to wit, InsufficientOperands('*')).
 
 		€
 				Returns the Empty value.
@@ -1321,7 +1325,7 @@ Operators
 		U string
 				Returns a user-defined error, having the passed string as error message.
 
-				Depending on the setting of Z§errhd, this may or may not
+				Depending on the setting of Z§ign, this may or may not
 				(0) stop script execution immediately (default behavior)
 				(1) or simply pass an error value type to the higher-level operator.
 
@@ -1577,7 +1581,7 @@ Operators
 					to standard output.
 					Otherwise, nothing will be output.
 
-		Z§errhd n : error handling.
+		Z§ign n : ignore errors
 
 					If 0 (default), any error in any operation immediately stops execution
 					of the entire script or expression.
