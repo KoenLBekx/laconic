@@ -15,6 +15,7 @@
 //! |^|exponen-<br/>tiation|2|new<br/>exponen-<br/>tiation|number|1|error|
 //! |i|integer|1|ignored|number<br/>truncated<br/>towards<br/>zero|error|error|
 //! |i,|ceiling|1|ignored|number<br/>filled<br/>towards<br/>nearest<br/>integer<br/>away from<br/>zero|error|error|
+//! |o§r|rounding|1|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|error|error|
 //! |a|abs|1|ignored|number<br/>absolute<br/>value|error|error|
 //! |l|logarithm<br/>from 2nd<br/>operand<br/>in base<br/>1st operand|2|ignored|number|error|error|
 //!
@@ -97,6 +98,88 @@
 //! |K|push to<br/>LIFO<br/>stack|1|pushed<br/>also|value of<br/>last<br/>operand|empty|depends<br/>on Z§ign|
 //! |k|pop from<br/>LIFO<br/>stack|0|ignored|value of<br/>top stack<br/>item;<br/>empty<br/>if none|n/a|n/a|
 //! |k,|stack<br/>height|0|ignored|number<br/>of stack<br/>items|n/a|n/a|
+//!
+//! ## Settings-related operators
+//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |Z|setting:<br/>assign value<br/>of 2nd<br/>operand<br/>to setting<br/>designated<br/>by 1st<br/>operand|2|ignored|setting<br/>value<br/>(2nd operand)|error|error|
+//! |Z§prec|comparison<br/>precision<br/>setting|1|ignored|setting<br/>value<br/>(2nd operand)|error|error|
+//! |Z§loops|maximum<br/>number<br/>of loop<br/>iterations|1|ignored|setting<br/>value<br/>(2nd operand)|error|error|
+//! |Z§ign|if not 0 ignore<br/>errors,<br/>else stop<br/>script<br/>execution<br/>on errors|1|ignored|setting<br/>value<br/>(2nd operand)|error|error|
+//!
+//! ## Named operators
+//! 
+//! The number of characters to represent operators is limited.
+//! Moreover, for most people, the beautiful 汉字 (Han zi) are difficult to enter using a keyboard. 
+//!
+//! That's why there are also operators that are designated by a name; these are called "named operators".
+//! The o and O operators take that name as their first operand in order to perform the operation of a named operator.
+//! 
+//! The difference between both operators is that<br/>
+//! - the lower case o operator takes 2 operands : the named operator name and one operation operand;<br/>
+//! - the upper case O operator takes 3 operands : the named operator name and two operation operands.
+//! 
+//! Furthermore, adding the comma operator to both the O and o operands increases their expected number of operands by (2 * number_of_commas), so
+//! 
+//! - the o, operator takes 4 operands;<br/>
+//! - the O, operator takes 5 operands;<br/>
+//! - the o,, operator takes 6 operands;<br/>
+//! - the O,, operator takes 7 operands;<br/>
+//! etc.
+//! 
+//! Both operators, however, can have their number of operands overridden by the ( and ) operators,
+//! in which case they can be used interchangeably and following commas don't affect the number of expected operands (they can still affect the behaviour, though).
+//! 
+//! The operator's name, which is the first operand of the o and O operators, can either be a number or a string.
+//! For readability, however, strings are chosen for the implemented operators.
+//!
+//! As stated, this string is the first operand and can be written either as<br/>
+//! o §name<br/>
+//! o§name<br/>
+//! o\[sname\]<br/>
+//! or<br/>
+//! o \[sname\]
+//!
+//! The below named operators have been implemented:
+//!
+//! |Operator|Description|Required<br/>operands,<br/>inc.<br/>operator<br/>name|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |o§r|rounding|2|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|error|error|
+//! |o§fib|Fibonacci<br/>number|2|ignored|Fibonacci<br/>number<br/>chosen<br/>by index (2nd<br/>operand)|error|error|
+//! |o§uni|Unicode<br/>character|2|converted<br/>also|string<br/>having<br/>Unicode<br/>characters|error|error|
+//! |o§ucv|Unicode<br/>value|2|3rd operand<br/>is used as<br/>character<br/>position.<br/>If absent,<br/>0 is used.|Unicode<br/>code point of<br/>character|error|error|
+//! |o§len|length in<br/>characters|2|length is<br/>added|total length<br/>of operands|error|error|
+//! |o§lower|lower<br/>case|2|ignored|lower case<br/>of 2nd<br/>operand|error|error|
+//! |o§upper|upper<br/>case|2|ignored|upper case<br/>of 2nd<br/>operand|error|error|
+//! |o§proper|proper<br/>case|2|ignored|proper case<br/>of 2nd<br/>operand|error|error|
+//! |o,§find|find 3rd operand<br/>as part of<br/>2nd operand<br/>starting from<br/>position passed<br/>as 4th operand|3|4th operand<br/>is start position.<br/>If missing,<br/>0 is used.|If found,<br/>start position<br/>of found<br/>substring.<br/>Else, empty.|error|error|
+//! |o,§sub|substring|3|4th operand<br/>will be used<br/>as length|the substring|error|error|
+//! |O,,§repl|string replacement|4 or 7|ignored|resulting<br/>string|error|error|
+//! |o,§split|split string|4|ignored|number of<br/>segments|error|error|
+//!
+//!
+//! Note: the **o,§sub** operator takes 4 arguments:<br/>
+//! - §sub: the operator's name;<br/>
+//! - the source string;<br/>
+//! - the start position of the substring;<br/>
+//! - (optional) the length of the substring. If ommitted, the substring will be taken from the
+//! start position until the end of the source string.
+//!
+//! Note: the **o,§repl** or **O,,§repl** operator takes 4 or 7 arguments:<br/>
+//! - §repl : the operator's name;<br/>
+//! - the source string;<br/>
+//! - the substring to be replaced;<br/>
+//! - the string to replace it with;<br/>
+//! And optionally:<br/>
+//! - the number or name of the position variable;<br/>
+//! - the number or name of the sequence variable;<br/>
+//! - the number or name of the routine that can use both variables to decide if a replacement should happen.
+//!
+//! Note the **0,§split** operator takes 4 arguments:
+//! - §split : the operator's name;<br/>
+//! - the source string;<br/>
+//! - the segment separator, like §;<br/>
+//! - the prefix of the numbered variable names the split segments will be assigned to.
 //!
 //! ## Other operators
 //! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
@@ -264,7 +347,9 @@ pub enum ScriptError {
     InsufficientOperands(char),
     InvalidOperand(char),
     InvalidOperandMax(char),
+    NegativeOperand(char),
     NonNumericOperand(char),
+    NonTextOperand(char),
     UnclosedBracketsAtEnd,
     UnexpectedClosingBracket{position: usize},
     UnexpectedClosingParenthesis,
@@ -685,8 +770,10 @@ impl Expression {
     }
 
     pub fn operate(&mut self, shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        /*
         #[cfg(test)]
         println!("operate {}", self.opr_mark);
+        */
 
         shuttle.assignment_indexes_stack.push(Vec::<ValueType>::new());
 
@@ -712,8 +799,10 @@ impl Expression {
             },
         }
 
+        /*
         #[cfg(test)]
         println!("operate {}, assignment_indexes: {:?}", self.opr_mark, assignment_indexes);
+        */
 
         for index in assignment_indexes {
             // Assign the resulting value to the variable
@@ -725,8 +814,10 @@ impl Expression {
             shuttle.preceding_nr_operands = self.operands.len() as f64;
         }
 
+        /*
         #[cfg(test)]
         println!("operate {} ==> {:?}", self.opr_mark, self.get_value());
+        */
 
         Ok(())
     }
@@ -1162,8 +1253,10 @@ impl Interpreter {
 
         for exp in atoms.iter().rev() {
 
+            /*
             #[cfg(test)]
             println!("exp_stack: {:?}", exp_stack);
+            */
 
             match exp {
                 Atom::Number(string_rep) => {
@@ -2345,18 +2438,21 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn setting(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut setting_name = ValueType::Empty;
         let mut setting_value = ValueType::Empty;
 
         for (count, op) in operands.iter().enumerate() {
-            match count {
-                0 => setting_name = op.get_value(),
-                1 => setting_value = op.get_value(),
-                _ => (),
+            match op.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Number(_) | ValueType::Text(_) => match count {
+                    0 => setting_name = op.get_value(),
+                    1 => setting_value = op.get_value(),
+                    _ => (),
+                },
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2373,15 +2469,10 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn enumerated_opr(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        let default_outcome = ValueType::Number(0f64);
-
-        if operands.is_empty() {
-            *result_value = default_outcome;
-
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let opr_func = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(name) if name == "r".to_string() => round,
             ValueType::Text(name) if name == "fib".to_string() => fibonacci,
             ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
@@ -2404,9 +2495,9 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "gregt".to_string() => gregorian_text,
             ValueType::Text(name) if name == "gregn".to_string() => gregorian_days_in_month,
             ValueType::Text(name) if name == "version".to_string() => get_version,
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             unknown =>  {
-                *result_value = default_outcome;
-
                 return Err(ScriptError::UnknownNamedOperator(
                     unknown.get_string_value("???".to_string())));
             },
@@ -2522,21 +2613,22 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn get_unicode_chars(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let mut result_string = String::new();
-        let mut opd_val: f64;
 
         for opd in &*operands {
-            opd_val = opd.get_num_value(0f64);
+            match opd.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Number(num) => match char::from_u32(num as u32) {
+                    // num is invalid unicode point
+                    None => result_string.push_str(format!("¿{}?", num.trunc()).as_str()),
 
-            match char::from_u32(opd_val as u32) {
-                // opd_val is invalid unicode point
-                None => result_string.push_str(format!("¿{}?", opd_val).as_str()),
-
-                Some(ch) => result_string.push(ch),
+                    Some(ch) => result_string.push(ch),
+                },
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2546,18 +2638,18 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn get_length(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let mut tot_len = 0usize;
 
         for opd in operands {
             tot_len +=
             match opd.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Text(txt) => txt,
                 ValueType::Number(num) => shuttle.number_format.format(num),
-                _ => "".to_string(),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }.chars().collect::<Vec<char>>().len();
         }
 
@@ -2650,8 +2742,10 @@ pub(crate) mod opr_funcs {
             month_offset = 7 + month_offset - 1;
         }
 
+        /*
         #[cfg(test)]
         println!("month_offset: {}", month_offset % 7);
+        */
 
         (year_offset + month_offset + day) % 7
     }
@@ -2704,8 +2798,10 @@ pub(crate) mod opr_funcs {
             },
         }
 
+        /*
         #[cfg(test)]
         println!("YMD: {}-{}-{}", year, month, day);
+        */
 
         let day_of_week = day_of_week(year, month, day);
         *result_value = ValueType::Number(day_of_week as f64);
@@ -2780,8 +2876,10 @@ pub(crate) mod opr_funcs {
                 break;
             }
 
+            /*
             #[cfg(test)]
             println!("years_counted: {}", years_counted);
+            */
         }
 
         year_increment = 100;
@@ -2796,8 +2894,10 @@ pub(crate) mod opr_funcs {
                 break;
             }
 
+            /*
             #[cfg(test)]
             println!("years_counted: {}", years_counted);
+            */
         }
 
         year_increment = 4;
@@ -2812,8 +2912,10 @@ pub(crate) mod opr_funcs {
                 break;
             }
 
+            /*
             #[cfg(test)]
             println!("years_counted: {}", years_counted);
+            */
         }
 
         year_increment = 1;
@@ -2828,8 +2930,10 @@ pub(crate) mod opr_funcs {
                 break;
             }
 
+            /*
             #[cfg(test)]
             println!("years_counted: {}", years_counted);
+            */
         }
 
         let is_leap_year = is_leap_year(year_float);
@@ -2871,6 +2975,7 @@ pub(crate) mod opr_funcs {
         let days_in_leap_century = days_in_century + 1;
         let days_in_leap_year = DAYS_IN_YEAR + 1;
 
+        /*
         #[cfg(test)]
         {
             println!("days in four years no leap: {}", days_in_four_years_no_leap);
@@ -2879,21 +2984,26 @@ pub(crate) mod opr_funcs {
             println!("days in leap century: {}", days_in_leap_century);
             println!("days in four centuries: {}", days_in_four_centuries);
         }
+        */
 
         let mut seq = seq_nr as u32;
         let mut year = 0;
         let mut month: u32;
         let day: u32;
 
+        /*
         #[cfg(test)]
         println!("Starting from seq {}", seq);
+        */
 
         let mut count = seq / days_in_four_centuries;
         year += 400 * count;
         seq = seq % days_in_four_centuries;
 
+        /*
         #[cfg(test)]
         println!("- days in 4 centuries:    seq={}, year={}", seq, year);
+        */
 
         if is_leap_year(year as f64) {
             if seq >= days_in_leap_century {
@@ -2902,30 +3012,38 @@ pub(crate) mod opr_funcs {
             }
         }
 
+        /*
         #[cfg(test)]
         println!("- 1st (leap)century:      seq={}, year={}", seq, year);
+        */
 
         count = seq / days_in_century;
         year += 100 * count;
         seq = seq % days_in_century;
 
+        /*
         #[cfg(test)]
         println!("- count centuries:        seq={}, year={}, count={}", seq, year, count);
+        */
 
         if (seq >= days_in_four_years_no_leap) && !is_leap_year(year as f64) {
             year += 4;
             seq -= days_in_four_years_no_leap;
         }
 
+        /*
         #[cfg(test)]
         println!("- 1st no-leap 4 years:    seq={}, year={}", seq, year);
+        */
 
         count = seq / days_in_four_years;
         year += 4 * count;
         seq = seq % days_in_four_years;
 
+        /*
         #[cfg(test)]
         println!("- count * 4 years:        seq={}, year={}, count={}", seq, year, count);
+        */
 
         if is_leap_year(year as f64) {
             if seq >= days_in_leap_year {
@@ -2934,15 +3052,19 @@ pub(crate) mod opr_funcs {
             }
         }
 
+        /*
         #[cfg(test)]
         println!("- 1st (leap)year:         seq={}, year={}", seq, year);
+        */
 
         count = seq / DAYS_IN_YEAR;
         year += count;
         seq = seq % DAYS_IN_YEAR;
 
+        /*
         #[cfg(test)]
         println!("- count years:            seq={}, year={}, count={}", seq, year, count);
+        */
 
         if seq == 0 {
             year -= 1;
@@ -3088,14 +3210,14 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn get_unicode_value(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let characters: Vec::<char> = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let pos = if operands.len() < 2 {
@@ -3160,22 +3282,24 @@ pub(crate) mod opr_funcs {
         // TODO: invalid, or impossible, operands shouldn't cause an Err to be returned, but a
         // ValueType::Empty to be assigned.
 
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
-        let characters: Vec<char> = match operands[0].get_value() {
+        let characters: Vec::<char> = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let source_len = characters.len();
 
         let find_characters: Vec<char> = match operands[1].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let find_len = find_characters.len();
@@ -3186,8 +3310,11 @@ pub(crate) mod opr_funcs {
 
         let start_pos = if operands.len() >= 3 {
             match operands[2].get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Number(num) => num as usize,
-                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         } else {
             0_usize
@@ -3214,28 +3341,30 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn replace_in_string(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 3 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 3)?;
 
         let use_condition = operands.len() > 3;
 
         if use_condition && (operands.len() < 6) {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
+            check_nr_operands(opr_mark, operands, 6)?;
         }
 
         let characters: Vec<char> = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let source_len = characters.len();
 
         let find_characters: Vec<char> = match operands[1].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let find_len = find_characters.len();
@@ -3245,18 +3374,22 @@ pub(crate) mod opr_funcs {
         }
 
         let repl_characters: Vec<char> = match operands[2].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let repl_len = repl_characters.len();
 
         let pos_var = if use_condition {
             match operands[3].get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Text(content) => ValueType::Text(content),
                 ValueType::Number(content) => ValueType::Number(content),
-                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         } else {
             ValueType::Empty
@@ -3264,9 +3397,11 @@ pub(crate) mod opr_funcs {
 
         let seq_var = if use_condition {
             match operands[4].get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Text(content) => ValueType::Text(content),
                 ValueType::Number(content) => ValueType::Number(content),
-                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         } else {
             ValueType::Empty
@@ -3280,9 +3415,11 @@ pub(crate) mod opr_funcs {
 
         let mut found_routine = if use_condition {
             let name = match operands[5].get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Text(content) => ValueType::Text(content),
                 ValueType::Number(content) => ValueType::Number(content),
-                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             };
 
             if let Some(ref rout) = shuttle.routines.get(&name) {
@@ -3335,9 +3472,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn split(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 3 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 3)?;
 
         let mut source = "".to_string();
         let mut separator = "".to_string();
@@ -3345,6 +3480,7 @@ pub(crate) mod opr_funcs {
 
         for (count, opd) in operands.iter().enumerate() {
             match opd.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Text(txt) => {
                     match count {
                         0 => source = txt,
@@ -3353,7 +3489,9 @@ pub(crate) mod opr_funcs {
                         _ => (),
                     }
                 },
-                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -3378,37 +3516,47 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn substring(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let characters: Vec::<char> = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
-        let start_pos_float = if let ValueType::Number(sp) = operands[1].get_value() {
-            sp
-        } else {
-            return Err(ScriptError::InvalidOperand(*opr_mark))
+        let start_pos = match operands[1].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Number(num) => {
+                if num < 0_f64 {
+                    return Err(ScriptError::NegativeOperand(*opr_mark));
+                } else {
+                    num as usize
+                }
+            }, 
+            ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
-
-        if start_pos_float < 0_f64 {
-            return Err(ScriptError::InvalidOperand(*opr_mark));
-        }
-
-        let start_pos = start_pos_float as usize;
 
         if start_pos > characters.len() {
             return Err(ScriptError::InvalidOperand(*opr_mark));
         }
 
         let sub_len = if operands.len() >= 3 {
-            if let ValueType::Number(sp) = operands[2].get_value(){
-                sp as usize
-            } else {
-                return Err(ScriptError::InvalidOperand(*opr_mark))
+            match operands[2].get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Number(num) => {
+                    if num < 0_f64 {
+                        return Err(ScriptError::NegativeOperand(*opr_mark));
+                    } else {
+                        num as usize
+                    }
+                }, 
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         } else {
             characters.len() - start_pos
@@ -3426,45 +3574,45 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn lower(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         *result_value = ValueType::Text(match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(txt) => txt,
             ValueType::Number(num) => shuttle.number_format.format(num),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }.to_lowercase());
 
         Ok(())
     }
 
     pub fn upper(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         *result_value = ValueType::Text(match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(txt) => txt,
             ValueType::Number(num) => shuttle.number_format.format(num),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }.to_uppercase());
 
         Ok(())
     }
 
     pub fn proper(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let mut result = String::new();
         let mut is_new_word = true;
 
         for c in match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(txt) => txt,
             ValueType::Number(num) => shuttle.number_format.format(num),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }.chars(){
             let new_chars: Box<dyn Iterator<Item = char>> =  
                 if is_new_word {
@@ -3561,8 +3709,10 @@ pub(crate) mod opr_funcs {
             return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
+        /*
         #[cfg(test)]
         println!("fn eval: opr_mark={}, operands[0]={:?} ", *opr_mark, operands[0]);
+        */
 
         // Only the first operand is used; subsequent ones are completely ignored.
         match operands[0].get_value() {
@@ -6575,14 +6725,14 @@ mod tests {
         #[test]
         fn x_sub_start_pos_is_string() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('O')),
+                Err(ScriptError::NonNumericOperand('O')),
                 Interpreter::execute_with_mocked_io("O§sub §Zupla §two".to_string()));
         }
 
         #[test]
         fn x_sub_negative_start_pos() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('O')),
+                Err(ScriptError::NegativeOperand('O')),
                 Interpreter::execute_with_mocked_io("O§sub §Zupla ~3".to_string()));
         }
 
@@ -6610,7 +6760,7 @@ mod tests {
         #[test]
         fn x_sub_length_is_string() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::NonNumericOperand('o')),
                 Interpreter::execute_with_mocked_io("o,§sub §Zupla 1 §end".to_string()));
         }
 
@@ -6738,7 +6888,7 @@ mod tests {
         #[test]
         fn x_find_empty_first_operand() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::EmptyOperand('o')),
                 Interpreter::execute_with_mocked_io("$0 € o,§find v0 §where 0".to_string()));
         }
 
@@ -6755,7 +6905,7 @@ mod tests {
         #[test]
         fn x_find_start_pos_is_string() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::NonNumericOperand('o')),
                 Interpreter::execute_with_mocked_io("o,§find §Metapontium §pont §zero".to_string()));
         }
 
@@ -6907,7 +7057,7 @@ mod tests {
         #[test]
         fn x_proper_empty() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::EmptyOperand('o')),
                 Interpreter::execute_with_mocked_io("o§proper c§empty".to_string())
             );
         }
@@ -7638,7 +7788,7 @@ mod tests {
         #[test]
         fn x_split_numeric_separator() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::NonTextOperand('o')),
                 Interpreter::execute_with_mocked_io("o,§split §A1B1C1D1E 1 §frag".to_string())
             );
         }
