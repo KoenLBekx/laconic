@@ -145,6 +145,7 @@
 //! |Operator|Description|Required<br/>operands,<br/>inc.<br/>operator<br/>name|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
 //! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 //! |o§r|rounding|2|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|error|error|
+//! |o§version|version|1|A 2nd<br/>operand<br/>chooses the<br/>version part<br/>(1-3).<br/>0 chooses<br/>entire version<br/>again.<br/>E.g.: 1.0.2|The<br/>Laconic<br/>interpreter's<br/>version|error|error|
 //! |o§fib|Fibonacci<br/>number|2|ignored|Fibonacci<br/>number<br/>chosen<br/>by index (2nd<br/>operand)|error|error|
 //! |o§uni|Unicode<br/>character|2|converted<br/>also|string<br/>having<br/>Unicode<br/>characters|error|error|
 //! |o§ucv|Unicode<br/>value|2|3rd operand<br/>is used as<br/>character<br/>position.<br/>If absent,<br/>0 is used.|Unicode<br/>code point of<br/>character|error|error|
@@ -154,9 +155,16 @@
 //! |o§proper|proper<br/>case|2|ignored|proper case<br/>of 2nd<br/>operand|error|error|
 //! |o,§find|find 3rd operand<br/>as part of<br/>2nd operand<br/>starting from<br/>position passed<br/>as 4th operand|3|4th operand<br/>is start position.<br/>If missing,<br/>0 is used.|If found,<br/>start position<br/>of found<br/>substring.<br/>Else, empty.|error|error|
 //! |o,§sub|substring|3|4th operand<br/>will be used<br/>as length|the substring|error|error|
-//! |O,,§repl|string replacement|4 or 7|ignored|resulting<br/>string|error|error|
+//! |O,,§repl|string<br/>replacement|4 or 7|ignored|resulting<br/>string|error|error|
 //! |o,§split|split string|4|ignored|number of<br/>segments|error|error|
-//!
+//! |o,§fmt|set number<br/>format|4|ignored|empty|error|error|
+//! |o§leap|leap<br/>year|2|ignored|1 if number<br/>in 1st operand<br/>is a leap year,<br/>else 0|error|error|
+//! |o,§dow|day of<br/>week|4:<br/>§dow,<br/>year,<br/>month<br/>and day.|ignored|0 for saturday,<br/>1-6 for<br/>following<br/>days|error|error|
+//! |o,§greg|Gregorian<br/>day's<br/>sequence<br/>number|4:<br/>§dow,<br/>year,<br/>month<br/>and day.|ignored|1 for january 1,<br/>year 0000,<br/>etc.|error|error|
+//! |o§gregy|year from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregy<br/>and seq.nr.|ignored|year|error|error|
+//! |o§gregm|month from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregm<br/>and seq.nr.|ignored|month (1-12)|error|error|
+//! |o§gregd|day from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregd<br/>and seq.nr.|ignored|day (1-31)|error|error|
+    //! |o§gregt|date text<br/>from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregt<br/>and seq.nr.|A 3rd.<br/>operand<br/>is used as<br/>separator|A YYYYsMMsDD<br/>string where<br/>s is a<br/>separator,<br/>if any|error|error|
 //!
 //! Note: the **o,§sub** operator takes 4 arguments:<br/>
 //! - §sub: the operator's name;<br/>
@@ -175,11 +183,19 @@
 //! - the number or name of the sequence variable;<br/>
 //! - the number or name of the routine that can use both variables to decide if a replacement should happen.
 //!
-//! Note the **0,§split** operator takes 4 arguments:
+//! Note: the **0,§split** operator takes 4 arguments:
 //! - §split : the operator's name;<br/>
 //! - the source string;<br/>
 //! - the segment separator, like §;<br/>
 //! - the prefix of the numbered variable names the split segments will be assigned to.
+//!
+//! Note: the **o,§fmt** operator takes 4 arguments:<br/>
+//! - §fmt : the operator's name;<br/>
+//! - the number of fractal digits;<br/>
+//! - the fractal separator (default = .);<br/>
+//! - the thousands grouping separator (default: no grouping).
+//! This number format is only used for the final output of a script,
+//! or for output by the w or the +(concatenation) commands.
 //!
 //! ## Other operators
 //! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
@@ -2533,19 +2549,26 @@ pub(crate) mod opr_funcs {
             })
     }
 
-    pub fn get_version(_opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn get_version(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-        let version_nums: Vec<&str> = VERSION.split(CH_SEPA_VERSION).collect();
 
         *result_value = if operands.len() == 0 {
             ValueType::Text(VERSION.to_string())
         } else {
-            match operands[0].get_num_value(0_f64) {
-                0_f64 => ValueType::Text(VERSION.to_string()),
-                1_f64 => ValueType::Text(version_nums.get(0).unwrap_or(&"0").to_string()),
-                2_f64 => ValueType::Text(version_nums.get(1).unwrap_or(&"0").to_string()),
-                3_f64 => ValueType::Text(version_nums.get(2).unwrap_or(&"0").to_string()),
-                _ => ValueType::Text(VERSION.to_string()),
+            let version_nums: Vec<&str> = VERSION.split(CH_SEPA_VERSION).collect();
+
+            match operands[0].get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Number(num) => match num {
+                    0_f64 => ValueType::Text(VERSION.to_string()),
+                    1_f64 => ValueType::Text(version_nums.get(0).unwrap_or(&"0").to_string()),
+                    2_f64 => ValueType::Text(version_nums.get(1).unwrap_or(&"0").to_string()),
+                    3_f64 => ValueType::Text(version_nums.get(2).unwrap_or(&"0").to_string()),
+                    _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                },
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         };
 
@@ -2553,17 +2576,40 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn set_number_format(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let prev_format = shuttle.number_format.clone();
 
         for (count, op) in operands.iter().enumerate() {
             match count {
+                /*
                 0 => shuttle.number_format.set_fractal_digits(op.get_num_value(0f64)),
                 1 => shuttle.number_format.set_fractal_separator(op.get_string_value(".".to_string())),
                 2 => shuttle.number_format.set_thousands_separator(op.get_string_value(",".to_string())),
+                _ => (),
+                */
+
+                0 => match op.get_value() {
+                    ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                    ValueType::Number(num) => shuttle.number_format.set_fractal_digits(num),
+                    ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                    ValueType::Error(s_err) => return Err(s_err),
+                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+                },
+                1 => match op.get_value() {
+                    ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                    ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
+                    ValueType::Text(txt) => shuttle.number_format.set_fractal_separator(txt),
+                    ValueType::Error(s_err) => return Err(s_err),
+                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+                },
+                2 => match op.get_value() {
+                    ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                    ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
+                    ValueType::Text(txt) => shuttle.number_format.set_thousands_separator(txt),
+                    ValueType::Error(s_err) => return Err(s_err),
+                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+                },
                 _ => (),
             }
         }
@@ -2774,6 +2820,7 @@ pub(crate) mod opr_funcs {
             _ =>  {
                 for (count, opd) in operands.iter().enumerate() {
                     match opd.get_value() {
+                        ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                         ValueType::Number(n) => if n >= 0_f64 {
                             match count {
                                 0 => year = n as u32,
@@ -2784,7 +2831,9 @@ pub(crate) mod opr_funcs {
                         } else {
                             return Err(ScriptError::InvalidOperand(*opr_mark));
                         },
-                        _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                        ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                        ValueType::Error(s_err) => return Err(s_err),
+                        ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                     }
                 }
 
@@ -2810,9 +2859,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn gregorian_seq(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 3 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 3)?;
         
         let mut year_float = 0_f64;
         let mut year = 0_u32;
@@ -2821,6 +2868,7 @@ pub(crate) mod opr_funcs {
 
         for (count, opd) in operands.iter().enumerate() {
             match opd.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Number(n) => if n >= 0_f64 {
                     match count {
                         0 => {
@@ -2834,7 +2882,9 @@ pub(crate) mod opr_funcs {
                 } else {
                     return Err(ScriptError::InvalidOperand(*opr_mark));
                 },
-                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -3103,13 +3153,14 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn gregorian_date_item(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, item: DateInfoItem) -> Result<GregorianDateInfo, ScriptError> {
-        if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let seq_nr = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Number(num) => num,
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let date_info_opt = match shuttle.last_calculated_gregorian_day {
@@ -3175,9 +3226,11 @@ pub(crate) mod opr_funcs {
     pub fn gregorian_text(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         let sepa = if operands.len() > 1 {
             match operands[1].get_value() {
-                ValueType::Text(t) => t,
                 ValueType::Empty => String::new(),
-                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
+                ValueType::Text(t) => t,
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         } else {
             String::new()
@@ -5967,8 +6020,9 @@ mod tests {
 
         #[test]
         fn x_enum_opr_version_invalid_operand() {
-            const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-            assert_eq!(VERSION.to_string(), Interpreter::execute_with_mocked_io("o§version 8".to_string()).unwrap().string_representation);
+            assert_eq!(
+                Err(ScriptError::InvalidOperand('o')),
+                Interpreter::execute_with_mocked_io("o§version 8".to_string()));
         }
 
         #[test]
@@ -7406,7 +7460,7 @@ mod tests {
         #[test]
         fn x_gregt_erroneous_arg_0() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::NonNumericOperand('o')),
                 Interpreter::execute_with_mocked_io("o§gregt §zupla".to_string())
             );
         }
@@ -7414,7 +7468,7 @@ mod tests {
         #[test]
         fn x_gregt_erroneous_separator_arg() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('O')),
+                Err(ScriptError::NonTextOperand('O')),
                 Interpreter::execute_with_mocked_io("O§gregt 739708 0".to_string())
             );
         }
