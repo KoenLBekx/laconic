@@ -1,6 +1,7 @@
+//{ Crate documentation
 //! # Operators
 //! <style>td:first-child{font-size: 2.2rem;}</style>
-//! ## Basic arithmetic operators
+//! ## Arithmetic operators
 //! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
 //! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 //! |~|unary<br/>minus|1|ignored|number|error|error|
@@ -18,6 +19,10 @@
 //! |o§r|rounding|1|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|error|error|
 //! |a|abs|1|ignored|number<br/>absolute<br/>value|error|error|
 //! |l|logarithm<br/>from 2nd<br/>operand<br/>in base<br/>1st operand|2|ignored|number|error|error|
+//! |s|sign|1|tested also|1 if all<br/>operands are<br/>positive,<br/>-1 if all are<br/>negative,<br/>0 if mixed.|error|error|
+//! |b|input<br/>number<br/>base|1|ignored|the new<br/>base|error|error|
+//! |b,|output<br/>number<br/>base|1|ignored|the new<br/>base|error|error|
+//! |n|parse<br/>number<br/>from<br/>string|1|ignored|number|error|error|
 //!
 //! ## Trigonometric operators
 //! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
@@ -197,32 +202,43 @@
 //! This number format is only used for the final output of a script,
 //! or for output by the w or the +(concatenation) commands.
 //!
+//! ## Flow-related operators
+//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |?|if|2:<br/>1. condition<br/>2. operator<br/>executed<br/>if true<br/>3. operator<br/>executed<br/>if false|ignored|value of<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
+//! |W|while|2:<br/>1. condition<br/>2. operator<br/>to be<br/>executed|executed<br/>also|value of<br/>last<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
+//! |F|for|5:<br/>1. start count<br/>2. end count<br/>3. increment<br/>4. counter<br/>variable<br/>number<br/>or name<br/>5. operator<br/>to be<br/>executed|executed<br/>also|value of<br/>last<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
+//! |B|break<br/>while<br/>or for<br/>loop|1:<br/>1 = current<br/>loop;<br/>higher = nth-1<br/>nesting<br/>loop|ignored|1st<br/>operand|error|error|
+//! |R|definition<br/>of routine<br/>with new<br/>scope|2:<br/>1. routine<br/>name or<br/>number;<br/>2. operator<br/>to be<br/>executed|included<br/>in definition|name or<br/>number|error|error|
+//! |R,|definition<br/>of routine<br/>using scope<br/>of caller|2:<br/>1. routine<br/>name or<br/>number;<br/>2. operator<br/>to be<br/>executed|included<br/>in definition|name or<br/>number|error|error|
+//! |X|execute<br/>routine|1:<br/>routine<br/>name or<br/>number|pushed<br/>on stack as<br/>arguments|result of<br/>routine's<br/>last<br/>top-level<br/>operator|error|error|
+//!
+//! ## I/O operators
+//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+//! |r|read<br/>from<br/>stdin|0|ignored|if input<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|n/a|n/a|
+//! |r,|read<br/>from<br/>file|1:<br/>file<br/>path|ignored|if input<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|n/a|n/a|
+//! |w|write<br/>to<br/>stdout|1|written<br/>also|empty|empty|depends on<br/>Z§ign|
+//! |w,|write<br/>to<br/>file,<br/>overwriting<br/>it|2|ignored|nr. of<br/>characters<br/>written|empty|depends on<br/>Z§ign|
+//!
 //! ## Other operators
 //! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
 //! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 //! |;|combines<br/>expressions|2|used|value of<br/>last one|empty|error|
-//! ||||||||
-//! ||||||||
-//! ||||||||
+//! |t|type|1|ignored|0 for empty,<br/>1 for number,<br/>2 for text,<br/>90 for error.|empty|depends on<br/>Z§ign|
+//! |N|number<br/>of operands<br/>of preceding<br/>same-level<br/>operator|0|ignored|number|n/a|n/a|
+//! |E|evaluate<br/>the expression<br/>in 1st<br/>operand<br/>(should<br/>be string)|1|ignored|evaluation<br/>result|empty|depends on<br/>Z§ign|
+//! |U|user-<br/>coded<br/>error|1:<br/>error<br/>message|ignored|error|error|error|
+//}
 
-//{ TODO: resolve TODO's in code.
+//{ TODOs
+//TODO: resolve TODO's in code.
 // TODO: fn main should also accept a -q (quiet) parameter, which would prevent the output of the
 //      final value to stdin.
 //      (Same as Z§quiet 1)
 // TODO: fn main should also accept a -c (continue) parameter, which would prevent an error
 //      condition to bubble up to the topmost operator and stop execution immediately.
 //      (Same as Z§ign 1).
-// TODO: have all operators have an acceptable behavior with less or more operands than standard.
-//      (Special attention for ':' !)
-// TODO: take ValueType::Text, ValueType::Error and ValueType::Empty into account for all operators.
-// TODO: If a sensible default or neutral value is available, accept empty value operands.
-//      (Like 0 for +, 1 for *, "" for + of strings, etc.)
-// TODO: all operator functions in mod opr_funcs should handle an operand
-//      having ValueType::Error(...) in an appropriate way,
-//      not always just return the ScriptError again.
-//      E.g. the w operator outputs the string representation of the ScriptError;
-//      the + operator should simply return the ScriptError again
-//      if all other operators are either Number or also Error.
 // TODO: the characters for the operators should be hard-coded only once: in constants.
 //      (done; not done follows below:)
 //      These constants can figure in a constant array of tuples
@@ -244,7 +260,6 @@
 //      )
 // TODO: use giantity ?
 //}
-
 
 use std::collections::HashMap;
 use std::fmt;
@@ -361,11 +376,13 @@ pub enum ScriptError {
     EmptyOperand(char),
     FileReadFailure{path: String, reason: String},
     InsufficientOperands(char),
+    InvalidNumberBase(f64),
     InvalidOperand(char),
     InvalidOperandMax(char),
     NegativeOperand(char),
     NonNumericOperand(char),
     NonTextOperand(char),
+    NumberParsingFailure(String),
     UnclosedBracketsAtEnd,
     UnexpectedClosingBracket{position: usize},
     UnexpectedClosingParenthesis,
@@ -1640,13 +1657,13 @@ pub(crate) mod opr_funcs {
         Ok(num * sign_factor)
     }
 
-    pub fn nop(opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn nop(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         // If still needed, parse the string representation to a number.
         match result_value {
             ValueType::Text(string_rep) => {
                 match parse_number(&string_rep, shuttle.input_base, true) {
                     Ok(num) => *result_value = ValueType::Number(num),
-                    Err(_) => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                    Err(msg) => return Err(ScriptError::NumberParsingFailure(msg)),
                 }
             },
             _ => (),
@@ -2627,26 +2644,26 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn sign(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let mut all_positive = true;
         let mut all_negative = true;
 
-        let mut opd_val: f64;
-
         for opd in &*operands {
-            opd_val = opd.get_num_value(0f64);
-
-            all_positive = all_positive && (opd_val > 0f64);
-            all_negative = all_negative && (opd_val < 0f64);
+            match opd.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Number(num) =>  {
+                    all_positive = all_positive && (num > 0f64);
+                    all_negative = all_negative && (num < 0f64);
+                },
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+            }
         }
 
         *result_value = ValueType::Number(
-            if all_positive && all_negative {
-                0f64
-            } else if all_positive {
+            if all_positive {
                 1f64
             } else if all_negative {
                 -1f64
@@ -2788,16 +2805,10 @@ pub(crate) mod opr_funcs {
             month_offset = 7 + month_offset - 1;
         }
 
-        /*
-        #[cfg(test)]
-        println!("month_offset: {}", month_offset % 7);
-        */
-
         (year_offset + month_offset + day) % 7
     }
 
     pub fn dow(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        
         let mut year = 0_u32;
         let mut month = 0_u32;
         let mut day = 0_u32;
@@ -3687,34 +3698,40 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn get_type(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
-
+        check_nr_operands(opr_mark, operands, 1)?;
         *result_value = ValueType::Number(operands[0].get_value().get_type_as_num());
 
         Ok(())
     }
 
     pub fn input_base(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                let num_val = e.get_num_value(0f64).trunc();
+        check_nr_operands(opr_mark, operands, 1)?;
 
-                // TODO: return Err if invalid base.
+        *result_value = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Number(num) => {
+                let num_val = num.trunc();
+
                 if (num_val > 1f64) && (num_val < f64::INFINITY) {
                     shuttle.input_base = num_val;
+                } else {
+                    return Err(ScriptError::InvalidNumberBase(num_val));
                 }
 
                 ValueType::Number(shuttle.input_base)
             },
+            ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         Ok(())
     }
 
     pub fn output_base(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        check_nr_operands(opr_mark, operands, 1)?;
+
+        /*
         *result_value = match operands.first() {
             None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
             Some(e) => {
@@ -3728,14 +3745,31 @@ pub(crate) mod opr_funcs {
                 ValueType::Number(shuttle.number_format.base)
             },
         };
+        */
+
+        *result_value = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Number(num) => {
+                let num_val = num.trunc();
+
+                if (num_val > 1f64) && (num_val < f64::INFINITY) {
+                    shuttle.number_format.set_base(num_val);
+                } else {
+                    return Err(ScriptError::InvalidNumberBase(num_val));
+                }
+
+                ValueType::Number(shuttle.input_base)
+            },
+            ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+        };
 
         Ok(())
     }
     
     pub fn write(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         for op in operands {
             let _ = shuttle.writer.write(
@@ -3752,15 +3786,13 @@ pub(crate) mod opr_funcs {
         let _ = shuttle.writer.flush();
         
         // TODO: provide sensible value in result_value.
-        *result_value = ValueType::Text(String::new());
+        *result_value = ValueType::Empty;
 
         Ok(())
     }
 
     pub fn eval(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         /*
         #[cfg(test)]
@@ -3769,6 +3801,8 @@ pub(crate) mod opr_funcs {
 
         // Only the first operand is used; subsequent ones are completely ignored.
         match operands[0].get_value() {
+            ValueType::Empty => *result_value = ValueType::Empty,
+            ValueType::Number(num) => *result_value = ValueType::Number(num),
             ValueType::Text(program) => {
                 match Interpreter::split_atoms(&program) {
                     Ok(atoms) =>  {
@@ -3791,10 +3825,8 @@ pub(crate) mod opr_funcs {
                     },
                 }
             },
-            ValueType::Number(num) => *result_value = ValueType::Number(num),
-            ValueType::Empty => *result_value = ValueType::Empty,
             ValueType::Error(s_err) => *result_value = ValueType::Error(s_err),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }
         
         Ok(())
@@ -3815,11 +3847,10 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn read_file(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Text(path) => {
                 let os_path = OsStr::new(path.as_str());
 
@@ -3828,27 +3859,30 @@ pub(crate) mod opr_funcs {
                     Err(msg) => return Err(ScriptError::FileReadFailure{path: path, reason: msg.to_string()}),
                 }
             },
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }
 
         Ok(())
     }
 
     pub fn write_file(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let content = match operands[1].get_value() {
-            ValueType::Text(txt) => txt,
-            ValueType::Number(num) => shuttle.number_format.format(num),
             ValueType::Empty => NO_VALUE.to_string(),
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Number(num) => shuttle.number_format.format(num),
+            ValueType::Text(txt) => txt,
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let len = content.len();
 
         match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
             ValueType::Text(path) => {
                 let os_path = OsStr::new(path.as_str());
 
@@ -3857,27 +3891,28 @@ pub(crate) mod opr_funcs {
                     Err(msg) => return Err(ScriptError::FileReadFailure{path: path, reason: msg.to_string()}),
                 }
             },
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }
 
         Ok(())
     }
 
-    pub fn to_number(_opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = if operands.len() == 0 {
-            ValueType::Number(f64::NAN)
-        } else {
-            // Only read operands[0]; ignore further operands.
-            match operands[0].get_value() {
-                ValueType::Number(n) => ValueType::Number(n),
-                ValueType::Text(t) => {
-                    match parse_number(&t, shuttle.input_base, false) {
-                        Ok(n) => ValueType::Number(n),
-                        Err(_) => ValueType::Number(f64::NAN),
-                    }
-                },
-                _ => ValueType::Number(f64::NAN),
-            }
+    pub fn to_number(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        check_nr_operands(opr_mark, operands, 1)?;
+
+        // Only read operands[0]; ignore further operands.
+        *result_value = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Number(n) => ValueType::Number(n),
+            ValueType::Text(t) => {
+                match parse_number(&t, shuttle.input_base, false) {
+                    Ok(n) => ValueType::Number(n),
+                    Err(err) => return Err(ScriptError::NumberParsingFailure(err.clone())),
+                }
+            },
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         Ok(())
@@ -3890,9 +3925,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn exec_while(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut outcome = 0f64;
         let mut op_count: usize;
@@ -3946,9 +3979,7 @@ pub(crate) mod opr_funcs {
     }
     
     pub fn exec_for(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 5 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 5)?;
 
         let mut outcome = 0f64;
         let mut counter_val = 0f64;
@@ -3963,17 +3994,24 @@ pub(crate) mod opr_funcs {
             return Err(ScriptError::InsufficientOperands(*opr_mark));
         }
 
-        for (op_count, op) in operands.iter_mut().enumerate() {
+        for (op_count, op) in operands[0..=3].iter_mut().enumerate() {
             if op_count <= 3 {
                 op.operate(shuttle)?;
             }
 
-            match op_count {
-                0 => counter_val = op.get_num_value(0f64),
-                1 => end_val = op.get_num_value(0f64),
-                2 => increment = op.get_num_value(1f64),
-                3 => counter_var = op.get_value(),
-                _ => (),
+            match op.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Number(num) => match op_count {
+                    0 => counter_val = num,
+                    1 => end_val = num,
+                    2 => increment = num,
+                    3 => counter_var = ValueType::Number(num),
+                    _ => (),
+                },
+                ValueType::Text(txt) if op_count == 3 => counter_var = ValueType::Text(txt),
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -4031,17 +4069,18 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn set_break(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.is_empty() {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 1)?;
 
         let target = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Number(num) => num ,
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         if target < 0_f64 {
-            return Err(ScriptError::InvalidOperand(*opr_mark));
+            return Err(ScriptError::NegativeOperand(*opr_mark));
         }
 
         shuttle.break_target = target as u32;
@@ -4052,9 +4091,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn exec_if(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        if operands.len() < 3 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 3)?;
 
         let mut outcome = ValueType::Empty;
         let mut use_second = true;
@@ -4096,11 +4133,7 @@ pub(crate) mod opr_funcs {
     }
 
     fn define_routine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, in_new_variables_scope: bool) -> Result<(), ScriptError> {
-        if operands.len() < 2 {
-            *result_value = ValueType::Empty;
-            
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut name = ValueType::Empty;
         let mut expressions = Vec::<Expression>::new();
@@ -4109,7 +4142,13 @@ pub(crate) mod opr_funcs {
             match op_tuple {
                 (0, op) => {
                     op.operate(shuttle)?;
-                    name = op.get_value();
+                    name = match op.get_value() {
+                        ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                        ValueType::Number(num) => ValueType::Number(num),
+                        ValueType::Text(txt) => ValueType::Text(txt),
+                        ValueType::Error(s_err) => return Err(s_err),
+                        ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+                    };
                 },
                 (_, op) => {
                     expressions.push(op.clone());
@@ -4118,7 +4157,7 @@ pub(crate) mod opr_funcs {
         }
 
         let body = match expressions.len() {
-            0 => Expression::new(OPEMP, 0), // Should never occur after test on operands.len() above
+            0 => Expression::new(OPEMP, 0), // Should never occur after test check_nr_operands above
             1 => expressions.pop().unwrap_or(Expression::new(OPEMP, 0)),
             _ => {
                 let mut combinator = Expression::new(OPCMB, 0);
@@ -4138,11 +4177,9 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn exec_routine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        *result_value = ValueType::Empty;
+        check_nr_operands(opr_mark, operands, 1)?;
 
-        if operands.len() < 1 {
-            return Err(ScriptError::InsufficientOperands(*opr_mark));
-        }
+        *result_value = ValueType::Empty;
 
         // Returns empty value.
         let mut found_routine = Routine{
@@ -4172,10 +4209,15 @@ pub(crate) mod opr_funcs {
             shuttle.nums.push(HashMap::new());
         }
 
-        found_routine.body.operate(shuttle)?;
+        let call_result =  found_routine.body.operate(shuttle);
 
         if found_routine.in_new_variables_scope {
             shuttle.nums.pop().unwrap_or(HashMap::<ValueType, ValueType>::new());
+        }
+
+        match call_result {
+            Ok(_) => (),
+            Err(s_err) => return Err(s_err),
         }
 
         *result_value = found_routine.body.get_value();
@@ -6435,6 +6477,20 @@ mod tests {
         }
 
         #[test]
+        fn x_base_negative() {
+            assert_eq!(
+                Err(ScriptError::InvalidNumberBase(-2_f64)),
+                Interpreter::execute_with_mocked_io("b~2 1110.1".to_string()));
+        }
+
+        #[test]
+        fn x_obase_negative() {
+            assert_eq!(
+                Err(ScriptError::InvalidNumberBase(-2_f64)),
+                Interpreter::execute_with_mocked_io("b,~2 1110.1".to_string()));
+        }
+
+        #[test]
         fn x_obase2() {
             assert_eq!("1000110.000000".to_string(), Interpreter::execute_with_mocked_io("b,2 70".to_string()).unwrap().string_representation);
         }
@@ -6630,8 +6686,10 @@ mod tests {
         }
 
         #[test]
-        fn x_to_num_string_valid_base10_spaces() {
-            assert!(Interpreter::execute_with_mocked_io("b50 n[s1 72]".to_string()).unwrap().numeric_value.is_nan());
+        fn x_to_num_string_invalid_base10_spaces() {
+            assert_eq!(
+                Err(ScriptError::NumberParsingFailure("Digit value too high for base of input number".to_string())),
+                Interpreter::execute_with_mocked_io("b50 n[s1 72]".to_string()));
         }
 
         #[test]
@@ -6681,32 +6739,30 @@ mod tests {
 
         #[test]
         fn x_to_num_empty() {
-            assert!(Interpreter::execute_with_mocked_io("n€".to_string()).unwrap().numeric_value.is_nan());
+            assert_eq!(
+                Err(ScriptError::EmptyOperand('n')),
+                Interpreter::execute_with_mocked_io("n€".to_string()));
         }
 
         #[test]
         fn x_to_num_string_invalid() {
-            assert!(Interpreter::execute_with_mocked_io("n[stwenty two]".to_string()).unwrap().numeric_value.is_nan());
+            assert_eq!(
+                Err(ScriptError::NumberParsingFailure("Illegal spaces in number input".to_string())),
+                Interpreter::execute_with_mocked_io("n[stwenty two]".to_string()));
         }
 
         #[test]
         fn x_to_num_string_invalid_non_leading_minus() {
-            assert!(Interpreter::execute_with_mocked_io("n§25-8".to_string()).unwrap().numeric_value.is_nan());
+            assert_eq!(
+                Err(ScriptError::NumberParsingFailure("Non-leading sign indicator".to_string())),
+                Interpreter::execute_with_mocked_io("n§25-8".to_string()));
         }
 
         #[test]
         fn x_to_num_string_invalid_non_leading_tilde() {
-            assert!(Interpreter::execute_with_mocked_io("n§25~8".to_string()).unwrap().numeric_value.is_nan());
-        }
-
-        #[test]
-        fn x_to_num_string_num_nan() {
-            assert!(Interpreter::execute_with_mocked_io("nn€".to_string()).unwrap().numeric_value.is_nan());
-        }
-
-        #[test]
-        fn x_adding_nan() {
-            assert!(Interpreter::execute_with_mocked_io("+20 n€".to_string()).unwrap().numeric_value.is_nan());
+            assert_eq!(
+                Err(ScriptError::NumberParsingFailure("Non-leading sign indicator".to_string())),
+                Interpreter::execute_with_mocked_io("n§25~8".to_string()));
         }
 
         #[test]

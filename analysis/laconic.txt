@@ -10,6 +10,7 @@ LACONIC
 		//				about a specific operator (given in next parameter).
 
 		Ideas for later versions:
+			- Z,§settignName would give the value of a setting.
 			- provide operators or constants for conversion between imperial and continental
 				quantities for size, volume, speed, temperature, weight e.a.
 			- provide calculations with complex numbers.
