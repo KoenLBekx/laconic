@@ -232,7 +232,7 @@
 //}
 
 //{ TODOs
-//TODO: resolve TODO's in code.
+// TODO: resolve TODO's in code.
 // TODO: fn main should also accept a -q (quiet) parameter, which would prevent the output of the
 //      final value to stdin.
 //      (Same as Z§quiet 1)
@@ -248,7 +248,6 @@
 // TODO: make private whatever can remain private.
 // TODO: include the explanations in analysis/laconic.txt in markdown format as documentation
 //      comments.
-// TODO: Replace ScriptError::InvalidOperand by a series of way more specific errors.
 // TODO: The ScriptError variants that carry an operator mark as char should carry a string
 //      so the full enumerated operator name can be passed, e.g.: "o,§dow".
 // TODO: check using cargo clippy.
@@ -365,23 +364,28 @@ impl fmt::Debug for Atom {
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum ScriptError {
+    ConflictingNumberPartSeparators,
     DigitParsingFailure{position: usize, reason: String},
     DivideByZero(char),
     EmptyOperand(char),
     FileReadFailure{path: String, reason: String},
+    FindStringLongerThanSourceString(char),
     InsufficientOperands(char),
+    InvalidDatePart(char),
+    InvalidDateSequenceNumber(String),
     InvalidNumberBase(f64),
-    InvalidOperand(char),
     InvalidOperandMax(char),
+    InvalidVersionPart(f64),
     LogarithmOfZeroOrNegativeNumberIsNotSupported,
-    NegativeOperand(char),
     NonIntegerPowerOfNegativeNumberIsNotSupported,
     NonNumericOperand(char),
     NonTextOperand(char),
     NumberParsingFailure(String),
+    PositionPastLastPossible(usize),
     UnclosedBracketsAtEnd,
     UnexpectedClosingBracket{position: usize},
     UnexpectedClosingParenthesis,
+    UnexpectedNegativeOperand(char),
     UnknownBracketContentTypeMarker{position: usize, marker: char},
     UnknownConstant(String),
     UnknownNamedOperator(String),
@@ -2027,15 +2031,22 @@ pub(crate) mod opr_funcs {
     pub fn atan2(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         check_nr_operands(opr_mark, operands, 2)?;
 
-        let num_y = match operands[0].get_value() {
-            ValueType::Number(num) => num,
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
-        };
+        let mut num_y = 1_f64;
+        let mut num_x = 1_f64;
 
-        let num_x = match operands[1].get_value() {
-            ValueType::Number(num) => num,
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
-        };
+        for (count, opd) in operands[0..=1].iter().enumerate() {
+            match opd.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Number(num) => match count {
+                    0 => num_y = num,
+                    1 => num_x = num,
+                    _ => (),
+                },
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+            };
+        }
 
         *result_value = ValueType::Number(num_y.atan2(num_x));
 
@@ -2591,7 +2602,7 @@ pub(crate) mod opr_funcs {
                     1_f64 => ValueType::Text(version_nums.get(0).unwrap_or(&"0").to_string()),
                     2_f64 => ValueType::Text(version_nums.get(1).unwrap_or(&"0").to_string()),
                     3_f64 => ValueType::Text(version_nums.get(2).unwrap_or(&"0").to_string()),
-                    _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                    _ => return Err(ScriptError::InvalidVersionPart(num)),
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
@@ -2645,7 +2656,7 @@ pub(crate) mod opr_funcs {
         || (shuttle.number_format.fractal_separator == shuttle.number_format.digit_separator)
         || (shuttle.number_format.thousands_separator == shuttle.number_format.digit_separator) {
             shuttle.number_format = prev_format;
-            return Err(ScriptError::InvalidOperand(*opr_mark));
+            return Err(ScriptError::ConflictingNumberPartSeparators);
         }
 
         *result_value = ValueType::Empty;
@@ -2782,17 +2793,23 @@ pub(crate) mod opr_funcs {
         }
 
         let year = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Number(num) => num,
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let month = match operands[1].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Number(num) => num,
-            _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+            ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         if (year < 0_f64) || (month < 1_f64) || (month > 12_f64) {
-            return Err(ScriptError::InvalidOperand(*opr_mark));
+            return Err(ScriptError::InvalidDatePart(*opr_mark));
         }
 
         *result_value = ValueType::Number(days_in_month(month as u32, is_leap_year(year)) as f64);
@@ -2850,7 +2867,7 @@ pub(crate) mod opr_funcs {
                                 _ => (),
                             }
                         } else {
-                            return Err(ScriptError::InvalidOperand(*opr_mark));
+                            return Err(ScriptError::UnexpectedNegativeOperand(*opr_mark));
                         },
                         ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                         ValueType::Error(s_err) => return Err(s_err),
@@ -2859,11 +2876,11 @@ pub(crate) mod opr_funcs {
                 }
 
                 if (month) == 0 || (month > 12) {
-                    return Err(ScriptError::InvalidOperand(*opr_mark));
+                    return Err(ScriptError::InvalidDatePart(*opr_mark));
                 }
 
                 if (day == 0) || (day > 31) {
-                    return Err(ScriptError::InvalidOperand(*opr_mark));
+                    return Err(ScriptError::InvalidDatePart(*opr_mark));
                 }
             },
         }
@@ -2901,7 +2918,7 @@ pub(crate) mod opr_funcs {
                         _ => (),
                     }
                 } else {
-                    return Err(ScriptError::InvalidOperand(*opr_mark));
+                    return Err(ScriptError::UnexpectedNegativeOperand(*opr_mark));
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
@@ -2910,11 +2927,11 @@ pub(crate) mod opr_funcs {
         }
 
         if (month) == 0 || (month > 12) {
-            return Err(ScriptError::InvalidOperand(*opr_mark));
+            return Err(ScriptError::InvalidDatePart(*opr_mark));
         }
 
         if (day == 0) || (day > 31) {
-            return Err(ScriptError::InvalidOperand(*opr_mark));
+            return Err(ScriptError::InvalidDatePart(*opr_mark));
         }
 
         // One leap year
@@ -3213,7 +3230,7 @@ pub(crate) mod opr_funcs {
                         shuttle.last_calculated_gregorian_day = Some(date_info.clone());
                         date_info
                     },
-                    Err(_) => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                    Err(msg) => return Err(ScriptError::InvalidDateSequenceNumber(msg)),
                 }
             }
         };
@@ -3298,13 +3315,16 @@ pub(crate) mod opr_funcs {
             0_usize
         } else {
             match operands[1].get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Number(num) => num as usize,
-                _ => return Err(ScriptError::InvalidOperand(*opr_mark)),
+                ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         };
 
         if pos >= characters.len() {
-            return Err(ScriptError::InvalidOperand(*opr_mark));
+            return Err(ScriptError::PositionPastLastPossible(pos));
         }
 
         *result_value = ValueType::Number(characters[pos] as u32 as f64);
@@ -3379,7 +3399,7 @@ pub(crate) mod opr_funcs {
         let find_len = find_characters.len();
 
         if find_len > source_len {
-            return Err(ScriptError::InvalidOperand(*opr_mark));
+            return Err(ScriptError::FindStringLongerThanSourceString(*opr_mark));
         }
 
         let start_pos = if operands.len() >= 3 {
@@ -3397,7 +3417,7 @@ pub(crate) mod opr_funcs {
         let last_start_pos = source_len - find_len;
 
         if start_pos > last_start_pos {
-            return Err(ScriptError::InvalidOperand(*opr_mark));
+            return Err(ScriptError::PositionPastLastPossible(start_pos));
         }
 
         if (find_len == 0_usize) || (source_len == 0_usize) {
@@ -3444,7 +3464,7 @@ pub(crate) mod opr_funcs {
         let find_len = find_characters.len();
 
         if find_len > source_len {
-            return Err(ScriptError::InvalidOperand(*opr_mark));
+            return Err(ScriptError::FindStringLongerThanSourceString(*opr_mark));
         }
 
         let repl_characters: Vec<char> = match operands[2].get_value() {
@@ -3604,7 +3624,7 @@ pub(crate) mod opr_funcs {
             ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Number(num) => {
                 if num < 0_f64 {
-                    return Err(ScriptError::NegativeOperand(*opr_mark));
+                    return Err(ScriptError::UnexpectedNegativeOperand(*opr_mark));
                 } else {
                     num as usize
                 }
@@ -3615,7 +3635,7 @@ pub(crate) mod opr_funcs {
         };
 
         if start_pos > characters.len() {
-            return Err(ScriptError::InvalidOperand(*opr_mark));
+            return Err(ScriptError::PositionPastLastPossible(start_pos));
         }
 
         let sub_len = if operands.len() >= 3 {
@@ -3623,7 +3643,7 @@ pub(crate) mod opr_funcs {
                 ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Number(num) => {
                     if num < 0_f64 {
-                        return Err(ScriptError::NegativeOperand(*opr_mark));
+                        return Err(ScriptError::UnexpectedNegativeOperand(*opr_mark));
                     } else {
                         num as usize
                     }
@@ -3639,7 +3659,7 @@ pub(crate) mod opr_funcs {
         let end_pos_excl = start_pos + sub_len;
 
         if end_pos_excl > characters.len() {
-            return Err(ScriptError::InvalidOperand(*opr_mark));
+            return Err(ScriptError::PositionPastLastPossible(end_pos_excl));
         }
 
         *result_value = ValueType::Text(characters[start_pos..end_pos_excl].iter().collect());
@@ -4090,7 +4110,7 @@ pub(crate) mod opr_funcs {
         };
 
         if target < 0_f64 {
-            return Err(ScriptError::NegativeOperand(*opr_mark));
+            return Err(ScriptError::UnexpectedNegativeOperand(*opr_mark));
         }
 
         shuttle.break_target = target as u32;
@@ -6085,7 +6105,7 @@ mod tests {
         #[test]
         fn x_enum_opr_version_invalid_operand() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::InvalidVersionPart(8_f64)),
                 Interpreter::execute_with_mocked_io("o§version 8".to_string()));
         }
 
@@ -6878,7 +6898,7 @@ mod tests {
         #[test]
         fn x_sub_negative_start_pos() {
             assert_eq!(
-                Err(ScriptError::NegativeOperand('O')),
+                Err(ScriptError::UnexpectedNegativeOperand('O')),
                 Interpreter::execute_with_mocked_io("O§sub §Zupla ~3".to_string()));
         }
 
@@ -6899,7 +6919,7 @@ mod tests {
         #[test]
         fn x_sub_start_pos_is_source_length_but_more_chars_requested() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::PositionPastLastPossible(6)),
                 Interpreter::execute_with_mocked_io("o,§sub §Zupla 5 1".to_string()));
         }
 
@@ -6920,7 +6940,7 @@ mod tests {
         #[test]
         fn x_sub_length_is_too_great() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::PositionPastLastPossible(6)),
                 Interpreter::execute_with_mocked_io("o,§sub §Zupla 1 5".to_string()));
         }
 
@@ -6959,14 +6979,14 @@ mod tests {
         #[test]
         fn x_ucv_second_operand_is_string() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('O')),
+                Err(ScriptError::NonNumericOperand('O')),
                 Interpreter::execute_with_mocked_io("O§ucv §Oostende §three".to_string()));
         }
 
         #[test]
         fn x_ucv_index_beyond_string_length() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('O')),
+                Err(ScriptError::PositionPastLastPossible(20)),
                 Interpreter::execute_with_mocked_io("O§ucv §Oostende 20".to_string()));
         }
 
@@ -6998,7 +7018,7 @@ mod tests {
         #[test]
         fn x_find_source_string_length_zero_second_has_chars() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::FindStringLongerThanSourceString('o')),
                 Interpreter::execute_with_mocked_io("o,§find § §www 0".to_string()));
         }
 
@@ -7058,7 +7078,7 @@ mod tests {
         #[test]
         fn x_find_start_pos_beyond_last_possible() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::PositionPastLastPossible(9)),
                 Interpreter::execute_with_mocked_io("o,§find §Metapontium §ium 9".to_string()));
         }
 
@@ -7713,7 +7733,7 @@ mod tests {
         #[test]
         fn x_fmt_invalid() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('o')),
+                Err(ScriptError::ConflictingNumberPartSeparators),
                 Interpreter::execute_with_mocked_io("o,§fmt 3 §, §,".to_string())
             );
         }
@@ -7767,7 +7787,7 @@ mod tests {
         #[test]
         fn x_gregn_string_year() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('O')),
+                Err(ScriptError::NonNumericOperand('O')),
                 Interpreter::execute_with_mocked_io("O§gregn §2000 5".to_string())
             );
         }
@@ -7775,7 +7795,7 @@ mod tests {
         #[test]
         fn x_gregn_string_month() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('O')),
+                Err(ScriptError::NonNumericOperand('O')),
                 Interpreter::execute_with_mocked_io("O§gregn 2000 §5".to_string())
             );
         }
@@ -7783,7 +7803,7 @@ mod tests {
         #[test]
         fn x_gregn_year_negative() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('O')),
+                Err(ScriptError::InvalidDatePart('O')),
                 Interpreter::execute_with_mocked_io("O§gregn ~2 5".to_string())
             );
         }
@@ -7791,7 +7811,7 @@ mod tests {
         #[test]
         fn x_gregn_month_0() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('O')),
+                Err(ScriptError::InvalidDatePart('O')),
                 Interpreter::execute_with_mocked_io("O§gregn 1980 0".to_string())
             );
         }
@@ -7799,7 +7819,7 @@ mod tests {
         #[test]
         fn x_gregn_month_13() {
             assert_eq!(
-                Err(ScriptError::InvalidOperand('O')),
+                Err(ScriptError::InvalidDatePart('O')),
                 Interpreter::execute_with_mocked_io("O§gregn 1980 13".to_string())
             );
         }
