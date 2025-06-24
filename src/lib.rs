@@ -252,12 +252,6 @@
 // TODO: The ScriptError variants that carry an operator mark as char should carry a string
 //      so the full enumerated operator name can be passed, e.g.: "o,§dow".
 // TODO: check using cargo clippy.
-// TODO: ^~8 /1 3 yields NaN, while it should yield -2.
-//          Is this due to f64 not being able to represent 1/3 exactly ?
-//      (The same goes for
-//          ^~32 /1 5
-//          ^~27 /1 3
-//      )
 // TODO: use giantity ?
 //}
 
@@ -379,7 +373,9 @@ pub enum ScriptError {
     InvalidNumberBase(f64),
     InvalidOperand(char),
     InvalidOperandMax(char),
+    LogarithmOfZeroOrNegativeNumberIsNotSupported,
     NegativeOperand(char),
+    NonIntegerPowerOfNegativeNumberIsNotSupported,
     NonNumericOperand(char),
     NonTextOperand(char),
     NumberParsingFailure(String),
@@ -392,6 +388,7 @@ pub enum ScriptError {
     UnknownOperator{position: usize, operator: char},
     UnknownRoutine(String),
     UserDefinedError(String),
+    ZeroOrNegativeLogarithmBaseIsNotSupported,
 }
 
 #[derive(Clone, Debug, PartialOrd)]
@@ -1753,13 +1750,18 @@ pub(crate) mod opr_funcs {
     
     pub fn power(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         check_nr_operands(opr_mark, operands, 2)?;
-        let mut outcome = 1f64;
+        let mut outcome = 1_f64;
 
         for (count, op) in operands.iter().enumerate() {
             match op.get_value() {
                 ValueType::Number(num) => match count {
                     0 => outcome = num,
-                    _ => outcome = outcome.powf(num),
+                    _ => {
+                        if (outcome < 0_f64) && (num.fract() != 0_f64) {
+                            return Err(ScriptError::NonIntegerPowerOfNegativeNumberIsNotSupported);
+                        }
+                        outcome = outcome.powf(num);
+                    },
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
@@ -2058,6 +2060,14 @@ pub(crate) mod opr_funcs {
                 ValueType::Error(s_err) => return Err(s_err),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
+        }
+
+        if base <= 0_f64 {
+            return Err(ScriptError::ZeroOrNegativeLogarithmBaseIsNotSupported);
+        }
+
+        if product <= 0_f64 {
+            return Err(ScriptError::LogarithmOfZeroOrNegativeNumberIsNotSupported);
         }
 
         *result_value = ValueType::Number(product.log(base));
@@ -5199,6 +5209,18 @@ mod tests {
         }
 
         #[test]
+        fn x_power_integer_of_negative_base() {
+            assert_eq!(9_f64, Interpreter::execute_with_mocked_io("^~3 2".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_power_fractal_of_negative_base() {
+            assert_eq!(
+                Err(ScriptError::NonIntegerPowerOfNegativeNumberIsNotSupported),
+                Interpreter::execute_with_mocked_io("^~3 /1 3".to_string()));
+        }
+
+        #[test]
         fn x_power_error_no_stop() {
             assert_eq!(
                 "Outcome: DivideByZero('/')".to_string(),
@@ -6357,6 +6379,20 @@ mod tests {
         #[test]
         fn x_log_ln() {
             assert_eq!(1f64, Interpreter::execute_with_mocked_io("Z§prec .000001 =1 le e".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_log_negative_base() {
+            assert_eq!(
+                Err(ScriptError::ZeroOrNegativeLogarithmBaseIsNotSupported),
+                Interpreter::execute_with_mocked_io("l ~10 ~1000".to_string()));
+        }
+
+        #[test]
+        fn x_log_of_negative_number() {
+            assert_eq!(
+                Err(ScriptError::LogarithmOfZeroOrNegativeNumberIsNotSupported),
+                Interpreter::execute_with_mocked_io("l 10 ~1000".to_string()));
         }
 
         #[test]
