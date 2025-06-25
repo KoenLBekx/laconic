@@ -50,7 +50,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			`´#@£€µ²³DdfGgHhIJjLPQquVz
+			`´#@£µ²³DdfGgHhIJjLPQquVz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent

@@ -218,7 +218,7 @@
 //! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 //! |r|read<br/>from<br/>stdin|0|ignored|if input<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|n/a|n/a|
 //! |r,|read<br/>from<br/>file|1:<br/>file<br/>path|ignored|if input<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|n/a|n/a|
-//! |w|write<br/>to<br/>stdout|1|written<br/>also|empty|empty|depends on<br/>Z§ign|
+//! |w|write<br/>to<br/>stdout|1|written<br/>also|number<br/>of bytes<br/>written|empty|depends on<br/>Z§ign|
 //! |w,|write<br/>to<br/>file,<br/>overwriting<br/>it|2|ignored|nr. of<br/>characters<br/>written|empty|depends on<br/>Z§ign|
 //!
 //! ## Other operators
@@ -392,6 +392,7 @@ pub enum ScriptError {
     UnknownOperator{position: usize, operator: char},
     UnknownRoutine(String),
     UserDefinedError(String),
+    WriteFailure(String),
     ZeroOrNegativeLogarithmBaseIsNotSupported,
 }
 
@@ -3373,9 +3374,6 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn find_in_string(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        // TODO: invalid, or impossible, operands shouldn't cause an Err to be returned, but a
-        // ValueType::Empty to be assigned.
-
         check_nr_operands(opr_mark, operands, 2)?;
 
         let characters: Vec::<char> = match operands[0].get_value() {
@@ -3761,22 +3759,6 @@ pub(crate) mod opr_funcs {
     pub fn output_base(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         check_nr_operands(opr_mark, operands, 1)?;
 
-        /*
-        *result_value = match operands.first() {
-            None => return Err(ScriptError::InsufficientOperands(*opr_mark)),
-            Some(e) => {
-                let num_val = e.get_num_value(0f64).trunc();
-
-                // TODO: return Err if invalid base.
-                if (num_val > 1f64) && (num_val < f64::INFINITY) {
-                    shuttle.number_format.set_base(num_val);
-                }
-
-                ValueType::Number(shuttle.number_format.base)
-            },
-        };
-        */
-
         *result_value = match operands[0].get_value() {
             ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Number(num) => {
@@ -3800,9 +3782,10 @@ pub(crate) mod opr_funcs {
     
     pub fn write(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         check_nr_operands(opr_mark, operands, 1)?;
+        let mut tot_written = 0_usize;
 
         for op in operands {
-            let _ = shuttle.writer.write(
+            match shuttle.writer.write(
                 (match op.get_value() {
                     ValueType::Empty => NO_VALUE.to_string(),   
                     ValueType::Number(num) => shuttle.number_format.format(num),
@@ -3810,13 +3793,15 @@ pub(crate) mod opr_funcs {
                     ValueType::Error(s_err) => format!("{:?}", s_err),
                     ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 }).as_bytes()
-            );
+            ) {
+                Ok(nr_bytes) => tot_written += nr_bytes,
+                Err(io_err) => return Err(ScriptError::WriteFailure(io_err.to_string())),
+            }
         }
 
         let _ = shuttle.writer.flush();
         
-        // TODO: provide sensible value in result_value.
-        *result_value = ValueType::Empty;
+        *result_value = ValueType::Number(tot_written as f64);
 
         Ok(())
     }
