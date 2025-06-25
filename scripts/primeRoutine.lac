@@ -1,0 +1,32 @@
+[c The number passed by stack is prime if the script returns 1, otherwise, the script returns the lowest factor found.]
+R
+	§isPrime
+	?
+		=k, 0
+		U[sisPrime: no number on stack]
+		;(
+			$0 k
+			$1 1
+			?
+				&
+					>v0 1
+					=0 %v0 2
+				$1 2
+				;(
+					$2 ^v0 .5
+					$3 3
+					W
+						&
+							!>v3 v2
+							=v1 1
+							;
+								$
+									1
+									?
+										= 0 % v0 v3
+										v3
+										1
+								+: 3 2
+				)
+			v1
+		)
