@@ -24,6 +24,7 @@ LACONIC
 					Su, Francis E., et al. “Why Does 0.999… = 1?.” Math Fun Facts
 					https://math.hmc.edu/funfacts/why-does-0-999-1/
 				)
+				(This may not be feasable using f64.)
 			- provide RegEx functionality in finding and replacing substrings.
 			- provide an operator
 					w,, filepath expression
@@ -34,12 +35,15 @@ LACONIC
 				based on arrays of variables.
 			- Provide an operator that outputs if there is precision loss
 				after a floating-point operation, and how much.
+			- Provide a second way of adding more operands than expected to an operator,
+				by preceding the supernumerous operands with '#'.
+				(The existing way is using parentheses.)
 
 		* Characters assigned (or to be assigned) to operators:
-			~+-*/%^$():,;=<>!&|?°€¶AaBbCcEeFiKklMmNnOopRrSsTtUvWwXxZ
+			~+-*/%^$():,;=<>!&|?°€¶AaBbCcEeFiKklMmNnOopqRrSsTtUVvWwXxZ
 
 		*	Implemented operators:
-			~+-*/%^$():,;=<>!&|?°€¶AaBbCcEeFiKklMmNnOopRrSsTt vWwXxZ
+			~+-*/%^$():,;=<>!&|?°€¶AaBbCcEeFiKklMmNnOoqpRrSsTtUVvWwXxZ
 
 		* Characters not to be used as operator:
 			' " \   	Interfere with command line syntax or string literals
@@ -50,7 +54,7 @@ LACONIC
 			whitespace
 
 		* Common characters not used yet:
-			`´#@£µ²³DdfGgHhIJjLPQquVz
+			`´#@£µ²³DdfGgHhIJjLPQuz
 			
 		Note the Unicode code point of some characters not on all keyboards:
 			^ 005E Circumflex accent
@@ -420,6 +424,19 @@ Operators
 
 	Strings
 
+		q exp
+				"Quote": converts an extression to a string.
+				Numbers are converted according to the number formatting settings specified by
+				o,§fmt ...
+
+				This is shorter than +§ (expression), which would do the same
+
+		q, exp
+				"Quote": converts an extression to a string.
+				Numbers are truncated towards zero and rendered without fractal digits.
+
+				This is shorter than +,§ (expression), which would do the same
+
 		+
 			The plus operator will concatenate strings if any of its operands is a string.
 			Concatenating with § or [s] (empty string) is a way of converting a number to a string.
@@ -517,9 +534,19 @@ Operators
 			The position returned is zero-based: the first character has position 0.
 
 			If the substring is not found in string, this operator returns €:
-			the empty value.
+			the empty value, so the way to test if the substring was found is to check
+			on the type of the result:
 
-			e.g.
+			E.g.:
+					$
+						§pos
+						O§find §Belgium §um
+					?
+						=1 tv§pos 
+						w+, [sFound at position ] v§pos
+						w[sNot found]
+
+			Some more examples:
 				O§find §Samovar §a
 					yields 1
 				o,§find §Samovar §a 3
@@ -530,8 +557,6 @@ Operators
 					yields 0
 				tO§find [sNo hay remedio] §hay
 					yields 1
-	
-			e.g.
 				O(§find §Samovar §a 3)
 					yields 5
 
@@ -1068,6 +1093,21 @@ Operators
 
 			If a 0 is passed, suppresses a previously set break target, if any.
 
+		?, opr1 oprIfError optional:oprIfOk
+
+			If operator opr1 is successful (no error),
+			then its outcome is returned,
+			else oprIfError's outcome.
+
+			If a third operator oprIfOkis present,
+			then that operator's outcome is returned if opr1 was successful.
+
+			Both the operators oprIfOk and oprIfError can make use of a V operator,
+			which will yield the result of the successful operation if called by oprIfOk,
+			or the error value if called by oprIfError.
+
+		V value of first operand of ?, operator.		
+
 	Routines
 
 		R defines a Routine which will have separate variables and can't use the variables of the calling code.
@@ -1330,11 +1370,9 @@ Operators
 				Converts a string expression to a number.
 
 				If the first operand is a string, the n operator converts it to a a number, if possible.
-				If not, the returned number is NaN and all calculations with it will return NaN.
-
-				If the first operand is empty, NaN will be returned also.
-
+				If the first operand is empty, 0 will be returned.
 				If the first operand is already a number, it will be returned as is.
+				If the first operand is an error value, that error will be returned or thrown depending on Z§ign.
 
 		o Operator designated by name, 2 operands
 

@@ -324,6 +324,8 @@ const OPEVL: char = 'E';
 const OPNLN: char = '¶';
 const OPALT: char = ',';
 const OPUER: char = 'U';
+const OPVAL: char = 'V';
+const OPQUO: char = 'q';
 
 // CH_SEPA_NUM can't be used as match pattern.
 const CH_NUM_SEPA: char = '_';
@@ -733,7 +735,9 @@ impl Expression {
             (OPAND, _) => &opr_funcs::and,
             (OPOR_, _) => &opr_funcs::or,
             (OPXOR, _) => &opr_funcs::xor,
-            (OPIF_, _) => &opr_funcs::exec_if,
+            (OPIF_, 0) => &opr_funcs::exec_if,
+            (OPIF_, 1) => &opr_funcs::exec_try,
+            (OPVAL, _) => &opr_funcs::try_value,
             (OPSET, _) => &opr_funcs::setting,
             (OPOP1, _) => &opr_funcs::enumerated_opr,
             (OPOP2, _) => &opr_funcs::enumerated_opr,
@@ -750,6 +754,8 @@ impl Expression {
             (OPEVL, _) => &opr_funcs::eval,
             (OPNLN, _) => &opr_funcs::newline,
             (OPUER, _) => &opr_funcs::user_error,
+            (OPQUO, 0) => &opr_funcs::quote,
+            (OPQUO, 1) => &opr_funcs::quote_trunc,
             _ => &opr_funcs::nop,
         };
 
@@ -983,6 +989,7 @@ struct Shuttle {
     text_io_handler: Box<dyn TextIOHandler>,
     last_calculated_gregorian_day: Option<GregorianDateInfo>,
     break_target: u32,
+    try_outcome_stack: Vec<ValueType>,
 
     #[cfg(test)]
     golden_ratio_calculations: u8,
@@ -1011,6 +1018,7 @@ impl Shuttle {
             text_io_handler,
             last_calculated_gregorian_day: None,
             break_target: 0_u32,
+            try_outcome_stack: Vec::new(),
 
             #[cfg(test)]
             golden_ratio_calculations: 0u8,
@@ -1307,7 +1315,7 @@ impl Interpreter {
                         OPNEG | OPINT | OPABS | OPVAR | OPMAS | OPNOT |
                         OPWRT | OPDEG | OPSIN | OPCOS | OPTAN | OPCON |
                         OPSIG | OPTYP | OPBAS | OPSTK | OPEXR | OP2NR |
-                        OPBRK | OPEVL | OPUER
+                        OPBRK | OPEVL | OPUER | OPQUO
                             => 1,
                         OPPLS | OPMNS | OPMUL | OPDIV | OPEXP | OPLOG |
                         OPMOD | OPAND | OPOR_ | OPXOR | OPASG | OPWHI |
@@ -1332,6 +1340,8 @@ impl Interpreter {
                         op_for_stack => {
                             if [OPOP1, OPOP2].contains(&op_for_stack) {
                                 needed_ops += (2 * alternative_marks_count) as usize;
+                            } else if (op_for_stack == OPIF_) && (alternative_marks_count > 0) {
+                                needed_ops = 2;
                             } else if (op_for_stack == OPWRT) && (alternative_marks_count > 0) {
                                 needed_ops = 2;
                             } else if (op_for_stack == OPREA) && (alternative_marks_count > 0) {
@@ -1410,7 +1420,7 @@ impl Interpreter {
     }
 
     fn is_known_operator(op: char) -> bool {
-        "~+-*/^lia%°SCTApec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRX€BE¶U".contains(op)
+        "~+-*/^lia%°SCTApec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRX€BE¶UVq".contains(op)
     }
 }
 
@@ -1687,27 +1697,35 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
+    fn concat_expressions(opr_mark: &mut char, operands: &mut [Expression], shuttle: &mut Shuttle, do_truncate: bool) -> Result<String, ScriptError> {
+        let mut string_outcome = "".to_string();
+
+        for op in operands {
+            string_outcome.push_str(
+                (match op.get_value() {
+                    ValueType::Empty => "".to_string(),   
+                    ValueType::Number(num) if do_truncate => format!("{}", num.trunc() as i64),
+                    ValueType::Number(num) => shuttle.number_format.format(num),
+                    ValueType::Text(txt) => txt,
+                    ValueType::Error(s_err) => format!("{:?}", s_err),
+                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+                }).as_str()
+            );
+        }
+
+        Ok(string_outcome)
+    }
+
     fn add_base(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, do_truncate: bool) -> Result<(), ScriptError> {
         check_nr_operands(opr_mark, operands, 2)?;
 
         if has_any_string_operands(operands) {
-            let mut string_outcome = "".to_string();
-
-            for op in operands {
-                string_outcome.push_str(
-                    (match op.get_value() {
-                        ValueType::Empty => "".to_string(),   
-                        ValueType::Number(num) if do_truncate => format!("{}", num.trunc() as i64),
-                        ValueType::Number(num) => shuttle.number_format.format(num),
-                        ValueType::Text(txt) => txt,
-                        ValueType::Error(_) => op.get_string_value("Error".to_string()),
-                        ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
-                    }).as_str()
-                );
-            }
-
-            *result_value = ValueType::Text(string_outcome);
-
+            *result_value = ValueType::Text(
+                match concat_expressions(opr_mark, operands, shuttle, do_truncate) {
+                    Ok(concatenated) => concatenated,
+                    Err(s_err) => return Err(s_err),
+                }
+            );
         } else {
             let mut num_outcome = 0f64;
 
@@ -2621,13 +2639,6 @@ pub(crate) mod opr_funcs {
 
         for (count, op) in operands.iter().enumerate() {
             match count {
-                /*
-                0 => shuttle.number_format.set_fractal_digits(op.get_num_value(0f64)),
-                1 => shuttle.number_format.set_fractal_separator(op.get_string_value(".".to_string())),
-                2 => shuttle.number_format.set_thousands_separator(op.get_string_value(",".to_string())),
-                _ => (),
-                */
-
                 0 => match op.get_value() {
                     ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                     ValueType::Number(num) => shuttle.number_format.set_fractal_digits(num),
@@ -2653,9 +2664,15 @@ pub(crate) mod opr_funcs {
             }
         }
 
-        if (shuttle.number_format.fractal_separator == shuttle.number_format.thousands_separator)
-        || (shuttle.number_format.fractal_separator == shuttle.number_format.digit_separator)
-        || (shuttle.number_format.thousands_separator == shuttle.number_format.digit_separator) {
+        let has_conflict = if shuttle.number_format.use_thousands_separator {
+            (shuttle.number_format.fractal_separator == shuttle.number_format.thousands_separator)
+            || (shuttle.number_format.fractal_separator == shuttle.number_format.digit_separator)
+            || (shuttle.number_format.thousands_separator == shuttle.number_format.digit_separator)
+        } else  {
+            shuttle.number_format.fractal_separator == shuttle.number_format.digit_separator
+        };
+
+        if has_conflict {
             shuttle.number_format = prev_format;
             return Err(ScriptError::ConflictingNumberPartSeparators);
         }
@@ -2695,6 +2712,27 @@ pub(crate) mod opr_funcs {
         );
 
         Ok(())
+    }
+
+    pub fn quote_base(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, do_truncate: bool) -> Result<(), ScriptError> {
+        check_nr_operands(opr_mark, operands, 1)?;
+
+        *result_value = ValueType::Text(
+            match concat_expressions(opr_mark, operands, shuttle, do_truncate) {
+                Ok(concatenated) => concatenated,
+                Err(s_err) => return Err(s_err),
+            }
+        );
+
+        Ok(())
+    }
+
+    pub fn quote(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        quote_base(opr_mark, result_value, operands, shuttle, false)
+    }
+
+    pub fn quote_trunc(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        quote_base(opr_mark, result_value, operands, shuttle, true)
     }
 
     pub fn get_unicode_chars(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
@@ -3918,7 +3956,7 @@ pub(crate) mod opr_funcs {
 
         // Only read operands[0]; ignore further operands.
         *result_value = match operands[0].get_value() {
-            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Empty => ValueType::Number(0_f64),
             ValueType::Number(n) => ValueType::Number(n),
             ValueType::Text(t) => {
                 match parse_number(&t, shuttle.input_base, false) {
@@ -4131,6 +4169,76 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = outcome;
+
+        Ok(())
+    }
+
+    pub fn exec_try(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        check_nr_operands(opr_mark, operands, 2)?;
+
+        let error_breaks_status_found = shuttle.error_breaks;
+        shuttle.error_breaks = false;
+
+        let had_success = match operands[0].operate(shuttle) {
+            Ok(_) =>  {
+                shuttle.try_outcome_stack.push(operands[0].get_value());
+
+                match operands[0].get_value() {
+                    ValueType::Empty => true,
+                    ValueType::Number(_) => true,
+                    ValueType::Text(_) => true,
+                    ValueType::Error(_) => false,
+                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+                }
+            },
+            Err(s_err) => {
+                shuttle.try_outcome_stack.push(ValueType::Error(s_err));
+
+                false
+            },
+        };
+
+        shuttle.error_breaks = error_breaks_status_found;
+
+        let op_to_execute = if had_success {
+            if operands.len() >= 3 {
+                2
+            } else {
+                0
+            }
+        } else {
+            1
+        };
+
+        let op_result = if op_to_execute > 0 {
+            operands[op_to_execute].operate(shuttle)
+        } else {
+            Ok(())
+        };
+
+        if !shuttle.try_outcome_stack.is_empty() {
+            shuttle.try_outcome_stack.pop();
+        }
+
+        if let Err(s_err) = op_result
+        {
+            return Err(s_err);
+        }
+
+        *result_value = operands[op_to_execute].get_value();
+
+        Ok(())
+    }
+
+    pub fn try_value(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        let stack_len = shuttle.try_outcome_stack.len();
+
+        *result_value = if stack_len == 0 {
+            ValueType::Empty
+        } else {
+            // Not using shuttle.try_outcome_stack.last, as that would necessitate an .expect() call.
+            shuttle.try_outcome_stack[stack_len - 1].clone()
+        };
 
         Ok(())
     }
@@ -6780,9 +6888,7 @@ mod tests {
 
         #[test]
         fn x_to_num_empty() {
-            assert_eq!(
-                Err(ScriptError::EmptyOperand('n')),
-                Interpreter::execute_with_mocked_io("n€".to_string()));
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("n€".to_string()).unwrap().numeric_value);
         }
 
         #[test]
@@ -7714,6 +7820,11 @@ mod tests {
         fn x_fmt_switch_chars() {
             assert_eq!("4,25".to_string(), Interpreter::execute_with_mocked_io("o,§fmt 2 §, §. +§ 4.25".to_string()).unwrap().string_representation);
         }
+
+        #[test]
+        fn x_fmt_no_1000_separator() {
+            assert_eq!("4,25".to_string(), Interpreter::execute_with_mocked_io("o,§fmt 2 §, § +§ 4.25".to_string()).unwrap().string_representation);
+        }
     
         #[test]
         fn x_fmt_invalid() {
@@ -8171,6 +8282,129 @@ mod tests {
                 Err(ScriptError::UserDefinedError("I failed".to_string())),
                 Interpreter::execute_with_mocked_io("Z§ign 0 +8 U[sI failed]".to_string())
             );
+        }
+
+        #[test]
+        fn x_value_outside_try() {
+            assert_eq!(0_f64, Interpreter::execute_with_mocked_io("tV".to_string()).unwrap().numeric_value);
+        }
+
+        #[test]
+        fn x_try_2_ops_no_error() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            let outcome = interpreter.execute_opts("?,/7 2 13".to_string(), true, false, false).unwrap().numeric_value;
+
+            assert_eq!(3.5_f64, outcome);
+            assert!(interpreter.shuttle.try_outcome_stack.is_empty());
+            assert!(interpreter.shuttle.error_breaks);
+        }
+
+        #[test]
+        fn x_try_3_ops_no_error() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            let outcome = interpreter.execute_opts("?,(/7 2 13 V)".to_string(), true, false, false).unwrap().numeric_value;
+
+            assert_eq!(3.5_f64, outcome);
+            assert!(interpreter.shuttle.try_outcome_stack.is_empty());
+            assert!(interpreter.shuttle.error_breaks);
+        }
+
+        #[test]
+        fn x_try_2_ops_error() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            let outcome = interpreter.execute_opts("?,/7 0 13".to_string(), true, false, false).unwrap().numeric_value;
+
+            assert_eq!(13_f64, outcome);
+            assert!(interpreter.shuttle.try_outcome_stack.is_empty());
+            assert!(interpreter.shuttle.error_breaks);
+        }
+
+        #[test]
+        fn x_try_3_ops_error() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            let outcome = interpreter.execute_opts("?,(/7 0 0 13)".to_string(), true, false, false).unwrap().numeric_value;
+
+            assert_eq!(0_f64, outcome);
+            assert!(interpreter.shuttle.try_outcome_stack.is_empty());
+            assert!(interpreter.shuttle.error_breaks);
+        }
+
+        #[test]
+        fn x_try_nested_value_of_nested() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            let outcome = interpreter.execute_opts("?,/7 0 ?,(/7 1 99 V)".to_string(), true, false, false).unwrap().numeric_value;
+
+            assert_eq!(7_f64, outcome);
+            assert!(interpreter.shuttle.try_outcome_stack.is_empty());
+            assert!(interpreter.shuttle.error_breaks);
+        }
+
+        #[test]
+        fn x_try_nested_value_of_upper() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            let outcome = interpreter.execute_opts("?,(/7 1 99 ;?,(2 44 V) V)".to_string(), true, false, false).unwrap().numeric_value;
+
+            assert_eq!(7_f64, outcome);
+            assert!(interpreter.shuttle.try_outcome_stack.is_empty());
+            assert!(interpreter.shuttle.error_breaks);
+        }
+
+        #[test]
+        fn x_try_nested_error_text() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            let outcome = interpreter.execute_opts("?,U§failed V".to_string(), true, false, false).unwrap().string_representation;
+
+            assert_eq!(r#"UserDefinedError("failed")"#.to_string(), outcome);
+            assert!(interpreter.shuttle.try_outcome_stack.is_empty());
+            assert!(interpreter.shuttle.error_breaks);
+        }
+
+        #[test]
+        fn x_try_nested_checking_error_text() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            let outcome = interpreter.execute_opts("?,/22 0 ?=1 tO§find +§ V §DivideByZero §div qV".to_string(), true, false, false).unwrap().string_representation;
+
+            assert_eq!("div".to_string(), outcome);
+            assert!(interpreter.shuttle.try_outcome_stack.is_empty());
+            assert!(interpreter.shuttle.error_breaks);
+        }
+    
+        #[test]
+        fn x_quote() {
+            assert_eq!(
+                r#"-3,50helloUserDefinedError("xxx")"#.to_string(),
+                Interpreter::execute_with_mocked_io("Z§ign 1 o,§fmt 2 §, § q(~3.5 € §hello U§xxx)".to_string()).unwrap().string_representation);
+        }
+    
+        #[test]
+        fn x_quote_truncate() {
+            assert_eq!(
+                r#"-3helloUserDefinedError("xxx")"#.to_string(),
+                Interpreter::execute_with_mocked_io("Z§ign 1 o,§fmt 2 §, § q,(~3.5 € §hello U§xxx)".to_string()).unwrap().string_representation);
         }
     }
 
