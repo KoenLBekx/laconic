@@ -5,15 +5,15 @@
 //! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
 //! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 //! |~|unary<br/>minus|1|ignored|number|error|error|
-//! |+|addition<br/>if no string<br/>operands|2|added|number|0|error|
+//! |+|addition<br/>if no string<br/>operands|2|added|number|error|error|
 //! |+|concatenation<br/>if at least 1<br/>string<br/>operand|2|added|string;<br/>numbers are<br/>formatted<br/>as per<br/>o,§fmt command|empty<br/>string|string|
 //! |+,|concatenation<br/>if at least 1<br/>string<br/>operand|2|added|string;<br/>numbers are<br/>truncated<br/>to integers|empty<br/>string|string|
-//! |-|subtraction|2|subtracted|number|1|error|
-//! |*|multiplication|2|multiplied|number|1|error|
-//! |/|division|2|new<br/>division|number|1|error|
-//! |/,|integer<br/>division;<br>remainder<br/>is pushed<br/>to stack|2|ignored|number:<br>quotient|1|error|
-//! |%|modulo|2|modulo<br/>from<br/>modulo...|number|ignored|error|
-//! |^|exponen-<br/>tiation|2|new<br/>exponen-<br/>tiation|number|1|error|
+//! |-|subtraction|2|subtracted|number|error|error|
+//! |*|multiplication|2|multiplied|number|error|error|
+//! |/|division|2|new<br/>division|number|error|error|
+//! |/,|integer<br/>division;<br>remainder<br/>is pushed<br/>to stack|2|ignored|number:<br>quotient|error|error|
+//! |%|modulo|2|modulo<br/>from<br/>modulo...|number|error|error|
+//! |^|exponen-<br/>tiation|2|new<br/>exponen-<br/>tiation|number|error|error|
 //! |i|integer|1|ignored|number<br/>truncated<br/>towards<br/>zero|error|error|
 //! |i,|ceiling|1|ignored|number<br/>filled<br/>towards<br/>nearest<br/>integer<br/>away from<br/>zero|error|error|
 //! |o§r|rounding|1|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|error|error|
@@ -206,6 +206,8 @@
 //! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
 //! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 //! |?|if|2:<br/>1. condition<br/>2. operator<br/>executed<br/>if true<br/>3. operator<br/>executed<br/>if false|ignored|value of<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
+//! |?,|try<br/>operand 1;<br/>if error<br/>return<br/>operand 2|2|if a 3rd<br/>operand<br/>is given,<br/>it's returned<br/>when no error.|see prev.<br/>columns|empty|error|
+//! |V|value of<br/>1st operand<br/>of last ?,<br/>operator|0|ignored|Error value<br/>if operand1<br/>failed, else<br/>any value|n/a|n/a|
 //! |W|while|2:<br/>1. condition<br/>2. operator<br/>to be<br/>executed|executed<br/>also|value of<br/>last<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
 //! |F|for|5:<br/>1. start count<br/>2. end count<br/>3. increment<br/>4. counter<br/>variable<br/>number<br/>or name<br/>5. operator<br/>to be<br/>executed|executed<br/>also|value of<br/>last<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
 //! |B|break<br/>while<br/>or for<br/>loop|1:<br/>1 = current<br/>loop;<br/>higher = nth-1<br/>nesting<br/>loop|ignored|1st<br/>operand|error|error|
@@ -218,21 +220,24 @@
 //! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 //! |r|read<br/>from<br/>stdin|0|ignored|if input<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|n/a|n/a|
 //! |r,|read<br/>from<br/>file|1:<br/>file<br/>path|ignored|if input<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|n/a|n/a|
-//! |w|write<br/>to<br/>stdout|1|written<br/>also|number<br/>of bytes<br/>written|empty|depends on<br/>Z§ign|
-//! |w,|write<br/>to<br/>file,<br/>overwriting<br/>it|2|ignored|nr. of<br/>characters<br/>written|empty|depends on<br/>Z§ign|
+//! |w|write<br/>to<br/>stdout|1|written<br/>also|number<br/>of bytes<br/>written|empty<br/>string|depends on<br/>Z§ign|
+//! |w,|write<br/>to<br/>file,<br/>overwriting<br/>it|2|ignored|nr. of<br/>characters<br/>written|empty<br/>string|depends on<br/>Z§ign|
 //!
 //! ## Other operators
 //! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
 //! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 //! |;|combines<br/>expressions|2|used|value of<br/>last one|empty|error|
+//! |q|quote:<br/>convert<br/>to string|1|ignored|string;<br/>numbers are<br/>formatted<br/>according to<br/>o,§fmt settings|empty|error|
+//! |q,|quote:<br/>convert<br/>to string|1|ignored|string;<br/>fractal parts<br/>of numbers are<br/>truncated<br/>towards zero|empty|error|
 //! |t|type|1|ignored|0 for empty,<br/>1 for number,<br/>2 for text,<br/>90 for error.|empty|depends on<br/>Z§ign|
 //! |N|number<br/>of operands<br/>of preceding<br/>same-level<br/>operator|0|ignored|number|n/a|n/a|
-//! |E|evaluate<br/>the expression<br/>in 1st<br/>operand<br/>(should<br/>be string)|1|ignored|evaluation<br/>result|empty|depends on<br/>Z§ign|
+//! |E|evaluate<br/>the expression<br/>in 1st<br/>operand<br/>(should<br/>be string)|1|ignored|evaluation<br/>result|error|depends on<br/>Z§ign|
 //! |U|user-<br/>coded<br/>error|1:<br/>error<br/>message|ignored|error|error|error|
 //}
 
 //{ TODOs
 // TODO: resolve TODO's in code.
+// TODO: raise an error on all unexpected empty values, also in the + and - operators.
 // TODO: fn main should also accept a -q (quiet) parameter, which would prevent the output of the
 //      final value to stdin.
 //      (Same as Z§quiet 1)
@@ -250,15 +255,19 @@
 //      comments.
 // TODO: The ScriptError variants that carry an operator mark as char should carry a string
 //      so the full enumerated operator name can be passed, e.g.: "o,§dow".
+// TODO: Interpreter.execute_opts should also show the routines and other shuttle state if
+//      show_before or show_after.
 // TODO: check using cargo clippy.
 // TODO: use giantity ?
 //}
 
+//{ uses
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::io::stdout;
 use string_io_and_mock::{FileTextHandler, MockTextHandler, TextIOHandler};
+//}
 
 // Static lifetime: justified, because the functions referenced
 // are compiled into the application and live as long as it runs.
@@ -385,6 +394,7 @@ pub enum ScriptError {
     NonTextOperand(char),
     NumberParsingFailure(String),
     PositionPastLastPossible(usize),
+    ReadingUninitializedVariable(String),
     UnclosedBracketsAtEnd,
     UnexpectedClosingBracket{position: usize},
     UnexpectedClosingParenthesis,
@@ -724,7 +734,7 @@ impl Expression {
             (OPRTN, 1) => &opr_funcs::define_routine_sharing_variables,
             (OPEXR, _) => &opr_funcs::exec_routine,
             (OPASG, _) => &opr_funcs::assign_number_register,
-            (OPVAR, _) => &opr_funcs::get_register,
+            (OPVAR, _) => &opr_funcs::get_variable,
             (OPMAS, _) => &opr_funcs::assignment_maker,
             (OPSTK, _) => &opr_funcs::push_stack,
             (OPPOP, 0) => &opr_funcs::pop_stack,
@@ -1750,6 +1760,7 @@ pub(crate) mod opr_funcs {
 
             for op in operands {
                 match op.get_value() {
+                    ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                     ValueType::Number(num) => num_outcome += num,
                     ValueType::Error(s_err) => return Err(s_err),
                     ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
@@ -1777,11 +1788,11 @@ pub(crate) mod opr_funcs {
 
         for op in operands {
             match op.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Number(num) => outcome *= num,
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
-                _ => (),
             }
         }
 
@@ -1796,6 +1807,7 @@ pub(crate) mod opr_funcs {
 
         for (count, op) in operands.iter().enumerate() {
             match op.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Number(num) => match count {
                     0 => outcome = num,
                     _ => {
@@ -1808,7 +1820,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
-                _ => (),
             }
         }
 
@@ -1823,6 +1834,7 @@ pub(crate) mod opr_funcs {
 
         for (count, op) in operands.iter().enumerate() {
             match op.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Number(num) => match count {
                     0 => outcome = num,
                     _ => outcome -= num,
@@ -1830,7 +1842,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
-                _ => (),
             }
         }
 
@@ -1845,6 +1856,7 @@ pub(crate) mod opr_funcs {
 
         for (count, op) in operands.iter().enumerate() {
             match op.get_value() {
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Number(num) => match count {
                     0 => outcome = num,
                     _ =>  {
@@ -1858,7 +1870,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
-                _ => (),
             }
         }
 
@@ -1876,7 +1887,7 @@ pub(crate) mod opr_funcs {
 
         for (count, op) in operands.iter().enumerate() {
             match op.get_value() {
-                ValueType::Empty => (),
+                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Number(num) => match count {
                     0 => dividend = num,
                     1 => {
@@ -2239,7 +2250,7 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn get_register(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn get_variable(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         check_nr_operands(opr_mark, operands, 1)?;
 
         let index = match operands[0].get_value() {
@@ -3873,7 +3884,7 @@ pub(crate) mod opr_funcs {
 
         // Only the first operand is used; subsequent ones are completely ignored.
         match operands[0].get_value() {
-            ValueType::Empty => *result_value = ValueType::Empty,
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Number(num) => *result_value = ValueType::Number(num),
             ValueType::Text(program) => {
                 match Interpreter::split_atoms(&program) {
@@ -4860,7 +4871,6 @@ mod tests {
             let _ = exp.operate(&mut shuttle);
 
             match shuttle.get_var(&ValueType::Number(4000.3f64)) {
-                ValueType::Empty => panic!("The numerical register assigned to has not been found back."),
                 ValueType::Number(num) => assert_eq!(500.1f64, num),
                 _ => panic!("The value found in shuttle.nums should be ValueType::Number."),
             }
@@ -4997,6 +5007,11 @@ mod tests {
         }
 
         #[test]
+        fn x_add_empty() {
+            assert_eq!(Err(ScriptError::EmptyOperand('+')), Interpreter::execute_with_mocked_io("+€4".to_string()));
+        }
+
+        #[test]
         fn x_add_strings() {
             assert_eq!("23.750000 km.".to_string(), Interpreter::execute_with_mocked_io("+23.75 [s km.]".to_string()).unwrap().string_representation());
         }
@@ -5054,7 +5069,7 @@ mod tests {
 
         #[test]
         fn x_minus_empty() {
-            assert_eq!(-38_f64, Interpreter::execute_with_mocked_io("-€ 38".to_string()).unwrap().numeric_value());
+            assert_eq!(Err(ScriptError::EmptyOperand('-')), Interpreter::execute_with_mocked_io("-€ 38".to_string()));
         }
 
         #[test]
@@ -5163,7 +5178,7 @@ mod tests {
 
         #[test]
         fn x_multiply_empty() {
-            assert_eq!(100_f64, Interpreter::execute_with_mocked_io("* € 100".to_string()).unwrap().numeric_value());
+            assert_eq!(Err(ScriptError::EmptyOperand('*')), Interpreter::execute_with_mocked_io("* € 100".to_string()));
         }
 
         #[test]
@@ -5467,7 +5482,7 @@ mod tests {
         fn x_min_empty() {
             assert_eq!(
                 NO_VALUE.to_string(),
-                Interpreter::execute_with_mocked_io("m(128 v§notUsedYet [s Huh?] 277 ~31 5)".to_string())
+                Interpreter::execute_with_mocked_io("m(128 € [s Huh?] 277 ~31 5)".to_string())
                     .unwrap().string_representation());
         }
 
@@ -5510,7 +5525,7 @@ mod tests {
         fn x_max_empty() {
             assert_eq!(
                 " Huh?".to_string(),
-                Interpreter::execute_with_mocked_io("M(128 v§notUsedYet [s Huh?] 277 ~31 5)".to_string())
+                Interpreter::execute_with_mocked_io("M(128 € [s Huh?] 277 ~31 5)".to_string())
                     .unwrap().string_representation());
         }
 
@@ -5552,7 +5567,7 @@ mod tests {
 
         #[test]
         fn x_assign_num_serial_assignation() {
-            assert_eq!(10f64, Interpreter::execute_with_mocked_io("$(4 1 2 3 4) F4 7 1 0 +:1 vv0 v1 ".to_string()).unwrap().numeric_value());
+            assert_eq!(10f64, Interpreter::execute_with_mocked_io("$(4 1 2 3 4) $1 0 F4 7 1 0 +:1 vv0 v1 ".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -5572,7 +5587,10 @@ mod tests {
 
         #[test]
         fn x_get_num_reg_uninit() {
-            assert_eq!(NO_VALUE.to_string(), Interpreter::execute_with_mocked_io("v200".to_string()).unwrap().string_representation());
+            assert_eq!(
+                0_f64,
+                Interpreter::execute_with_mocked_io("tv200".to_string()).unwrap().numeric_value()
+            );
         }
 
         #[test]
@@ -5657,12 +5675,12 @@ mod tests {
 
         #[test]
         fn x_equality_empty() {
-            assert_eq!(1f64, Interpreter::execute_with_mocked_io("=v44 v44".to_string()).unwrap().numeric_value());
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("$§void € =€ v§void".to_string()).unwrap().numeric_value());
         }
 
         #[test]
         fn x_equality_number_and_empty() {
-            assert_eq!(0f64, Interpreter::execute_with_mocked_io("=708 v44".to_string()).unwrap().numeric_value());
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("=708 €".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -5710,7 +5728,7 @@ mod tests {
         #[test]
         fn x_less_mixed() {
             // v111 as uninitialized variable is VaueType::Empty.
-            assert_eq!(1f64, Interpreter::execute_with_mocked_io("<(v111 ~2036 2 6 §Fruehling §Zambetas)".to_string()).unwrap().numeric_value());
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("<(€ ~2036 2 6 §Fruehling §Zambetas)".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -5735,7 +5753,7 @@ mod tests {
 
         #[test]
         fn x_greater_mixed() {
-            assert_eq!(1f64, Interpreter::execute_with_mocked_io(">(§Zambetas §Fruehling 1_000_000.2 2024 ~85 v111)".to_string()).unwrap().numeric_value());
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io(">(§Zambetas §Fruehling 1_000_000.2 2024 ~85 €)".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -5770,7 +5788,7 @@ mod tests {
 
         #[test]
         fn x_not_empty() {
-            assert_eq!(1f64, Interpreter::execute_with_mocked_io("!v§uninit".to_string()).unwrap().numeric_value());
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("!€".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -5790,7 +5808,7 @@ mod tests {
 
         #[test]
         fn x_not_not_empty() {
-            assert_eq!(0f64, Interpreter::execute_with_mocked_io("!!v§uninit".to_string()).unwrap().numeric_value());
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("!!€".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -5844,7 +5862,7 @@ mod tests {
 
         #[test]
         fn x_and_empty() {
-            assert_eq!(0f64, Interpreter::execute_with_mocked_io("& 9 v§uninit".to_string()).unwrap().numeric_value());
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("& 9 €".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -5908,7 +5926,7 @@ mod tests {
 
         #[test]
         fn x_or_empty() {
-            assert_eq!(1f64, Interpreter::execute_with_mocked_io("| 9 v§uninit".to_string()).unwrap().numeric_value());
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("| 9 €".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -6551,7 +6569,7 @@ mod tests {
 
         #[test]
         fn x_get_type_empty() {
-            assert_eq!(0f64, Interpreter::execute_with_mocked_io("t v9494".to_string()).unwrap().numeric_value());
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("t€".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -8031,8 +8049,7 @@ mod tests {
                                 $21 1
                                 ;
                                     $21 0
-                                    B
-                        v21
+                                    B1
                         =(
                             1
                             v21
