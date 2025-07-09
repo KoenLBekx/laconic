@@ -227,8 +227,8 @@
 //! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
 //! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 //! |;|combines<br/>expressions|2|used|value of<br/>last one|empty|error|
-//! |q|quote:<br/>convert<br/>to string|1|ignored|string;<br/>numbers are<br/>formatted<br/>according to<br/>o,§fmt settings|empty|error|
-//! |q,|quote:<br/>convert<br/>to string|1|ignored|string;<br/>fractal parts<br/>of numbers are<br/>truncated<br/>towards zero|empty|error|
+//! |q|quote:<br/>convert<br/>to string.<br/>Same as<br/>+§ ...|1|ignored|string;<br/>numbers are<br/>formatted<br/>according to<br/>o,§fmt settings|empty|error|
+//! |q,|quote:<br/>convert<br/>to string.<br/>Same as<br/>+,§ ...|1|ignored|string;<br/>fractal parts<br/>of numbers are<br/>truncated<br/>towards zero|empty|error|
 //! |t|type|1|ignored|0 for empty,<br/>1 for number,<br/>2 for text,<br/>90 for error.|empty|depends on<br/>Z§ign|
 //! |N|number<br/>of operands<br/>of preceding<br/>same-level<br/>operator|0|ignored|number|n/a|n/a|
 //! |E|evaluate<br/>the expression<br/>in 1st<br/>operand<br/>(should<br/>be string)|1|ignored|evaluation<br/>result|error|depends on<br/>Z§ign|
@@ -237,11 +237,10 @@
 
 //{ TODOs
 // TODO: resolve TODO's in code.
-// TODO: raise an error on all unexpected empty values, also in the + and - operators.
 // TODO: fn main should also accept a -q (quiet) parameter, which would prevent the output of the
 //      final value to stdin.
 //      (Same as Z§quiet 1)
-// TODO: fn main should also accept a -c (continue) parameter, which would prevent an error
+// TODO: fn main should also accept a -I (ignore errors) parameter, which would prevent an error
 //      condition to bubble up to the topmost operator and stop execution immediately.
 //      (Same as Z§ign 1).
 // TODO: the characters for the operators should be hard-coded only once: in constants.
@@ -255,8 +254,6 @@
 //      comments.
 // TODO: The ScriptError variants that carry an operator mark as char should carry a string
 //      so the full enumerated operator name can be passed, e.g.: "o,§dow".
-// TODO: Interpreter.execute_opts should also show the routines and other shuttle state if
-//      show_before or show_after.
 // TODO: check using cargo clippy.
 // TODO: use giantity ?
 //}
@@ -956,6 +953,17 @@ struct Routine {
     in_new_variables_scope: bool,
 }
 
+impl Routine {
+    fn get_representation(&self, name: &ValueType) -> String {
+        format!(
+            "Routine {}, running using {} scope:\n{}",
+            name.get_string_value("(No name)".to_string()),
+            if self.in_new_variables_scope {"isolated"} else {"shared"},
+            self.body.get_representation()
+        )
+    }
+}
+
 enum DateInfoItem {
     Year,
     Month,
@@ -1134,7 +1142,8 @@ impl Interpreter {
         let mut tree: Expression = Self::make_tree(atoms)?;
 
         if show_before {
-            println!("\nTree before operate() :\n{}", tree.get_representation());
+            // println!("\nTree before operate() :\n{}", tree.get_representation());
+            self.print_state(&tree, true);
         }
 
         if do_execute {
@@ -1142,7 +1151,8 @@ impl Interpreter {
         }
 
         if show_after {
-            println!("\nTree after operate() :\n{}", tree.get_representation());
+            // println!("\nTree after operate() :\n{}", tree.get_representation());
+            self.print_state(&tree, false);
         }
 
         Ok(match tree.get_value() {
@@ -1450,6 +1460,18 @@ impl Interpreter {
 
     fn is_known_operator(op: char) -> bool {
         "~+-*/^lia%°SCTApec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRX€BE¶UVq".contains(op)
+    }
+
+    fn print_state(&self, tree: &Expression, before: bool) {
+        for (name, routine) in self.shuttle.routines.iter() {
+            println!("{}", routine.get_representation(name));
+        }
+
+        println!(
+            "\nTree {} operate() :\n{}",
+            if before {"before"} else {"after"},
+            tree.get_representation()
+        );
     }
 }
 
