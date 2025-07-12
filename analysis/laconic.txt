@@ -1618,11 +1618,14 @@ Operators
 
 		Z§quiet n : quiet execution
 
-				(to be implemented)
-
 					If n = 0 (default), Laconic will output the value of its topmost operator after execution
 					to standard output.
 					Otherwise, nothing will be output.
+
+					Output by the w operator is unaffected by this setting.
+
+					Z§quiet 1
+						does the same as the executable's -q parameter.
 
 		Z§ign n : ignore errors
 
@@ -1632,3 +1635,6 @@ Operators
 					This way, loops with user input in every iteration can continue.
 
 					Note: a script can test if a variable holds an Error value using the t operator.
+
+					Z§ign 1
+						does the same as the executable's -I parameter.

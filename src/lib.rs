@@ -239,12 +239,6 @@
 
 //{ TODOs
 // TODO: resolve TODO's in code.
-// TODO: fn main should also accept a -q (quiet) parameter, which would prevent the output of the
-//      final value to stdin.
-//      (Same as Z§quiet 1)
-// TODO: fn main should also accept a -I (ignore errors) parameter, which would prevent an error
-//      condition to bubble up to the topmost operator and stop execution immediately.
-//      (Same as Z§ign 1).
 // TODO: the characters for the operators should be hard-coded only once: in constants.
 //      (done; not done follows below:)
 //      These constants can figure in a constant array of tuples
@@ -1001,6 +995,7 @@ struct Shuttle {
     max_iterations: f64,
     orb: f64,
     error_breaks: bool,
+    is_quiet: bool,
     golden_ratio: Option<f64>,
     conjug_gold: Option<f64>,
     input_base: f64,
@@ -1030,6 +1025,7 @@ impl Shuttle {
             max_iterations: 10_000f64,
             orb: 0.000_000_01f64,
             error_breaks: true,
+            is_quiet: false,
             golden_ratio: None,
             conjug_gold: None,
             input_base: 10f64,
@@ -1470,6 +1466,14 @@ impl Interpreter {
             if before {"before"} else {"after"},
             tree.get_representation()
         );
+    }
+
+    pub fn is_quiet(&self) -> bool {
+        self.shuttle.is_quiet
+    }
+
+    pub fn suppress_exit_on_error(&mut self) {
+        self.shuttle.error_breaks = false;
     }
 }
 
@@ -2573,6 +2577,7 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name ==  "prec" => shuttle.orb = setting_value.get_num_value(0f64),
             ValueType::Text(name) if name == "loops" => shuttle.max_iterations = setting_value.get_num_value(0f64),
             ValueType::Text(name) if name == "ign" => shuttle.error_breaks = setting_value.get_num_value(0f64) == 0_f64,
+            ValueType::Text(name) if name == "quiet" => shuttle.is_quiet = setting_value.get_num_value(0f64) != 0_f64,
             _ => (),
         }
 
@@ -8273,6 +8278,45 @@ mod tests {
             interpreter.execute_opts("Z§ign 0".to_string(), true, false, false).unwrap();
 
             assert!(interpreter.shuttle.error_breaks);
+        }
+
+        #[test]
+        fn x_set_quiet_0() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            interpreter.execute_opts("Z§quiet 0".to_string(), true, false, false).unwrap();
+
+            assert!(!interpreter.is_quiet());
+        }
+
+        #[test]
+        fn x_set_quiet_1() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+
+            assert!(!interpreter.is_quiet());
+
+            interpreter.execute_opts("Z§quiet 1".to_string(), true, false, false).unwrap();
+
+            assert!(interpreter.is_quiet());
+        }
+
+        #[test]
+        fn x_suppress_errors() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            interpreter.suppress_exit_on_error();
+
+            assert_eq!(
+                "end".to_string(),
+                interpreter.execute_opts("+(4) §end".to_string(), true, false, false).unwrap().string_representation()
+            );
         }
 
         #[test]

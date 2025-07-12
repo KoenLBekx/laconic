@@ -8,6 +8,8 @@ fn main() {
     let mut show_after = false;
     let mut do_execute = true;
     let mut expect_file_name = false;
+    let mut be_quiet = false;
+    let mut ignore_errors = false;
 
     for arg_tuple in args().enumerate() {
         match arg_tuple {
@@ -37,6 +39,14 @@ fn main() {
                         do_execute = false;
                     }
 
+                    if arg.contains('q') {
+                        be_quiet = true;
+                    }
+
+                    if arg.contains('I') {
+                        ignore_errors = true;
+                    }
+
                     if arg.contains('i') && !expect_file_name {
                         expect_file_name = true;
                     }
@@ -55,14 +65,24 @@ fn main() {
 
         let mut interpreter = Interpreter::new_stdio_filesys();
 
-        match interpreter.execute_opts(
+        if ignore_errors {
+            interpreter.suppress_exit_on_error();
+        }
+
+        let exe_result = interpreter.execute_opts(
             script,
             do_execute,
             show_before,
             show_after
-        ) {
-            Ok(outcome) => println!("{}", outcome.string_representation()),
-            Err(err) => println!("{err:?}"),
+        );
+
+        if !(interpreter.is_quiet() || be_quiet) {
+            match exe_result {
+                Ok(outcome) => {
+                        println!("{}", outcome.string_representation())
+                },
+                Err(err) => println!("{err:?}"),
+            }
         }
     } else {
         show_syntax();
@@ -77,6 +97,9 @@ fn show_syntax() {
     println!("    -b    Show the script as a tree of operators before execution.");
     println!("    -a    Show the script as a tree of operators after  execution.");
     println!("    -i    Include the contents of a file into the script.");
+    println!("    -q    Don't print the outcome or error messages to standard output.");
+    println!("            (Output of the w operator will still be printed.)");
+    println!("    -I    Ignore errors: don't stop execution immediately when an error occurs.");
     println!();
     println!("Options can be combined:");
     println!("    laconic -bn '*440 ^2 /1 12");
