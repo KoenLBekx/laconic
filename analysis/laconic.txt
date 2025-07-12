@@ -10,12 +10,15 @@ LACONIC
 		//				about a specific operator (given in next parameter).
 
 		Ideas for later versions:
+			- use giantity or a third-party big number entity from crates.io; provide the choice between f64 or these as a Z§... choice.
 			- Z,§settignName would give the value of a setting.
 			- provide operators or constants for conversion between imperial and continental
 				quantities for size, volume, speed, temperature, weight e.a.
 			- provide calculations with complex numbers.
-			- embed data about the first n prime numbers.
+			- embed data about the first n prime numbers; make Laconic prime-savvy by providing an operator that returns the nth prime.
 			- provide manipulation of bytes, so even non-text files can be read and written.
+				This would require a new ValueType: ValueType::ByteArray.
+			- provide bitwise operators on byte arrays.
 			- A second period in a number can be considered to be the start of the repeating part of a number:
 				12.3.8 would interpreted as 12.3888...
 				so
@@ -38,6 +41,11 @@ LACONIC
 			- Provide a second way of adding more operands than expected to an operator,
 				by preceding the supernumerous operands with '#'.
 				(The existing way is using parentheses.)
+			- Provide a summation operator.
+			- Provide a factorial operator.
+			- Provide an operator that returns the current data as a Gregorian sequential number.
+			- Provide an operator that returns the current time as milliseconds/ticks since ... ?
+
 
 		* Characters assigned (or to be assigned) to operators:
 			~+-*/%^$():,;=<>!&|?°€¶AaBbCcEeFiKklMmNnOopqRrSsTtUVvWwXxZ

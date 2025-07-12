@@ -62,7 +62,7 @@ fn main() {
             show_after
         ) {
             Ok(outcome) => println!("{}", outcome.string_representation()),
-            Err(err) => println!("{:?}", err),
+            Err(err) => println!("{err:?}"),
         }
     } else {
         show_syntax();

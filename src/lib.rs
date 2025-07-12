@@ -130,7 +130,7 @@
 //! - the O, operator takes 5 operands;<br/>
 //! - the o,, operator takes 6 operands;<br/>
 //! - the O,, operator takes 7 operands;<br/>
-//! etc.
+//! - etc.
 //! 
 //! Both operators, however, can have their number of operands overridden by the ( and ) operators,
 //! in which case they can be used interchangeably and following commas don't affect the number of expected operands (they can still affect the behaviour, though).
@@ -176,13 +176,14 @@
 //! - the source string;<br/>
 //! - the start position of the substring;<br/>
 //! - (optional) the length of the substring. If ommitted, the substring will be taken from the
-//! start position until the end of the source string.
+//!   start position until the end of the source string.
 //!
 //! Note: the **o,§repl** or **O,,§repl** operator takes 4 or 7 arguments:<br/>
 //! - §repl : the operator's name;<br/>
 //! - the source string;<br/>
 //! - the substring to be replaced;<br/>
 //! - the string to replace it with;<br/>
+//!
 //! And optionally:<br/>
 //! - the number or name of the position variable;<br/>
 //! - the number or name of the sequence variable;<br/>
@@ -199,6 +200,7 @@
 //! - the number of fractal digits;<br/>
 //! - the fractal separator (default = .);<br/>
 //! - the thousands grouping separator (default: no grouping).
+//!
 //! This number format is only used for the final output of a script,
 //! or for output by the w or the +(concatenation) commands.
 //!
@@ -363,8 +365,8 @@ enum Atom {
 impl fmt::Debug for Atom {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Atom::Operator(c) => write!(f, "{}", c),
-            Atom::Number(n) => write!(f, "{} ", n),
+            Atom::Operator(c) => write!(f, "{c}"),
+            Atom::Number(n) => write!(f, "{n} "),
             Atom::String(_) => write!(f, "[s...]"),
             Atom::Comment(_) => write!(f, "[c...]"),
         }
@@ -438,8 +440,8 @@ impl ValueType {
     pub fn get_string_value(&self, default: String) -> String {
         match self {
             ValueType::Text(txt) => txt.clone(),
-            ValueType::Number(num) => format!("{}", num),
-            ValueType::Error(script_err) => format!("{:?}", script_err), 
+            ValueType::Number(num) => format!("{num}"),
+            ValueType::Error(script_err) => format!("{script_err:?}"), 
             ValueType::Max => "ValueType::Max".to_string(),
             ValueType::Empty => default,
         }
@@ -582,7 +584,7 @@ impl NumberFormat {
                         String::new()
                     };
 
-                    int_text = format!("{}{}{}{}", digit_separator, mod_digit, thsepa, int_text);
+                    int_text = format!("{digit_separator}{mod_digit}{thsepa}{int_text}");
                     int -= modulus;
                     int /= self.base;
                 }
@@ -835,7 +837,7 @@ impl Expression {
         }
 
         let operator_result = (self.operator)(&mut self.opr_mark, &mut self.value, &mut self.operands, shuttle);
-        let assignment_indexes = shuttle.assignment_indexes_stack.pop().unwrap_or(Vec::<ValueType>::new());
+        let assignment_indexes = shuttle.assignment_indexes_stack.pop().unwrap_or_default();
 
         match operator_result {
             Ok(_) => (),
@@ -943,7 +945,7 @@ impl fmt::Debug for Expression {
         };
 
         let out_string = format!("{}{}", self.opr_mark, representation);
-        write!(f, "{}", out_string)
+        write!(f, "{out_string}")
     }
 }
 
@@ -1159,7 +1161,7 @@ impl Interpreter {
             ValueType::Empty => ExecutionOutcome::Empty,
             ValueType::Number(ref n) => ExecutionOutcome::Number{value: *n, format_info: self.shuttle.number_format.clone()},
             ValueType::Text(ref s) => ExecutionOutcome::Text(s.clone()),
-            ValueType::Error(ref s_err) => ExecutionOutcome::Error(format!("{:?}", s_err)),
+            ValueType::Error(ref s_err) => ExecutionOutcome::Error(format!("{s_err:?}")),
             ValueType::Max => ExecutionOutcome::Error("Invalid Max operand".to_string()),
         })
     }
@@ -1372,16 +1374,12 @@ impl Interpreter {
                     match *c {
                         CH_OVR_START => override_start_found = true,
                         OPALT =>  {
-                            if alternative_marks_count < u8::MAX {
-                                alternative_marks_count += 1;
-                            }
+                            alternative_marks_count = alternative_marks_count.saturating_add(1);
                         },
                         op_for_stack => {
                             if [OPOP1, OPOP2].contains(&op_for_stack) {
                                 needed_ops += (2 * alternative_marks_count) as usize;
-                            } else if (op_for_stack == OPIF_) && (alternative_marks_count > 0) {
-                                needed_ops = 2;
-                            } else if (op_for_stack == OPWRT) && (alternative_marks_count > 0) {
+                            } else if ((op_for_stack == OPIF_) || (op_for_stack == OPWRT)) && (alternative_marks_count > 0) {
                                 needed_ops = 2;
                             } else if (op_for_stack == OPREA) && (alternative_marks_count > 0) {
                                 needed_ops = 1;
@@ -1500,6 +1498,12 @@ pub mod input {
         }
     }
 
+    impl Default for StdinReader {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl StdinOrMock for StdinReader {
         fn read_line(&mut self) -> Option<String> {
             let mut buffer = String::new();
@@ -1615,8 +1619,8 @@ pub(crate) mod opr_funcs {
         false
     }
 
-    fn parse_number(string_rep: &String, input_base: f64, ignore_non_numeric_chars: bool) -> Result<f64, String> {
-        let mut string_rep_ext = string_rep.clone().trim().to_string();
+    fn parse_number(string_rep: &str, input_base: f64, ignore_non_numeric_chars: bool) -> Result<f64, String> {
+        let mut string_rep_ext = string_rep.trim().to_string();
         string_rep_ext.push(CH_SEPA_DIGITS);
 
         let mut num = 0f64;
@@ -1722,14 +1726,11 @@ pub(crate) mod opr_funcs {
 
     pub fn nop(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         // If still needed, parse the string representation to a number.
-        match result_value {
-            ValueType::Text(string_rep) => {
-                match parse_number(&string_rep, shuttle.input_base, true) {
-                    Ok(num) => *result_value = ValueType::Number(num),
-                    Err(msg) => return Err(ScriptError::NumberParsingFailure(msg)),
-                }
-            },
-            _ => (),
+        if let ValueType::Text(string_rep) = result_value {
+            match parse_number(string_rep, shuttle.input_base, true) {
+                Ok(num) => *result_value = ValueType::Number(num),
+                Err(msg) => return Err(ScriptError::NumberParsingFailure(msg)),
+            }
         }
 
         Ok(())
@@ -1758,7 +1759,7 @@ pub(crate) mod opr_funcs {
                     ValueType::Number(num) if do_truncate => format!("{}", num.trunc() as i64),
                     ValueType::Number(num) => shuttle.number_format.format(num),
                     ValueType::Text(txt) => txt,
-                    ValueType::Error(s_err) => format!("{:?}", s_err),
+                    ValueType::Error(s_err) => format!("{s_err:?}"),
                     ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 }).as_str()
             );
@@ -1772,10 +1773,7 @@ pub(crate) mod opr_funcs {
 
         if has_any_string_operands(operands) {
             *result_value = ValueType::Text(
-                match concat_expressions(opr_mark, operands, shuttle, do_truncate) {
-                    Ok(concatenated) => concatenated,
-                    Err(s_err) => return Err(s_err),
-                }
+                concat_expressions(opr_mark, operands, shuttle, do_truncate)?
             );
         } else {
             let mut num_outcome = 0f64;
@@ -2212,12 +2210,12 @@ pub(crate) mod opr_funcs {
         let const_index = operands[0].get_value();
 
         *result_value = match const_index {
-            ValueType::Text(name) if name == "gold".to_string() =>
+            ValueType::Text(name) if name == "gold" =>
                 ValueType::Number(get_golden_ratio_from_shuttle(shuttle)) ,
-            ValueType::Text(name) if name == "cogold".to_string() =>
+            ValueType::Text(name) if name == "cogold" =>
                 ValueType::Number(get_conjugate_golden_ratio_from_shuttle(shuttle)),
-            ValueType::Text(name) if name == "n".to_string() => ValueType::Text("\n".to_string()),
-            ValueType::Text(name) if name == "empty".to_string() => ValueType::Empty,
+            ValueType::Text(name) if name == "n" => ValueType::Text("\n".to_string()),
+            ValueType::Text(name) if name == "empty" => ValueType::Empty,
             ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
             ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
@@ -2261,7 +2259,7 @@ pub(crate) mod opr_funcs {
             counter += 1f64;
 
             if name_is_string {
-                name = ValueType::Text(format!("{}{}", name_base, counter));
+                name = ValueType::Text(format!("{name_base}{counter}"));
             } else {
                 name = ValueType::Number(index + counter);
             }
@@ -2390,25 +2388,20 @@ pub(crate) mod opr_funcs {
         let mut outcome = true;
         let mut previous = ValueType::Empty;
         let mut current: ValueType;
-        let mut ops = operands.iter().enumerate();
+        let ops = operands.iter().enumerate();
 
-        loop {
-            match ops.next(){
-                Some((count, op)) => {
-                    match count {
-                        0 => previous = op.get_value(),
-                        _ => {
-                            current = op.get_value();
-                            outcome = outcome && (previous < current);
-                            previous = current;
-                        },
-                    }
-
-                    if !outcome {
-                        break;
-                    }
+        for (count, op) in ops {
+            match count {
+                0 => previous = op.get_value(),
+                _ => {
+                    current = op.get_value();
+                    outcome = outcome && (previous < current);
+                    previous = current;
                 },
-                None => break,
+            }
+
+            if !outcome {
+                break;
             }
         }
 
@@ -2427,25 +2420,20 @@ pub(crate) mod opr_funcs {
         let mut outcome = true;
         let mut previous = ValueType::Max;
         let mut current: ValueType;
-        let mut ops = operands.iter().enumerate();
+        let ops = operands.iter().enumerate();
 
-        loop {
-            match ops.next(){
-                Some((count, op)) => {
-                    match count {
-                        0 => previous = op.get_value(),
-                        _ => {
-                            current = op.get_value();
-                            outcome = outcome && (previous > current);
-                            previous = current;
-                        },
-                    }
-
-                    if !outcome {
-                        break;
-                    }
+        for (count, op) in ops {
+            match count {
+                0 => previous = op.get_value(),
+                _ => {
+                    current = op.get_value();
+                    outcome = outcome && (previous > current);
+                    previous = current;
                 },
-                None => break,
+            }
+
+            if !outcome {
+                break;
             }
         }
 
@@ -2466,7 +2454,7 @@ pub(crate) mod opr_funcs {
         for op in operands {
             match op.get_value() {
                 ValueType::Empty => (), // Empty is considered a falsy value.
-                ValueType::Text(ref s) => outcome &= s.len() == 0,
+                ValueType::Text(ref s) => outcome &= s.is_empty(),
                 ValueType::Number(n) => outcome &= are_near(0f64, n, shuttle.orb),
                 ValueType::Error(_) => (), // an Error is considered a falsy value.
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
@@ -2490,7 +2478,7 @@ pub(crate) mod opr_funcs {
         for op in operands {
             match op.get_value() {
                 ValueType::Empty => outcome = false,
-                ValueType::Text(ref s) => outcome &= s.len() > 0,
+                ValueType::Text(ref s) => outcome &= !s.is_empty(),
                 ValueType::Number(n) => outcome &= !are_near(0f64, n, shuttle.orb),
                 ValueType::Error(_) => outcome = false,
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
@@ -2514,7 +2502,7 @@ pub(crate) mod opr_funcs {
         for op in operands {
             match op.get_value() {
                 ValueType::Empty => (),
-                ValueType::Text(ref s) => outcome |= s.len() > 0,
+                ValueType::Text(ref s) => outcome |= !s.is_empty(),
                 ValueType::Number(n) => outcome |= !are_near(0f64, n, shuttle.orb),
                 ValueType::Error(_) => (),
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
@@ -2539,7 +2527,7 @@ pub(crate) mod opr_funcs {
             match op.get_value() {
                 ValueType::Empty => (),
                 ValueType::Text(ref s) =>  {
-                    if s.len() > 0 {
+                    if !s.is_empty() {
                         trues += 1;
                     }
                 },
@@ -2582,9 +2570,9 @@ pub(crate) mod opr_funcs {
         }
 
         match setting_name {
-            ValueType::Text(name) if name ==  "prec".to_string() => shuttle.orb = setting_value.get_num_value(0f64),
-            ValueType::Text(name) if name == "loops".to_string() => shuttle.max_iterations = setting_value.get_num_value(0f64),
-            ValueType::Text(name) if name == "ign".to_string() => shuttle.error_breaks = setting_value.get_num_value(0f64) == 0_f64,
+            ValueType::Text(name) if name ==  "prec" => shuttle.orb = setting_value.get_num_value(0f64),
+            ValueType::Text(name) if name == "loops" => shuttle.max_iterations = setting_value.get_num_value(0f64),
+            ValueType::Text(name) if name == "ign" => shuttle.error_breaks = setting_value.get_num_value(0f64) == 0_f64,
             _ => (),
         }
 
@@ -2598,28 +2586,28 @@ pub(crate) mod opr_funcs {
 
         let opr_func = match operands[0].get_value() {
             ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
-            ValueType::Text(name) if name == "r".to_string() => round,
-            ValueType::Text(name) if name == "fib".to_string() => fibonacci,
-            ValueType::Text(name) if name == "uni".to_string() => get_unicode_chars,
-            ValueType::Text(name) if name == "ucv".to_string() => get_unicode_value,
-            ValueType::Text(name) if name == "len".to_string() => get_length,
-            ValueType::Text(name) if name == "find".to_string() => find_in_string,
-            ValueType::Text(name) if name == "repl".to_string() => replace_in_string,
-            ValueType::Text(name) if name == "split".to_string() => split,
-            ValueType::Text(name) if name == "sub".to_string() => substring,
-            ValueType::Text(name) if name == "lower".to_string() => lower,
-            ValueType::Text(name) if name == "upper".to_string() => upper,
-            ValueType::Text(name) if name == "proper".to_string() => proper,
-            ValueType::Text(name) if name == "fmt".to_string() => set_number_format,
-            ValueType::Text(name) if name == "leap".to_string() => opr_leap,
-            ValueType::Text(name) if name == "dow".to_string() => dow,
-            ValueType::Text(name) if name == "greg".to_string() => gregorian_seq,
-            ValueType::Text(name) if name == "gregy".to_string() => gregorian_year,
-            ValueType::Text(name) if name == "gregm".to_string() => gregorian_month,
-            ValueType::Text(name) if name == "gregd".to_string() => gregorian_day,
-            ValueType::Text(name) if name == "gregt".to_string() => gregorian_text,
-            ValueType::Text(name) if name == "gregn".to_string() => gregorian_days_in_month,
-            ValueType::Text(name) if name == "version".to_string() => get_version,
+            ValueType::Text(name) if name == "r" => round,
+            ValueType::Text(name) if name == "fib" => fibonacci,
+            ValueType::Text(name) if name == "uni" => get_unicode_chars,
+            ValueType::Text(name) if name == "ucv" => get_unicode_value,
+            ValueType::Text(name) if name == "len" => get_length,
+            ValueType::Text(name) if name == "find" => find_in_string,
+            ValueType::Text(name) if name == "repl" => replace_in_string,
+            ValueType::Text(name) if name == "split" => split,
+            ValueType::Text(name) if name == "sub" => substring,
+            ValueType::Text(name) if name == "lower" => lower,
+            ValueType::Text(name) if name == "upper" => upper,
+            ValueType::Text(name) if name == "proper" => proper,
+            ValueType::Text(name) if name == "fmt" => set_number_format,
+            ValueType::Text(name) if name == "leap" => opr_leap,
+            ValueType::Text(name) if name == "dow" => dow,
+            ValueType::Text(name) if name == "greg" => gregorian_seq,
+            ValueType::Text(name) if name == "gregy" => gregorian_year,
+            ValueType::Text(name) if name == "gregm" => gregorian_month,
+            ValueType::Text(name) if name == "gregd" => gregorian_day,
+            ValueType::Text(name) if name == "gregt" => gregorian_text,
+            ValueType::Text(name) if name == "gregn" => gregorian_days_in_month,
+            ValueType::Text(name) if name == "version" => get_version,
             ValueType::Error(s_err) => return Err(s_err),
             ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             unknown =>  {
@@ -2659,13 +2647,14 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn get_version(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+        const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-        *result_value = if operands.len() == 0 {
+        *result_value = if operands.is_empty() {
             ValueType::Text(VERSION.to_string())
         } else {
             let version_nums: Vec<&str> = VERSION.split(CH_SEPA_VERSION).collect();
 
+            #[allow(clippy::get_first)]
             match operands[0].get_value() {
                 ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Number(num) => match num {
@@ -2770,10 +2759,7 @@ pub(crate) mod opr_funcs {
         check_nr_operands(opr_mark, operands, 1)?;
 
         *result_value = ValueType::Text(
-            match concat_expressions(opr_mark, operands, shuttle, do_truncate) {
-                Ok(concatenated) => concatenated,
-                Err(s_err) => return Err(s_err),
-            }
+            concat_expressions(opr_mark, operands, shuttle, do_truncate)?
         );
 
         Ok(())
@@ -2899,7 +2885,7 @@ pub(crate) mod opr_funcs {
             ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
-        if (year < 0_f64) || (month < 1_f64) || (month > 12_f64) {
+        if (year < 0_f64) || !(1_f64..=12_f64).contains(&month) {
             return Err(ScriptError::InvalidDatePart(*opr_mark));
         }
 
@@ -3177,18 +3163,16 @@ pub(crate) mod opr_funcs {
 
         let mut count = seq / days_in_four_centuries;
         year += 400 * count;
-        seq = seq % days_in_four_centuries;
+        seq %= days_in_four_centuries;
 
         /*
         #[cfg(test)]
         println!("- days in 4 centuries:    seq={}, year={}", seq, year);
         */
 
-        if is_leap_year(year as f64) {
-            if seq >= days_in_leap_century {
-                seq -= days_in_leap_century;
-                year += 100;
-            }
+        if is_leap_year(year as f64) && (seq >= days_in_leap_century) {
+            seq -= days_in_leap_century;
+            year += 100;
         }
 
         /*
@@ -3198,7 +3182,7 @@ pub(crate) mod opr_funcs {
 
         count = seq / days_in_century;
         year += 100 * count;
-        seq = seq % days_in_century;
+        seq %= days_in_century;
 
         /*
         #[cfg(test)]
@@ -3217,18 +3201,16 @@ pub(crate) mod opr_funcs {
 
         count = seq / days_in_four_years;
         year += 4 * count;
-        seq = seq % days_in_four_years;
+        seq %= days_in_four_years;
 
         /*
         #[cfg(test)]
         println!("- count * 4 years:        seq={}, year={}, count={}", seq, year, count);
         */
 
-        if is_leap_year(year as f64) {
-            if seq >= days_in_leap_year {
-                seq -= days_in_leap_year;
-                year += 1;
-            }
+        if is_leap_year(year as f64) && (seq >= days_in_leap_year) {
+            seq -= days_in_leap_year;
+            year += 1;
         }
 
         /*
@@ -3238,7 +3220,7 @@ pub(crate) mod opr_funcs {
 
         count = seq / DAYS_IN_YEAR;
         year += count;
-        seq = seq % DAYS_IN_YEAR;
+        seq %= DAYS_IN_YEAR;
 
         /*
         #[cfg(test)]
@@ -3423,7 +3405,7 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    fn find_in_string_base(characters: &Vec<char>, find_characters: &Vec<char>, start_pos: usize) -> Option<usize> {
+    fn find_in_string_base(characters: &[char], find_characters: &[char], start_pos: usize) -> Option<usize> {
         let source_len = characters.len();
         let find_len = find_characters.len();
 
@@ -3443,16 +3425,13 @@ pub(crate) mod opr_funcs {
 
         for compare_start_pos in start_pos..=last_start_pos {
             let mut matches = true;
-            let mut compare_find_pos = 0_usize;
 
-            for compare_source_pos in compare_start_pos..(compare_start_pos + find_len) {
-                matches = characters[compare_source_pos] == find_characters[compare_find_pos];
+            for (compare_find_pos, comp_char) in characters.iter().skip(compare_start_pos).take(find_len).enumerate() {
+                matches = *comp_char == find_characters[compare_find_pos];
 
                 if !matches {
                     break;
                 }
-
-                compare_find_pos += 1;
             }
 
             if matches {
@@ -3604,8 +3583,8 @@ pub(crate) mod opr_funcs {
                 ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             };
 
-            if let Some(ref rout) = shuttle.routines.get(&name) {
-                (*rout).clone()
+            if let Some(rout) = shuttle.routines.get(&name) {
+                rout.clone()
             } else {
                 empty_routine.clone()
             }
@@ -3618,34 +3597,29 @@ pub(crate) mod opr_funcs {
         let mut orig_pos = 0_usize;
         let mut count = 0f64;
 
-        loop {
-            match find_in_string_base(&result_characters, &find_characters, start_pos) {
-                Some(found_pos) =>  {
-                    let end_pos = found_pos + find_len;
-                    orig_pos += found_pos - start_pos;
+        while let Some(found_pos) = find_in_string_base(&result_characters, &find_characters, start_pos) {
+            let end_pos = found_pos + find_len;
+            orig_pos += found_pos - start_pos;
 
-                    let do_it = if use_condition {
-                        shuttle.set_var(pos_var.clone(), ValueType::Number(orig_pos as f64));
-                        shuttle.set_var(seq_var.clone(), ValueType::Number(count as f64));
-                        found_routine.body.operate(shuttle)?;
+            let do_it = if use_condition {
+                shuttle.set_var(pos_var.clone(), ValueType::Number(orig_pos as f64));
+                shuttle.set_var(seq_var.clone(), ValueType::Number(count));
+                found_routine.body.operate(shuttle)?;
 
-                        found_routine.body.get_num_value(0_f64)
-                    } else {
-                        1_f64
-                    };
+                found_routine.body.get_num_value(0_f64)
+            } else {
+                1_f64
+            };
 
-                    if do_it != 0_f64 {
-                        result_characters.splice(found_pos..end_pos, repl_characters.clone());
-                        start_pos += repl_len;
-                    } else {
-                        start_pos += find_len;
-                    }
-
-                    orig_pos += find_len;
-                    count += 1_f64;
-                },
-                None => break,
+            if do_it != 0_f64 {
+                result_characters.splice(found_pos..end_pos, repl_characters.clone());
+                start_pos += repl_len;
+            } else {
+                start_pos += find_len;
             }
+
+            orig_pos += find_len;
+            count += 1_f64;
         }
 
         *result_value = ValueType::Text(result_characters.iter().collect());
@@ -3677,16 +3651,16 @@ pub(crate) mod opr_funcs {
             }
         }
 
-        let is_separator_empty = separator.len() == 0;
+        let is_separator_empty = separator.is_empty();
 
         let mut count = 0;
 
         for fragment in source.split(separator.as_str()) {
-            if !((fragment.len() == 0) && is_separator_empty) {
+            if !((fragment.is_empty()) && is_separator_empty) {
                 count += 1;
 
                 shuttle.set_var(
-                    ValueType::Text(format!("{}{}", name_prefix, count)),
+                    ValueType::Text(format!("{name_prefix}{count}")),
                     ValueType::Text(fragment.to_string())
                 );
             }
@@ -3880,7 +3854,7 @@ pub(crate) mod opr_funcs {
                     ValueType::Empty => NO_VALUE.to_string(),   
                     ValueType::Number(num) => shuttle.number_format.format(num),
                     ValueType::Text(txt) => txt,
-                    ValueType::Error(s_err) => format!("{:?}", s_err),
+                    ValueType::Error(s_err) => format!("{s_err:?}"),
                     ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 }).as_bytes()
             ) {
@@ -3959,9 +3933,9 @@ pub(crate) mod opr_funcs {
             ValueType::Text(path) => {
                 let os_path = OsStr::new(path.as_str());
 
-                match shuttle.text_io_handler.read_text(&os_path) {
+                match shuttle.text_io_handler.read_text(os_path) {
                     Ok(content) => *result_value = ValueType::Text(content),
-                    Err(msg) => return Err(ScriptError::FileReadFailure{path: path, reason: msg.to_string()}),
+                    Err(msg) => return Err(ScriptError::FileReadFailure{ path, reason: msg.to_string()}),
                 }
             },
             ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
@@ -3991,9 +3965,9 @@ pub(crate) mod opr_funcs {
             ValueType::Text(path) => {
                 let os_path = OsStr::new(path.as_str());
 
-                match shuttle.text_io_handler.write_text(&os_path, content) {
+                match shuttle.text_io_handler.write_text(os_path, content) {
                     Ok(_) => *result_value = ValueType::Number(len as f64),
-                    Err(msg) => return Err(ScriptError::FileReadFailure{path: path, reason: msg.to_string()}),
+                    Err(msg) => return Err(ScriptError::FileReadFailure{path, reason: msg.to_string()}),
                 }
             },
             ValueType::Error(s_err) => return Err(s_err),
@@ -4272,10 +4246,7 @@ pub(crate) mod opr_funcs {
             shuttle.try_outcome_stack.pop();
         }
 
-        if let Err(s_err) = op_result
-        {
-            return Err(s_err);
-        }
+        op_result?;
 
         *result_value = operands[op_to_execute].get_value();
 
@@ -4367,8 +4338,8 @@ pub(crate) mod opr_funcs {
                 (0, op) => {
                     let name = op.get_value();
 
-                    if let Some(ref expr) = shuttle.routines.get(&name) {
-                        found_routine = (*expr).clone();
+                    if let Some(expr) = shuttle.routines.get(&name) {
+                        found_routine = expr.clone();
                     } else {
                         return Err(ScriptError::UnknownRoutine(
                             name.get_string_value("???".to_string())));
@@ -4387,7 +4358,7 @@ pub(crate) mod opr_funcs {
         let call_result =  found_routine.body.operate(shuttle);
 
         if found_routine.in_new_variables_scope {
-            shuttle.nums.pop().unwrap_or(HashMap::<ValueType, ValueType>::new());
+            shuttle.nums.pop().unwrap_or_default();
         }
 
         match call_result {
