@@ -2,11 +2,6 @@
 
 //{ TODOs
 // TODO: resolve TODO's in code.
-// TODO: Implement an Interpreter method that only has a script string as parameter (besides &mut
-//      self), and calls execute_opts(script, true, false, false).
-// TODO: Implement the K, operator that will push its operands in reverse order on the stack.
-// TODO: Implement the X, operator that will also push its second to last operands in reverse order on the stack.
-// TODO: Implement the K,, operator that will clear the stack.
 // TODO: the characters for the operators should be hard-coded only once: in constants.
 //      (done; not done follows below:)
 //      These constants can figure in a constant array of tuples
@@ -494,11 +489,14 @@ impl Expression {
             (OPBRK, _) => &opr_funcs::set_break,
             (OPRTN, 0) => &opr_funcs::define_routine_with_new_scope,
             (OPRTN, 1) => &opr_funcs::define_routine_sharing_variables,
-            (OPEXR, _) => &opr_funcs::exec_routine,
+            (OPEXR, 0) => &opr_funcs::exec_routine,
+            (OPEXR, 1) => &opr_funcs::exec_routine_reverse,
             (OPASG, _) => &opr_funcs::assign_number_register,
             (OPVAR, _) => &opr_funcs::get_variable,
             (OPMAS, _) => &opr_funcs::assignment_maker,
-            (OPSTK, _) => &opr_funcs::push_stack,
+            (OPSTK, 0) => &opr_funcs::push_stack,
+            (OPSTK, 1) => &opr_funcs::push_stack_reverse,
+            (OPSTK, 2) => &opr_funcs::clear_stack,
             (OPPOP, 0) => &opr_funcs::pop_stack,
             (OPPOP, 1) => &opr_funcs::stack_depth,
             (OPEQU, _) => &opr_funcs::equals,
@@ -900,6 +898,10 @@ impl Interpreter {
         Interpreter::new(writer, reader, text_io_handler)
     }
 
+    pub fn execute(&mut self, program: String) -> Result<ExecutionOutcome, ScriptError> {
+        self.execute_opts(program, true, false, false)
+    }
+
     pub fn execute_with_mocked_io(program: String) -> Result<ExecutionOutcome, ScriptError> {
         let writer = Box::new(Vec::<u8>::new());
         let reader = Box::new(input::MockByString::new(Vec::<String>::new()));
@@ -1159,6 +1161,8 @@ impl Interpreter {
                                 needed_ops = 2;
                             } else if (op_for_stack == OPREA) && (alternative_marks_count > 0) {
                                 needed_ops = 1;
+                            } else if (op_for_stack == OPSTK) && (alternative_marks_count == 2) {
+                                needed_ops = 0;
                             }
 
                             let mut new_exp =
@@ -2113,6 +2117,21 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
+    pub fn push_stack_reverse(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        check_nr_operands(opr_mark, operands, 1)?;
+
+        let mut outcome = ValueType::Empty;
+
+        for op in operands.iter().rev() {
+            outcome = (*op).get_value();
+            shuttle.stack.push(outcome.clone());
+        }
+
+        *result_value = outcome;
+
+        Ok(())
+    }
+
     pub fn pop_stack(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = match shuttle.stack.pop() {
             None => ValueType::Empty,
@@ -2124,6 +2143,13 @@ pub(crate) mod opr_funcs {
 
     pub fn stack_depth(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         *result_value = ValueType::Number(shuttle.stack.len() as f64);
+
+        Ok(())
+    }
+
+    pub fn clear_stack(_opr_mark: &mut char, result_value: &mut ValueType, _operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        *result_value = ValueType::Number(shuttle.stack.len() as f64);
+        shuttle.stack.clear();
 
         Ok(())
     }
@@ -4108,34 +4134,37 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn exec_routine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn exec_routine_base(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, reverse: bool) -> Result<(), ScriptError> {
         check_nr_operands(opr_mark, operands, 1)?;
 
         *result_value = ValueType::Empty;
 
+        /*
         // Returns empty value.
         let mut found_routine = Routine{
             body: Expression::new(OPEMP, 0),
             in_new_variables_scope: true,
         };
+        */
+        
+        let mut found_routine: Routine;
 
-        let mut name = ValueType::Empty;
+        let name = operands[0].get_value();
 
-        for op_tuple in operands.iter_mut().enumerate() {
-            match op_tuple {
-                (0, op) => {
-                    name = op.get_value();
+        if let Some(expr) = shuttle.routines.get(&name) {
+            found_routine = expr.clone();
+        } else {
+            return Err(ScriptError::UnknownRoutine(
+                name.get_string_value("???".to_string())));
+        }
 
-                    if let Some(expr) = shuttle.routines.get(&name) {
-                        found_routine = expr.clone();
-                    } else {
-                        return Err(ScriptError::UnknownRoutine(
-                            name.get_string_value("???".to_string())));
-                    }
-                },
-                (_, op) => {
-                    shuttle.stack.push(op.get_value());
-                },
+        if reverse {
+            for op in operands[1..].iter().rev() {
+                shuttle.stack.push(op.get_value());
+            }
+        } else {
+            for op in operands[1..].iter() {
+                shuttle.stack.push(op.get_value());
             }
         }
 
@@ -4161,6 +4190,14 @@ pub(crate) mod opr_funcs {
         *result_value = found_routine.body.get_value();
 
         Ok(())
+    }
+
+    pub fn exec_routine(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        exec_routine_base(opr_mark, result_value, operands, shuttle, false)
+    }
+
+    pub fn exec_routine_reverse(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        exec_routine_base(opr_mark, result_value, operands, shuttle, true)
     }
 
     pub fn user_error(opr_mark: &mut char, _result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
@@ -6049,6 +6086,17 @@ mod tests {
         }
 
         #[test]
+        fn x_interpreter_execute() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            interpreter.execute("w[sHello!]".to_string()).unwrap();
+
+            assert_eq!(6usize, interpreter.echo_output().unwrap().len());
+        }
+
+        #[test]
         fn x_write() {
             let writer = Box::new(Vec::<u8>::new());
             let reader = Box::new(MockByString::new(Vec::<String>::new()));
@@ -6558,6 +6606,16 @@ mod tests {
         }
 
         #[test]
+        fn x_stack_push_reverse_order() {
+            assert_eq!(1f64, Interpreter::execute_with_mocked_io("K,(9 7 5 3) >(kkkk)".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_stack_clear() {
+            assert_eq!(0f64, Interpreter::execute_with_mocked_io("K(7 5 9 6 2 1) K,, k,".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
         fn x_empty() {
             assert_eq!(0f64, Interpreter::execute_with_mocked_io("t€".to_string()).unwrap().numeric_value());
         }
@@ -6619,6 +6677,16 @@ mod tests {
         #[test]
         fn x_routine_get_name_in_main() {
             assert_eq!("main".to_string(), Interpreter::execute_with_mocked_io("c§rtn".to_string()).unwrap().string_representation());
+        }
+
+        #[test]
+        fn x_routine_exec_lifo_args() {
+            assert_eq!(-5f64, Interpreter::execute_with_mocked_io("R§minus -kk X(§minus 8 3)".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_routine_exec_inverse_args() {
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("R§minus -kk X,(§minus 8 3)".to_string()).unwrap().numeric_value());
         }
 
         #[test]

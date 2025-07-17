@@ -23,7 +23,11 @@ The Laconic crate provides both
 ```
     use laconic::Interpreter;
     let mut interpreter = Interpreter::new_stdio_filesys();
-    let exe_result = interpreter.execute_opts("*+4 2 3".to_string(), true, false, false);
+
+    let exe_result = interpreter.execute("*+4 2 3".to_string());
+
+    assert!(exe_result.is_ok());
+    assert_eq!(18_f64, exe_result.unwrap().numeric_value());
 ```
 - an executable that can be called from the command line:
 
@@ -349,11 +353,15 @@ One can pop and read items from the stack using the `k` operator:
 
 > `K40 k` yields 40.
 
+For easier passing arguments to routines, one can push operands in reverse order on the stack using the `K,` operand:
+
+> `K,(9 7 5 3) >(kkkk)` yields 1 (the larger numbers were on top of the stack and popped first)
+
 The `k,` operator returns the height of the stack: its number of values:
 
 > `K(§A §B 25) k,` yields 3.
 
-For clearing the stack, one can add the below operation to a script:
+For clearing the stack, one can use the `K,,` operator, which would do the same as:
 
 > `Wk,k` : While (`W`) the stack has items (`k,`), pop the topmost item (`k`).
 
@@ -411,7 +419,7 @@ Alternatively, if more operands are given to the `X` operator, these are pushed 
 
 > `X(§average 1 2 3 2)`
 
-> ***Note: as the stack is a last-in-first-out stack, stack items will be read by a routine in the reverse order they were pushed.***
+> ***Note: as the stack is a last-in-first-out stack, stack items will be read by a routine in the reverse order they were pushed. One can avoid this using the `K,` or `X,` operators instead.***
 
 As a routine's name is just another expression value, it's possible to use variables and stack items as pointers to routines.
 
@@ -743,6 +751,8 @@ Note: variables are stored in a HashTable; their key or "name" can be a number o
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 |K|push to<br/>LIFO<br/>stack|1|pushed<br/>also|value of<br/>last<br/>operand|empty|depends<br/>on Z§ign|
+|K,|push to<br/>LIFO<br/>stack<br/>in reverse<br/>order|1|pushed<br/>also|value of<br/>last<br/>operand|empty|depends<br/>on Z§ign|
+|K,,|clears<br/>the<br/>stack|0|ignored|number<br/>of stack<br/>items<br/>cleared|n/a|n/a|
 |k|pop from<br/>LIFO<br/>stack|0|ignored|value of<br/>top stack<br/>item;<br/>empty<br/>if none|n/a|n/a|
 |k,|stack<br/>height|0|ignored|number<br/>of stack<br/>items|n/a|n/a|
 
@@ -858,6 +868,7 @@ or for output by the w or the +(concatenation) commands.
 |R|definition<br/>of routine<br/>with new<br/>scope|2:<br/>1. routine<br/>name or<br/>number;<br/>2. operator<br/>to be<br/>executed|included<br/>in definition|name or<br/>number|error|error|
 |R,|definition<br/>of routine<br/>using scope<br/>of caller|2:<br/>1. routine<br/>name or<br/>number;<br/>2. operator<br/>to be<br/>executed|included<br/>in definition|name or<br/>number|error|error|
 |X|execute<br/>routine|1:<br/>routine<br/>name or<br/>number|pushed<br/>on stack as<br/>arguments|result of<br/>routine's<br/>last<br/>top-level<br/>operator|error|error|
+|X,|execute<br/>routine|1:<br/>routine<br/>name or<br/>number|pushed<br/>on stack as<br/>arguments<br/>**in reverse<br/>order**|result of<br/>routine's<br/>last<br/>top-level<br/>operator|error|error|
 
 ## I/O operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|

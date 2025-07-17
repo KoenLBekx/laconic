@@ -853,11 +853,17 @@ Operators
 
 	Stack
 
-		K	expression
+		K	expression(s)
 
 			Puts the value of the expression on the stack.
 
 			This operator can be used to pass data to routines.
+
+		K, expression(s)
+
+			Puts the value of the expression on the stack in reverse order.
+
+			This makes it easier to push values on the stack in the order a routine wants to find them.
 
 		k
 
@@ -867,6 +873,9 @@ Operators
 
 		k,
 			Stack depth: gets the number of items on the stack.
+
+		K,,
+			clears the stack.
 
 	Comparison
 
@@ -1222,6 +1231,10 @@ Operators
 				K(20 1 5 80) X§average
 
 			If a non-declared routine is called, the Empty value is returned.
+
+		X, eXecutes a routine and returns the routine's return value.
+
+			The difference with the X operator is that the operands after the routine name are pushed in reverse order on the stack - see the K, operator.
 
 	Input & Output
 
