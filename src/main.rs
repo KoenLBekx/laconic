@@ -56,13 +56,6 @@ fn main() {
     }
 
     if !script.is_empty() {
-        /*
-        let writer = Box::new(stdout());
-        let reader = Box::new(laconic::input::StdinReader::new());
-        let text_io_handler = Box::new(FileTextHandler::new());
-        let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
-        */
-
         let mut interpreter = Interpreter::new_stdio_filesys();
 
         if ignore_errors {

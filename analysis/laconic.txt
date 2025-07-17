@@ -756,6 +756,10 @@ Operators
 				newline character
 				This is the same as ¶
 
+			c§rtn
+				the name of the executing routine.
+				If called outside of a routine, returns "main".
+
 	Variables
 
 		$ Variable assignment

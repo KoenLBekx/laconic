@@ -1,244 +1,12 @@
-//{ Crate documentation
-//! # Operators
-//! <style>td:first-child{font-size: 2.2rem;}</style>
-//! ## Arithmetic operators
-//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |~|unary<br/>minus|1|ignored|number|error|error|
-//! |+|addition<br/>if no string<br/>operands|2|added|number|error|error|
-//! |+|concatenation<br/>if at least 1<br/>string<br/>operand|2|added|string;<br/>numbers are<br/>formatted<br/>as per<br/>o,§fmt command|empty<br/>string|string|
-//! |+,|concatenation<br/>if at least 1<br/>string<br/>operand|2|added|string;<br/>numbers are<br/>truncated<br/>to integers|empty<br/>string|string|
-//! |-|subtraction|2|subtracted|number|error|error|
-//! |*|multiplication|2|multiplied|number|error|error|
-//! |/|division|2|new<br/>division|number|error|error|
-//! |/,|integer<br/>division;<br>remainder<br/>is pushed<br/>to stack|2|ignored|number:<br>quotient|error|error|
-//! |%|modulo|2|modulo<br/>from<br/>modulo...|number|error|error|
-//! |^|exponen-<br/>tiation|2|new<br/>exponen-<br/>tiation|number|error|error|
-//! |i|integer|1|ignored|number<br/>truncated<br/>towards<br/>zero|error|error|
-//! |i,|ceiling|1|ignored|number<br/>filled<br/>towards<br/>nearest<br/>integer<br/>away from<br/>zero|error|error|
-//! |o§r|rounding|1|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|error|error|
-//! |a|abs|1|ignored|number<br/>absolute<br/>value|error|error|
-//! |l|logarithm<br/>from 2nd<br/>operand<br/>in base<br/>1st operand|2|ignored|number|error|error|
-//! |s|sign|1|tested also|1 if all<br/>operands are<br/>positive,<br/>-1 if all are<br/>negative,<br/>0 if mixed.|error|error|
-//! |b|input<br/>number<br/>base|1|ignored|the new<br/>base|error|error|
-//! |b,|output<br/>number<br/>base|1|ignored|the new<br/>base|error|error|
-//! |n|parse<br/>number<br/>from<br/>string|1|ignored|number|error|error|
-//!
-//! ## Trigonometric operators
-//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |p|Pi|0|ignored|number|n/a|n/a|
-//! |°|degrees<br/>from<br/>radians|1|ignored|number|error|error|
-//! |°,|radians<br/>from<br/>degrees|1|ignored|number|error|error|
-//! |S|sine<br/>from<br/>radians|1|ignored|number|error|error|
-//! |S,|arcsine<br/>in<br/>radians|1|ignored|number|error|error|
-//! |S,,|hyperbolic<br/>sine|1|ignored|number|error|error|
-//! |S,,,|inverse<br/>hyperbolic<br/>sine|1|ignored|number|error|error|
-//! |C|cosine<br/>from<br/>radians|1|ignored|number|error|error|
-//! |C,|arccosine<br/>in<br/>radians|1|ignored|number|error|error|
-//! |C,,|hyperbolic<br/>cosine|1|ignored|number|error|error|
-//! |C,,,|inverse<br/>hyperbolic<br/>cosine|1|ignored|number|error|error|
-//! |T|tangent<br/>from<br/>radians|1|ignored|number|error|error|
-//! |T,|arctangent<br/>in<br/>radians|1|ignored|number|error|error|
-//! |T,,|hyperbolic<br/>tangent|1|ignored|number|error|error|
-//! |T,,,|inverse<br/>hyperbolic<br/>tangent|1|ignored|number|error|error|
-//! |A|four quadrant<br/>arctangent<br/>of 1st arg (y)<br/>and 2nd arg (x)<br/>given in<br/>radians|2|ignored|number|error|error|
-//!
-//! ## Logical operators
-//!
-//! There are no boolean values.<br/>
-//! As return value, 0 is false and 1 is true.<br/>
-//! As input value, falsy are: 0, empty string, empty value and any error.<br/>
-//! All other values are truthy.
-//!
-//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |!|not|1|are<br/>checked<br/>also|1 if all<br/>operands<br/>are falsy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
-//! |&|and|1|are<br/>checked<br/>also|1 if all<br/>operands<br/>are truthy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
-//! |\||or|1|are<br/>checked<br/>also|1 if 1 or more<br/>operands<br/>are truthy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
-//! |x|xor|1|are<br/>checked<br/>also|1 if only 1<br/>operand<br/>is truthy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
-//!
-//! ## Comparison operators
-//!
-//! empty < any number < any string < any error<br/>
-//!
-//! The < and > operators can be combined with the negation operator:<br/>
-//! !< and !><br/>
-//! so as to obtain greater-or-equal or less-or-equal expressions with 2 operands.
-//!
-//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |=|equals|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are equal;<br/>else 0|empty|depends<br/>on Z§ign|
-//! |<|is less|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are an<br/>increasing<br/>series;<br/>else 0|empty|depends<br/>on Z§ign|
-//! |>|is greater|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are a<br/>decreasing<br/>series;<br/>else 0|empty|depends<br/>on Z§ign|
-//! |m|minimum|2|used|value of<br/>the smallest<br/>operand|empty|depends<br/>on<br/>Z§ign|
-//! |M|maximum|2|used|value of<br/>the greates<br/>operand|empty|depends<br/>on<br/>Z§ign|
-//!
-//! ## Constant operators
-//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |p|pi|0|ignored|number|n/a|n/a|
-//! |e|Euler's<br/>constant|0|ignored|number|n/a|n/a|
-//! |¶|newline<br/>character<br/>=<br/>c§n|0|ignored|string|n/a|n/a|
-//! |€|empty<br/>value<br/>=<br/>c§empty|0|ignored|Empty|n/a|n/a|
-//! |c|named<br/>constant:|1|ignored|several|error|error|
-//! |c§gold|golden<br/>ratio|0|ignored|several|error|error|
-//! |c§cogold|conjugate<br/>of golden<br/>ratio|0|ignored|several|error|error|
-//! |c§n|newline<br/>character<br/>=<br/>¶|0|ignored|several|error|error|
-//! |c§empty|empty<br/>value<br/>=<br/>€|0|ignored|several|error|error|
-//!
-//! ## Variable-related operators
-//!
-//! Note: variables are stored in a HashTable; their key or "name" can be a number or a string ("text")
-//!
-//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |$|assignment<br/>of 2nd<br/>operand<br/>to variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|2|assigned to<br/>subsequent<br/>variables|assigned<br/>value|error<br/>if 1st<br/>operand;<br/>empty if 2nd|error<br/>if 1st<br/>operand;<br/>if 2nd, depends<br/>on Z§ign|
-//! |v|value of<br/>variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|1|ignored|any type of<br/>expression<br/>value<br/>(including<br/>empty and<br/>error)|error|error|
-//! |:|like v<br/>but has result<br/>of parent operator<br/>assigned to that<br/>variable|1|ignored|like v|error|error|
-//!
-//! ## Stack-related operators
-//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |K|push to<br/>LIFO<br/>stack|1|pushed<br/>also|value of<br/>last<br/>operand|empty|depends<br/>on Z§ign|
-//! |k|pop from<br/>LIFO<br/>stack|0|ignored|value of<br/>top stack<br/>item;<br/>empty<br/>if none|n/a|n/a|
-//! |k,|stack<br/>height|0|ignored|number<br/>of stack<br/>items|n/a|n/a|
-//!
-//! ## Settings-related operators
-//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |Z|setting:<br/>assign value<br/>of 2nd<br/>operand<br/>to setting<br/>designated<br/>by 1st<br/>operand|2|ignored|setting<br/>value<br/>(2nd operand)|error|error|
-//! |Z§prec|comparison<br/>precision<br/>setting|1|ignored|setting<br/>value<br/>(2nd operand)|error|error|
-//! |Z§loops|maximum<br/>number<br/>of loop<br/>iterations|1|ignored|setting<br/>value<br/>(2nd operand)|error|error|
-//! |Z§ign|if not 0 ignore<br/>errors,<br/>else stop<br/>script<br/>execution<br/>on errors|1|ignored|setting<br/>value<br/>(2nd operand)|error|error|
-//!
-//! ## Named operators
-//! 
-//! The number of characters to represent operators is limited.
-//! Moreover, for most people, the beautiful 汉字 (Han zi) are difficult to enter using a keyboard. 
-//!
-//! That's why there are also operators that are designated by a name; these are called "named operators".
-//! The o and O operators take that name as their first operand in order to perform the operation of a named operator.
-//! 
-//! The difference between both operators is that<br/>
-//! - the lower case o operator takes 2 operands : the named operator name and one operation operand;<br/>
-//! - the upper case O operator takes 3 operands : the named operator name and two operation operands.
-//! 
-//! Furthermore, adding the comma operator to both the O and o operands increases their expected number of operands by (2 * number_of_commas), so
-//! 
-//! - the o, operator takes 4 operands;<br/>
-//! - the O, operator takes 5 operands;<br/>
-//! - the o,, operator takes 6 operands;<br/>
-//! - the O,, operator takes 7 operands;<br/>
-//! - etc.
-//! 
-//! Both operators, however, can have their number of operands overridden by the ( and ) operators,
-//! in which case they can be used interchangeably and following commas don't affect the number of expected operands (they can still affect the behaviour, though).
-//! 
-//! The operator's name, which is the first operand of the o and O operators, can either be a number or a string.
-//! For readability, however, strings are chosen for the implemented operators.
-//!
-//! As stated, this string is the first operand and can be written either as<br/>
-//! o §name<br/>
-//! o§name<br/>
-//! o\[sname\]<br/>
-//! or<br/>
-//! o \[sname\]
-//!
-//! The below named operators have been implemented:
-//!
-//! |Operator|Description|Required<br/>operands,<br/>inc.<br/>operator<br/>name|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |o§r|rounding|2|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|error|error|
-//! |o§version|version|1|A 2nd<br/>operand<br/>chooses the<br/>version part<br/>(1-3).<br/>0 chooses<br/>entire version<br/>again.<br/>E.g.: 1.0.2|The<br/>Laconic<br/>interpreter's<br/>version|error|error|
-//! |o§fib|Fibonacci<br/>number|2|ignored|Fibonacci<br/>number<br/>chosen<br/>by index (2nd<br/>operand)|error|error|
-//! |o§uni|Unicode<br/>character|2|converted<br/>also|string<br/>having<br/>Unicode<br/>characters|error|error|
-//! |o§ucv|Unicode<br/>value|2|3rd operand<br/>is used as<br/>character<br/>position.<br/>If absent,<br/>0 is used.|Unicode<br/>code point of<br/>character|error|error|
-//! |o§len|length in<br/>characters|2|length is<br/>added|total length<br/>of operands|error|error|
-//! |o§lower|lower<br/>case|2|ignored|lower case<br/>of 2nd<br/>operand|error|error|
-//! |o§upper|upper<br/>case|2|ignored|upper case<br/>of 2nd<br/>operand|error|error|
-//! |o§proper|proper<br/>case|2|ignored|proper case<br/>of 2nd<br/>operand|error|error|
-//! |o,§find|find 3rd operand<br/>as part of<br/>2nd operand<br/>starting from<br/>position passed<br/>as 4th operand|3|4th operand<br/>is start position.<br/>If missing,<br/>0 is used.|If found,<br/>start position<br/>of found<br/>substring.<br/>Else, empty.|error|error|
-//! |o,§sub|substring|3|4th operand<br/>will be used<br/>as length|the substring|error|error|
-//! |O,,§repl|string<br/>replacement|4 or 7|ignored|resulting<br/>string|error|error|
-//! |o,§split|split string|4|ignored|number of<br/>segments|error|error|
-//! |o,§fmt|set number<br/>format|4|ignored|empty|error|error|
-//! |o§leap|leap<br/>year|2|ignored|1 if number<br/>in 1st operand<br/>is a leap year,<br/>else 0|error|error|
-//! |o,§dow|day of<br/>week|4:<br/>§dow,<br/>year,<br/>month<br/>and day.|ignored|0 for saturday,<br/>1-6 for<br/>following<br/>days|error|error|
-//! |o,§greg|Gregorian<br/>day's<br/>sequence<br/>number|4:<br/>§dow,<br/>year,<br/>month<br/>and day.|ignored|1 for january 1,<br/>year 0000,<br/>etc.|error|error|
-//! |o§gregy|year from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregy<br/>and seq.nr.|ignored|year|error|error|
-//! |o§gregm|month from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregm<br/>and seq.nr.|ignored|month (1-12)|error|error|
-//! |o§gregd|day from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregd<br/>and seq.nr.|ignored|day (1-31)|error|error|
-    //! |o§gregt|date text<br/>from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregt<br/>and seq.nr.|A 3rd.<br/>operand<br/>is used as<br/>separator|A YYYYsMMsDD<br/>string where<br/>s is a<br/>separator,<br/>if any|error|error|
-//!
-//! Note: the **o,§sub** operator takes 4 arguments:<br/>
-//! - §sub: the operator's name;<br/>
-//! - the source string;<br/>
-//! - the start position of the substring;<br/>
-//! - (optional) the length of the substring. If ommitted, the substring will be taken from the
-//!   start position until the end of the source string.
-//!
-//! Note: the **o,§repl** or **O,,§repl** operator takes 4 or 7 arguments:<br/>
-//! - §repl : the operator's name;<br/>
-//! - the source string;<br/>
-//! - the substring to be replaced;<br/>
-//! - the string to replace it with;<br/>
-//!
-//! And optionally:<br/>
-//! - the number or name of the position variable;<br/>
-//! - the number or name of the sequence variable;<br/>
-//! - the number or name of the routine that can use both variables to decide if a replacement should happen.
-//!
-//! Note: the **0,§split** operator takes 4 arguments:
-//! - §split : the operator's name;<br/>
-//! - the source string;<br/>
-//! - the segment separator, like §;<br/>
-//! - the prefix of the numbered variable names the split segments will be assigned to.
-//!
-//! Note: the **o,§fmt** operator takes 4 arguments:<br/>
-//! - §fmt : the operator's name;<br/>
-//! - the number of fractal digits;<br/>
-//! - the fractal separator (default = .);<br/>
-//! - the thousands grouping separator (default: no grouping).
-//!
-//! This number format is only used for the final output of a script,
-//! or for output by the w or the +(concatenation) commands.
-//!
-//! ## Flow-related operators
-//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |?|if|2:<br/>1. condition<br/>2. operator<br/>executed<br/>if true<br/>3. operator<br/>executed<br/>if false|ignored|value of<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
-//! |?,|try<br/>operand 1;<br/>if error<br/>return<br/>operand 2|2|if a 3rd<br/>operand<br/>is given,<br/>it's returned<br/>when no error.|see prev.<br/>columns|empty|error|
-//! |V|value of<br/>1st operand<br/>of last ?,<br/>operator|0|ignored|Error value<br/>if operand1<br/>failed, else<br/>any value|n/a|n/a|
-//! |W|while|2:<br/>1. condition<br/>2. operator<br/>to be<br/>executed|executed<br/>also|value of<br/>last<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
-//! |F|for|5:<br/>1. start count<br/>2. end count<br/>3. increment<br/>4. counter<br/>variable<br/>number<br/>or name<br/>5. operator<br/>to be<br/>executed|executed<br/>also|value of<br/>last<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
-//! |B|break<br/>while<br/>or for<br/>loop|1:<br/>1 = current<br/>loop;<br/>higher = nth-1<br/>nesting<br/>loop|ignored|1st<br/>operand|error|error|
-//! |R|definition<br/>of routine<br/>with new<br/>scope|2:<br/>1. routine<br/>name or<br/>number;<br/>2. operator<br/>to be<br/>executed|included<br/>in definition|name or<br/>number|error|error|
-//! |R,|definition<br/>of routine<br/>using scope<br/>of caller|2:<br/>1. routine<br/>name or<br/>number;<br/>2. operator<br/>to be<br/>executed|included<br/>in definition|name or<br/>number|error|error|
-//! |X|execute<br/>routine|1:<br/>routine<br/>name or<br/>number|pushed<br/>on stack as<br/>arguments|result of<br/>routine's<br/>last<br/>top-level<br/>operator|error|error|
-//!
-//! ## I/O operators
-//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |r|read<br/>from<br/>stdin|0|ignored|if input<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|n/a|n/a|
-//! |r,|read<br/>from<br/>file|1:<br/>file<br/>path|ignored|if input<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|n/a|n/a|
-//! |w|write<br/>to<br/>stdout|1|written<br/>also|number<br/>of bytes<br/>written|empty<br/>string|depends on<br/>Z§ign|
-//! |w,|write<br/>to<br/>file,<br/>overwriting<br/>it|2|ignored|nr. of<br/>characters<br/>written|empty<br/>string|depends on<br/>Z§ign|
-//!
-//! ## Other operators
-//! |Operator|Description|Required<br/>operands|Surplus<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-//! |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-//! |;|combines<br/>expressions|2|used|value of<br/>last one|empty|error|
-//! |q|quote:<br/>convert<br/>to string.<br/>Same as<br/>+§ ...|1|ignored|string;<br/>numbers are<br/>formatted<br/>according to<br/>o,§fmt settings|empty|error|
-//! |q,|quote:<br/>convert<br/>to string.<br/>Same as<br/>+,§ ...|1|ignored|string;<br/>fractal parts<br/>of numbers are<br/>truncated<br/>towards zero|empty|error|
-//! |t|type|1|ignored|0 for empty,<br/>1 for number,<br/>2 for text,<br/>90 for error.|empty|depends on<br/>Z§ign|
-//! |N|number<br/>of operands<br/>of preceding<br/>same-level<br/>operator|0|ignored|number|n/a|n/a|
-//! |E|evaluate<br/>the expression<br/>in 1st<br/>operand<br/>(should<br/>be string)|1|ignored|evaluation<br/>result|error|depends on<br/>Z§ign|
-//! |U|user-<br/>coded<br/>error|1:<br/>error<br/>message|ignored|error|error|error|
-//}
+#![doc = include_str!("../README.md")]
 
 //{ TODOs
 // TODO: resolve TODO's in code.
+// TODO: Implement an Interpreter method that only has a script string as parameter (besides &mut
+//      self), and calls execute_opts(script, true, false, false).
+// TODO: Implement the K, operator that will push its operands in reverse order on the stack.
+// TODO: Implement the X, operator that will also push its second to last operands in reverse order on the stack.
+// TODO: Implement the K,, operator that will clear the stack.
 // TODO: the characters for the operators should be hard-coded only once: in constants.
 //      (done; not done follows below:)
 //      These constants can figure in a constant array of tuples
@@ -402,8 +170,9 @@ pub enum ScriptError {
     ZeroOrNegativeLogarithmBaseIsNotSupported,
 }
 
-#[derive(Clone, Debug, PartialOrd)]
+#[derive(Clone, Debug, Default, PartialOrd)]
 enum ValueType {
+    #[default]
     Empty,
     Number(f64),
     Text(String),
@@ -990,6 +759,7 @@ struct Shuttle {
     nums: Vec<HashMap<ValueType, ValueType>>,
     stack: Vec<ValueType>,
     routines: HashMap<ValueType, Routine>,
+    routine_name_stack: Vec<ValueType>,
     assignment_indexes_stack: Vec<Vec<ValueType>>,
     preceding_nr_operands: f64,
     max_iterations: f64,
@@ -1020,6 +790,7 @@ impl Shuttle {
             nums: vec![HashMap::<ValueType, ValueType>::new()],
             stack: Vec::new(),
             routines: HashMap::new(),
+            routine_name_stack: Vec::new(),
             assignment_indexes_stack: Vec::new(),
             preceding_nr_operands: 0f64,
             max_iterations: 10_000f64,
@@ -1067,6 +838,15 @@ impl Shuttle {
             None => ValueType::Empty,
             Some(v) => v.clone(),
         }
+    }
+
+    fn running_routine_name(&self) -> ValueType {
+        if self.routine_name_stack.is_empty() {
+            return ValueType::Text("main".to_string());
+        }
+
+        let last_index = self.routine_name_stack.len() -1;
+        self.routine_name_stack[last_index].clone()
     }
 
     pub fn echo_output(&self) -> Option<&[u8]> {
@@ -2220,6 +2000,7 @@ pub(crate) mod opr_funcs {
                 ValueType::Number(get_conjugate_golden_ratio_from_shuttle(shuttle)),
             ValueType::Text(name) if name == "n" => ValueType::Text("\n".to_string()),
             ValueType::Text(name) if name == "empty" => ValueType::Empty,
+            ValueType::Text(name) if name == "rtn" => shuttle.running_routine_name(),
             ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
             ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
@@ -4338,10 +4119,12 @@ pub(crate) mod opr_funcs {
             in_new_variables_scope: true,
         };
 
+        let mut name = ValueType::Empty;
+
         for op_tuple in operands.iter_mut().enumerate() {
             match op_tuple {
                 (0, op) => {
-                    let name = op.get_value();
+                    name = op.get_value();
 
                     if let Some(expr) = shuttle.routines.get(&name) {
                         found_routine = expr.clone();
@@ -4360,11 +4143,15 @@ pub(crate) mod opr_funcs {
             shuttle.nums.push(HashMap::new());
         }
 
+        shuttle.routine_name_stack.push(name);
+
         let call_result =  found_routine.body.operate(shuttle);
 
         if found_routine.in_new_variables_scope {
             shuttle.nums.pop().unwrap_or_default();
         }
+
+        shuttle.routine_name_stack.pop().unwrap_or_default();
 
         match call_result {
             Ok(_) => (),
@@ -6817,6 +6604,21 @@ mod tests {
         #[test]
         fn x_routine_new_scope() {
             assert_eq!(5f64, Interpreter::execute_with_mocked_io("R(§empty_vars $§end k $§start k Fv§start v§end 1 §count $v§count €) $(11 5 5 5 5 5) K(11 15) X§empty_vars v15".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_routine_get_name() {
+            assert_eq!("tau".to_string(), Interpreter::execute_with_mocked_io("R,§tau ; $100 c§rtn *p2 X§tau v100".to_string()).unwrap().string_representation());
+        }
+
+        #[test]
+        fn x_routine_get_name_in_main_after_routine_execution() {
+            assert_eq!("main".to_string(), Interpreter::execute_with_mocked_io("R§tau *p2 X§tau c§rtn".to_string()).unwrap().string_representation());
+        }
+
+        #[test]
+        fn x_routine_get_name_in_main() {
+            assert_eq!("main".to_string(), Interpreter::execute_with_mocked_io("c§rtn".to_string()).unwrap().string_representation());
         }
 
         #[test]
