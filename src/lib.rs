@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+// The braces after the first comment slashes make Vim fold these comments also.
 //{ TODOs
 // TODO: resolve TODO's in code.
 // TODO: the characters for the operators should be hard-coded only once: in constants.
@@ -14,7 +15,7 @@
 // TODO: The ScriptError variants that carry an operator mark as char should carry a string
 //      so the full enumerated operator name can be passed, e.g.: "o,§dow".
 // TODO: check using cargo clippy.
-// TODO: use giantity ?
+// TODO: use some other numeric type that supports very large numbers with higher precision instead of f64 - see crates.io (dashu?)
 //}
 
 //{ uses
@@ -2019,18 +2020,17 @@ pub(crate) mod opr_funcs {
 
         let mut name_is_string = false;
         let mut name: ValueType;
+        let mut name_base = "".to_string();
+        let is_series = operands.len() > 2;
 
-        let mut name_base = String::new();
         let mut index = 0f64;
 
         match operands[0].get_value() {
             ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Number(num) =>  {
-                name = ValueType::Number(num);
                 index = num;
             },
             ValueType::Text(txt) => {
-                name = ValueType::Text(txt.clone());
                 name_base = txt;
                 name_is_string = true;
             }
@@ -2043,15 +2043,19 @@ pub(crate) mod opr_funcs {
 
         for opd in &operands[1..operands.len()] {
             reg_val = opd.get_value();
-            shuttle.set_var(name, reg_val.clone());
-
-            counter += 1f64;
 
             if name_is_string {
-                name = ValueType::Text(format!("{name_base}{counter}"));
+                if is_series {
+                    name = ValueType::Text(format!("{name_base}{counter}"));
+                } else {
+                    name = ValueType::Text(name_base.clone());
+                }
             } else {
                 name = ValueType::Number(index + counter);
             }
+
+            shuttle.set_var(name, reg_val.clone());
+            counter += 1f64;
         }
 
         *result_value = reg_val;
@@ -2282,7 +2286,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn and(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        check_nr_operands(opr_mark, operands, 1)?;
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut outcome = true;
 
@@ -2306,7 +2310,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn or(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        check_nr_operands(opr_mark, operands, 1)?;
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut outcome = false;
 
@@ -2330,7 +2334,7 @@ pub(crate) mod opr_funcs {
     }
 
     pub fn xor(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        check_nr_operands(opr_mark, operands, 1)?;
+        check_nr_operands(opr_mark, operands, 2)?;
 
         let mut trues = 0usize;
 
@@ -5393,8 +5397,13 @@ mod tests {
         }
 
         #[test]
+        fn x_assign_num_assignation_string_name() {
+            assert_eq!(10f64, Interpreter::execute_with_mocked_io("$§reg 10 v§reg".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
         fn x_assign_num_serial_assignation_string_name() {
-            assert_eq!(7f64, Interpreter::execute_with_mocked_io("$(§reg 1 2 3 4) +v§reg2 v§reg3".to_string()).unwrap().numeric_value());
+            assert_eq!(10f64, Interpreter::execute_with_mocked_io("$(§reg 1 2 3 4) +(v§reg0 v§reg1 v§reg2 v§reg3)".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -5654,12 +5663,12 @@ mod tests {
 
         #[test]
         fn x_and_1_true() {
-            assert_eq!(1f64, Interpreter::execute_with_mocked_io("& /7 2".to_string()).unwrap().numeric_value());
+            assert_eq!(Err(ScriptError::InsufficientOperands('&')), Interpreter::execute_with_mocked_io("& /7 2".to_string()));
         }
 
         #[test]
         fn x_and_1_false() {
-            assert_eq!(0f64, Interpreter::execute_with_mocked_io("& -5 5".to_string()).unwrap().numeric_value());
+            assert_eq!(Err(ScriptError::InsufficientOperands('&')), Interpreter::execute_with_mocked_io("& -5 5".to_string()));
         }
 
         #[test]
@@ -5718,12 +5727,12 @@ mod tests {
 
         #[test]
         fn x_or_1_true() {
-            assert_eq!(1f64, Interpreter::execute_with_mocked_io("| /7 2".to_string()).unwrap().numeric_value());
+            assert_eq!(Err(ScriptError::InsufficientOperands('|')), Interpreter::execute_with_mocked_io("| /7 2".to_string()));
         }
 
         #[test]
         fn x_or_1_false() {
-            assert_eq!(0f64, Interpreter::execute_with_mocked_io("| -5 5".to_string()).unwrap().numeric_value());
+            assert_eq!(Err(ScriptError::InsufficientOperands('|')), Interpreter::execute_with_mocked_io("| -5 5".to_string()));
         }
 
         #[test]
@@ -5782,12 +5791,12 @@ mod tests {
 
         #[test]
         fn x_xor_1_true() {
-            assert_eq!(1f64, Interpreter::execute_with_mocked_io("x /7 2".to_string()).unwrap().numeric_value());
+            assert_eq!(Err(ScriptError::InsufficientOperands('x')), Interpreter::execute_with_mocked_io("x /7 2".to_string()));
         }
 
         #[test]
         fn x_xor_1_false() {
-            assert_eq!(0f64, Interpreter::execute_with_mocked_io("x -5 5".to_string()).unwrap().numeric_value());
+            assert_eq!(Err(ScriptError::InsufficientOperands('x')), Interpreter::execute_with_mocked_io("x -5 5".to_string()));
         }
 
         #[test]

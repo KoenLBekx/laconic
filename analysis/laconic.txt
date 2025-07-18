@@ -1,9 +1,5 @@
 LACONIC
 
-		// TODO: explain the consequences of using floating-point numbers only.
-		//			(precision).
-		// TODO: explain standard number of operands and how to deviate from it.
-		// TODO: indicate the standard number of operands for every operator.
 		// TODO: add a -o parameter to the executable that gives an overview
 		//				of all operators grouped by functionality (arithmetic, flow, settings, etc.)
 		// TODO: add a -h parameter to the executable that gives comprehensive info
@@ -34,6 +30,7 @@ LACONIC
 
 						Writes the outcome of the expression to a file, appending to it
 						(instead of overwriting it).
+			- Provide an array (matrix?) value type having arbitrary dimensions, and support all meaningful operators on it.
 			- Provide an operator that writes an SVG file containing a graph
 				based on arrays of variables.
 			- Provide an operator that outputs if there is precision loss
@@ -45,7 +42,7 @@ LACONIC
 			- Provide a factorial operator.
 			- Provide an operator that returns the current data as a Gregorian sequential number.
 			- Provide an operator that returns the current time as milliseconds/ticks since ... ?
-
+			- Provide a variant E, of the E operator that converts standard infix notation to Polish notation before evaluating the string.
 
 		* Characters assigned (or to be assigned) to operators:
 			~+-*/%^$():,;=<>!&|?°€¶AaBbCcEeFiKklMmNnOopqRrSsTtUVvWwXxZ
@@ -790,7 +787,7 @@ Operators
 
 			$(§reg 20 30 40 50)
 				assigns
-					20 to variable "reg",
+					20 to variable "reg0",
 					30 to variable "reg1",
 					40 to variable "reg2",
 					50 to variable "reg3".

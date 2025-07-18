@@ -6,15 +6,15 @@
 <style>td:first-child{font-size: 1.5rem;}</style>
 # **Laconic**
 
-> *I got carried away. I needed a very concise expression interpreter, but Laconic nearly became a programming language:*
+> *I got carried away. I needed a concise expression interpreter, but Laconic nearly became a programming language:*
 
-> *besides numeric and string operators, it does provide variables, tests, loops, routines, standard input & output, file I/O and error handling.*
+> *besides numeric and string operators, it provides variables, tests, loops, routines, standard input & output, file I/O and error handling.*
 
-*- Koen Bekx*
+> *- Koen Bekx*
 
 ## Introduction
 
-Laconic is a Polish expression interpreter :<br/>
+Laconic is a Polish notation expression interpreter :<br/>
 > `*+4 2 3`<br/>
 > evaluates to 18.
 
@@ -258,6 +258,10 @@ Strings are either<br/>
 
 ***Note** that the `§` character doesn't terminate a simple string, so it can be part of one.*
 
+An empty string can be expressed by
+- `[s]`
+- `§` on itself: followed by whitespace, `[`, `(`, `)` or at the end of a script.
+
 Eg.:<br/>
 
 > `[sKunji Namparshespa]` yields the string "Kunji Namparshespa".<br/>
@@ -340,6 +344,22 @@ Variable identifiers can also be calculated:
 > `$§month 1 $+,§daysInMonth v§month 31` assigns the value 31 to variable having identifier "daysInMonth1".
 
 > Expressions like these, together with variables holding a pointer like v§month, allow for array-like constructs.
+
+## Serial assignment of variables
+
+It is possible to assign a series of values to a series of variables using one `$` operation:
+
+> `$(100 30 20 10)` assigns<br/>
+> 30 to variable 100<br/>
+> 20 to variable 101<br/>
+> 10 to variable 102.
+
+When the given variable identifier is a string, the assigned variables will have as identifier the original string + a counter starting from 0:
+
+> `$(rate 30 20 10)` assigns<br/>
+> 30 to variable "rate0"<br/>
+> 20 to variable "rate1"<br/>
+> 10 to variable "rate2".
 
 ## Stack
 
@@ -674,78 +694,98 @@ A routine's code has access to its own name or identifier using the `c§rtn` ope
 >> `n€` yields 0
 
 ## Trigonometric operators
-|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|p|Pi|0|ignored|number|n/a|n/a|
-|°|degrees<br/>from<br/>radians|1|ignored|number|error|error|
-|°,|radians<br/>from<br/>degrees|1|ignored|number|error|error|
-|S|sine<br/>from<br/>radians|1|ignored|number|error|error|
-|S,|arcsine<br/>in<br/>radians|1|ignored|number|error|error|
-|S,,|hyperbolic<br/>sine|1|ignored|number|error|error|
-|S,,,|inverse<br/>hyperbolic<br/>sine|1|ignored|number|error|error|
-|C|cosine<br/>from<br/>radians|1|ignored|number|error|error|
-|C,|arccosine<br/>in<br/>radians|1|ignored|number|error|error|
-|C,,|hyperbolic<br/>cosine|1|ignored|number|error|error|
-|C,,,|inverse<br/>hyperbolic<br/>cosine|1|ignored|number|error|error|
-|T|tangent<br/>from<br/>radians|1|ignored|number|error|error|
-|T,|arctangent<br/>in<br/>radians|1|ignored|number|error|error|
-|T,,|hyperbolic<br/>tangent|1|ignored|number|error|error|
-|T,,,|inverse<br/>hyperbolic<br/>tangent|1|ignored|number|error|error|
-|A|four quadrant<br/>arctangent<br/>in radians<br/>of 1st arg (y)<br/>and 2nd arg (x)|2|ignored|number|error|error|
+|p|π or Pi|0|ignored|3.1415 etc.|`Cp`|-1 (= cosine(π)|
+|°|degrees<br/>from<br/>radians|1|ignored|number|`°p`|180|
+|°,|radians<br/>from<br/>degrees|1|ignored|number|`°,180`|3.1415 etc.|
+|S|sine<br/>from<br/>radians|1|ignored|number|`S/p2`|1 (=sine(π/2)|
+|S,|arcsine<br/>in<br/>radians|1|ignored|number|`S,1`|1.570795 etc.<br/>(= π/2)|
+|S,,|hyperbolic<br/>sine|1|ignored|number|`S,,1`|1.7520 etc.|
+|S,,,|inverse<br/>hyperbolic<br/>sine|1|ignored|number|`S,,,1`|0.88137 etc.|
+|C|cosine<br/>from<br/>radians|1|ignored|number|`C0`|1|
+|C,|arccosine<br/>in<br/>radians|1|ignored|number|`C,0`|1.570795 etc.<br/>(= π/2)|
+|C,,|hyperbolic<br/>cosine|1|ignored|number|`C,,1`|1.54308 etc.|
+|C,,,|inverse<br/>hyperbolic<br/>cosine|1|ignored|number|`C,,,1`|0|
+|T|tangent<br/>from<br/>radians|1|ignored|number|`T°,45`|1|
+|T,|arctangent<br/>in<br/>radians|1|ignored|number|`°T,1`|45|
+|T,,|hyperbolic<br/>tangent|1|ignored|number|`T,,1`|0.761594 etc.|
+|T,,,|inverse<br/>hyperbolic<br/>tangent|1|ignored|number|`T,,,.5`|0.549306 etc.|
+|A|four quadrant<br/>arctangent<br/>in radians<br/>of 1st arg (y)<br/>and 2nd arg (x)|2|ignored|number|`°A 4 ~4`|135|
 
 ## Logical operators
 
-There are no boolean values.<br/>
-As return value, 0 is false and 1 is true.<br/>
-As input value, falsy are: 0, empty string, empty value and any error.<br/>
-All other values are truthy.
+Laconic has no boolean value type, however
 
-|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+as return value,
+- 0 is false and
+- 1 is true.
+
+As input value, falsy are:
+- 0,
+- empty string,
+- empty value and
+- any error.
+
+All other values are truthy:
+- any non-zero number, negative ones included,
+- any non-empty string.
+
+|Operator|Description|Expected<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|!|not|1|are<br/>checked<br/>also|1 if all<br/>operands<br/>are falsy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
-|&|and|1|are<br/>checked<br/>also|1 if all<br/>operands<br/>are truthy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
-|\||or|1|are<br/>checked<br/>also|1 if 1 or more<br/>operands<br/>are truthy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
-|x|xor|1|are<br/>checked<br/>also|1 if only 1<br/>operand<br/>is truthy;<br/>else 0|falsy|falsy<br/>if Z§ign 1<br/>else error|
+|!|not|1|are<br/>checked<br/>also|1 if all<br/>operands<br/>are falsy;<br/>else 0|`!0`<br/>`!5`<br/>`!(0 € -4 4 §)`<br/>`!(5 0 1)`|1<br/>0<br/>1<br/>0|
+|&|and|2|are<br/>checked<br/>also|1 if all<br/>operands<br/>are truthy;<br/>else 0|`&29 §Hello`<br/>`&(45 1 ~7)`<br/>`&86 0`|1<br/>1<br/>0|
+|\||or|2|are<br/>checked<br/>also|1 if 1 or more<br/>operands<br/>are truthy;<br/>else 0|`\|1 0`<br/>`\|0 0`<br/>`\|(0 §Ghent €)`|1<br/>0<br/>1|
+|x|xor|2|are<br/>checked<br/>also|1 if only 1<br/>operand<br/>is truthy;<br/>else 0|`x(0 1 0)`<br/>`x0 €`<br/>`x74 ~12`|1<br/>0<br/>1|
 
 ## Comparison operators
 
+For comparison's sake, all possible Laconic values live in one large continuum:<br/>
 empty < any number < any string < any error<br/>
 
 The < and > operators can be combined with the negation operator:<br/>
-!< and !><br/>
+`!<` and `!>`<br/>
 so as to obtain greater-or-equal or less-or-equal expressions with 2 operands.
 
-|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
+The `=` (equals) operator takes a precision margin into account in order to mitigate the underlying f64 number type's precision limitations.
+
+This precision margin is 0.000_000_01 by default, but can be set and changed again using the `Z§prec` operation. E.g.:
+
+> `Z§prec .1 = .11 .12` yields 1: true.
+
+*Note: `=` is always a comparison operator ("equals"), and never assigns. For assignments, see the `$` and `:` operators.*
+
+|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|=|equals|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are equal;<br/>else 0|empty|depends<br/>on Z§ign|
-|<|is less|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are an<br/>increasing<br/>series;<br/>else 0|empty|depends<br/>on Z§ign|
-|>|is greater|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are a<br/>decreasing<br/>series;<br/>else 0|empty|depends<br/>on Z§ign|
-|m|minimum|2|used|value of<br/>the smallest<br/>operand|empty|depends<br/>on<br/>Z§ign|
-|M|maximum|2|used|value of<br/>the greates<br/>operand|empty|depends<br/>on<br/>Z§ign|
+|=|equals|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are equal;<br/>else 0|`=27 ^3 3`<br/>`=§Καλημέρα [sΚαλημέρα]`<br/>`=(256 ^2 8 ^16 2)`<br/>`=€ 0`<br/>`$0T°,45 =1v0`|1<br/>1<br/>1<br/>0<br/>1|
+|<|is less|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are an<br/>increasing<br/>series;<br/>else 0|`Z§ign 1 <(€ ~33 0 [sA] [sa] /5 0`)<br/>`<0 €`|1<br/>0|
+|>|is greater|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are a<br/>decreasing<br/>series;<br/>else 0|`>(§Woof! 38 2)`<br/>`> +12.1 .3 13`<br/>`>§a §A`<br/>`>[sZorro y Perro] §Zorro`|1<br/>0<br/>1<br/>1|
+|m|minimum|2|used|value of<br/>the smallest<br/>operand|`m Sp Cp`<br/>`m(38 77 3)`<br/>`m(§z §York 8)`|-1<br/>3<br/>8|
+|M|maximum|2|used|value of<br/>the greatest<br/>operand|`M Sp Cp`<br/>`M(45 ~3 1_252)`<br/>`M§§ §§§`|0<br/>1252<br/>"§§"|
+
+*Note: `§§§` yields "§§" as the first `§` is the simple string prefix.*
 
 ## Constant operators
-|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|p|pi|0|ignored|number|n/a|n/a|
-|e|Euler's<br/>constant|0|ignored|number|n/a|n/a|
-|¶|newline<br/>character<br/>=<br/>c§n|0|ignored|string|n/a|n/a|
-|€|empty<br/>value<br/>=<br/>c§empty|0|ignored|Empty|n/a|n/a|
-|c|named<br/>constant:|1|ignored|several|error|error|
-|c§gold|golden<br/>ratio|0|ignored|several|error|error|
-|c§cogold|conjugate<br/>of golden<br/>ratio|0|ignored|several|error|error|
-|c§n|newline<br/>character<br/>=<br/>¶|0|ignored|several|error|error|
-|c§empty|empty<br/>value<br/>=<br/>€|0|ignored|several|error|error|
-|c§rtn|the running<br/>routine's<br/>name|0|ignored|"main" if not<br/>in routine;<br/>else the running<br/>routine's<br/>name|error|error|
+|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
+|:-:|:-:|:-:|:-:|:-:|:-|:-:|
+|p|pi|0|ignored|3.141592 etc.|Sp|-1 (=sine(π))|
+|e|Euler's<br/>number|0|ignored|2.718281 etc.|||
+|¶|newline<br/>character<br/>=<br/>c§n|0|ignored|"\n", U+000A|`+,(72 ¶ 99)`|"72<br/>99"|
+|€|empty<br/>value<br/>=<br/>c§empty|0|ignored|empty value|`?=v§crit 0 B1 €`|If<br/>variable<br/>"crit" is 0,<br/>break<br/>the loop,<br/>else<br/>do nothing.|
+|c|named<br/>constant:|1|ignored|several,<br/>see below|||
+|c§gold|golden<br/>ratio,<br/>calculated as<br/>(1 + sqrt(5))/2|0|ignored|1.618033 etc.|`$§height *v§width c§gold`|variable<br/>"height"<br/>has var. "width"<br/>x golden<br/>ratio|
+|c§cogold|conjugate<br/>of golden<br/>ratio,<br/>calculated as<br/>(1 - sqrt(5))/2|0|ignored|-0.618033 etc.|||
+|c§n|newline<br/>character<br/>=<br/>¶|0|ignored|"\n", U+000A|+(`$Decem- c§n §ber`)|"Decem-<br/>ber"|
+|c§empty|empty<br/>value<br/>=<br/>€|0|ignored|empty value|||
+|c§rtn|the running<br/>routine's<br/>name|0|ignored|"main" if not<br/>in routine;<br/>else the running<br/>routine's<br/>name|`R(`<br/>` §percent`<br/>` $0k`<br/>` $1k`<br/>` ?`<br/>`  !v1`<br/>`  U`<br/>`   +`<br/>`    c§rtn`<br/>`    [s: zero div.]`<br/>`  /*v0 100 v1`<br/>`)`|The "percent"<br/>routine<br/>includes<br/>its own name<br/>in an error<br/>message.|
 
 ## Variable-related operators
 
-Note: variables are stored in a HashTable; their key or "name" can be a number or a string ("text")
-
-|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|$|assignment<br/>of 2nd<br/>operand<br/>to variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|2|assigned to<br/>subsequent<br/>variables|assigned<br/>value|error<br/>if 1st<br/>operand;<br/>empty if 2nd|error<br/>if 1st<br/>operand;<br/>if 2nd, depends<br/>on Z§ign|
-|v|value of<br/>variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|1|ignored|any type of<br/>expression<br/>value<br/>(including<br/>empty and<br/>error)|error|error|
-|:|like v<br/>but has result<br/>of parent operator<br/>assigned to that<br/>variable|1|ignored|like v|error|error|
+|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
+|:-:|:-:|:-:|:-:|:-:|:-|:-:|
+|$|assignment<br/>of 2nd<br/>operand<br/>to variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|2|assigned to<br/>subsequent<br/>variables|assigned<br/>value|`$4 8 v4`<br/>`$§count 0 v§count`<br/><br/>`$(§tariff 3 10 25)`<br/>`  +,(v§tariff0 §; v§tariff2)`|8<br/>0<br/><br/><br/>3;25|
+|v|value of<br/>variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|1|ignored|any type of<br/>expression<br/>value<br/>(including<br/>empty and<br/>error)|See above||
+|:|like v<br/>but has result<br/>of parent operator<br/>assigned to that<br/>variable|1|ignored|like v|`$§count 0`<br/>`  +:§count 1`<br/>`  v§count`|<br/><br/>1|
 
 ## Stack-related operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
@@ -767,35 +807,37 @@ Note: variables are stored in a HashTable; their key or "name" can be a number o
 ## Named operators
 
 The number of characters to represent operators is limited.
-Moreover, for most people, the beautiful 汉字 (Han zi) are difficult to enter using a keyboard. 
+Moreover, for many people, non-Latin characters are difficult to enter using a keyboard. 
+
+So when Laconic wants to express every operator using only one character, it's a bit short of characters.
 
 That's why there are also operators that are designated by a name; these are called "named operators".
 The o and O operators take that name as their first operand in order to perform the operation of a named operator.
 
 The difference between both operators is that<br/>
-- the lower case o operator takes 2 operands : the named operator name and one operation operand;<br/>
-- the upper case O operator takes 3 operands : the named operator name and two operation operands.
+- the lower case `o` operator takes 2 operands : the named operator name and one operation operand;<br/>
+- the upper case `O` operator takes 3 operands : the named operator name and two operation operands.
 
-Furthermore, adding the comma operator to both the O and o operands increases their expected number of operands by (2 * number_of_commas), so
+Furthermore, adding the variant operator (`,`) to both the O and o operands increases their expected number of operands by (2 * number_of_variants), so
 
-- the o, operator takes 4 operands;<br/>
-- the O, operator takes 5 operands;<br/>
-- the o,, operator takes 6 operands;<br/>
-- the O,, operator takes 7 operands;<br/>
+- the `o,` operator takes 4 operands;<br/>
+- the `O,` operator takes 5 operands;<br/>
+- the `o,,` operator takes 6 operands;<br/>
+- the `O,,` operator takes 7 operands;<br/>
 - etc.
 
-Both operators, however, can have their number of operands overridden by the ( and ) operators,
-in which case they can be used interchangeably and following commas don't affect the number of expected operands (they can still affect the behaviour, though).
+Both operators, however, can have their number of operands overridden by parentheses,
+in which case they can be used interchangeably and following variant operators don't affect the number of expected operands (they can still affect the behaviour, though).
 
-The operator's name, which is the first operand of the o and O operators, can either be a number or a string.
+The operator's name, which is the first operand of the `o` and `O` operators, can either be a number or a string.
 For readability, however, strings are chosen for the implemented operators.
 
 As stated, this string is the first operand and can be written either as<br/>
-o §name<br/>
-o§name<br/>
-o\[sname\]<br/>
+`o §name`<br/>
+`o§name`<br/>
+`o [sname]`<br/>
 or<br/>
-o \[sname\]
+`o[sname]`
 
 The below named operators have been implemented:
 
@@ -817,7 +859,7 @@ The below named operators have been implemented:
 |o,§fmt|set number<br/>format|4|ignored|empty|error|error|
 |o§leap|leap<br/>year|2|ignored|1 if number<br/>in 1st operand<br/>is a leap year,<br/>else 0|error|error|
 |o,§dow|day of<br/>week|4:<br/>§dow,<br/>year,<br/>month<br/>and day.|ignored|0 for saturday,<br/>1-6 for<br/>following<br/>days|error|error|
-|o,§greg|Gregorian<br/>day's<br/>sequence<br/>number|4:<br/>§dow,<br/>year,<br/>month<br/>and day.|ignored|1 for january 1,<br/>year 0000,<br/>etc.|error|error|
+|o,§greg|Gregorian<br/>day's<br/>sequence<br/>number|4:<br/>§greg,<br/>year,<br/>month<br/>and day.|ignored|1 for january 1,<br/>year 0000,<br/>etc.|error|error|
 |o§gregy|year from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregy<br/>and seq.nr.|ignored|year|error|error|
 |o§gregm|month from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregm<br/>and seq.nr.|ignored|month (1-12)|error|error|
 |o§gregd|day from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregd<br/>and seq.nr.|ignored|day (1-31)|error|error|
