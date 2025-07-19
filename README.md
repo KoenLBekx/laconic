@@ -331,9 +331,37 @@ $
 </pre>
 > yields the frequency of tone B<sub>4</sub> according to ISO 16.
 
+One can supply a default value when reading a variable, in case it's uninitialized or holds the empty value: the `v,` operator takes two operands:
+- a variable identifier
+- a default value
+
+When the variable referred to by the first operand is empty or uninitialized, the value of the second operand is assigned to it and returned.
+
+> E.g.:
+>> `[cVariable 5 is uninitialized] v,5 1` yields 1
+>> `[cVariable 5 is uninitialized] v,5 1 v5` yields 1
+>> `$5 240 v,5 1` yields 240
+
 There is a shorthand way of making an operator assign its return value to a variable that's one of its operands: replace the `v` operator with the `:` read-and-assign operator:
 
 > `+:§index 1` increases the value of variable "index" with 1.
+
+There is also a variant `:,` operator, that takes two arguments
+- the identifier of the variable to be read and assigned;
+- a default value if this variable is empty. E.g.:
+
+<pre>
+  $
+    §count
+    €
+  +
+    :,
+      §count
+      0
+    1
+  v§count
+</pre>
+> yields 1 - if the non-variant version of the `:` operator would have been used, the `+` operator would have raised an error about an empty operand.
 
 Variables can also hold pointers to other variables:
 
@@ -785,7 +813,9 @@ This precision margin is 0.000_000_01 by default, but can be set and changed aga
 |:-:|:-:|:-:|:-:|:-:|:-|:-:|
 |$|assignment<br/>of 2nd<br/>operand<br/>to variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|2|assigned to<br/>subsequent<br/>variables|assigned<br/>value|`$4 8 v4`<br/>`$§count 0 v§count`<br/><br/>`$(§tariff 3 10 25)`<br/>`  +,(v§tariff0 §; v§tariff2)`|8<br/>0<br/><br/><br/>3;25|
 |v|value of<br/>variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|1|ignored|any type of<br/>expression<br/>value<br/>(including<br/>empty and<br/>error)|See above||
+|v,|value of<br/>variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text);<br/>if empty,<br/>assigns and<br/>second operand|2|ignored|any type of<br/>expression<br/>value<br/>(including<br/>empty and<br/>error)|See above||
 |:|like v<br/>but has result<br/>of parent operator<br/>assigned to that<br/>variable|1|ignored|like v|`$§count 0`<br/>`  +:§count 1`<br/>`  v§count`|<br/><br/>1|
+|:,|like :<br/>but assigns<br/>and returns<br/>the second<br/>operand if the<br/>variable<br/>is empty|2|ignored|like :|`$§count €`<br/>`  +:,§count 100 1`<br/>`  v§count`|<br/><br/>101|
 
 ## Stack-related operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
@@ -901,6 +931,7 @@ or for output by the w or the +(concatenation) commands.
 ## Flow-related operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+|;|combines<br/>expressions|2|used|value of<br/>last one|empty|error|
 |?|if|2:<br/>1. condition<br/>2. operator<br/>executed<br/>if true<br/>3. operator<br/>executed<br/>if false|ignored|value of<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
 |?,|try<br/>operand 1;<br/>if error<br/>return<br/>operand 2|2|if a 3rd<br/>operand<br/>is given,<br/>it's returned<br/>when no error.|see prev.<br/>columns|empty|error|
 |V|value of<br/>1st operand<br/>of last ?,<br/>operator|0|ignored|Error value<br/>if operand1<br/>failed, else<br/>any value|n/a|n/a|
@@ -923,7 +954,6 @@ or for output by the w or the +(concatenation) commands.
 ## Other operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|;|combines<br/>expressions|2|used|value of<br/>last one|empty|error|
 |q|quote:<br/>convert<br/>to string.<br/>Same as<br/>+§ ...|1|ignored|string;<br/>numbers are<br/>formatted<br/>according to<br/>o,§fmt settings|empty|error|
 |q,|quote:<br/>convert<br/>to string.<br/>Same as<br/>+,§ ...|1|ignored|string;<br/>fractal parts<br/>of numbers are<br/>truncated<br/>towards zero|empty|error|
 |t|type|1|ignored|0 for empty,<br/>1 for number,<br/>2 for text,<br/>90 for error.|empty|depends on<br/>Z§ign|

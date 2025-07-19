@@ -492,9 +492,11 @@ impl Expression {
             (OPRTN, 1) => &opr_funcs::define_routine_sharing_variables,
             (OPEXR, 0) => &opr_funcs::exec_routine,
             (OPEXR, 1) => &opr_funcs::exec_routine_reverse,
-            (OPASG, _) => &opr_funcs::assign_number_register,
-            (OPVAR, _) => &opr_funcs::get_variable,
-            (OPMAS, _) => &opr_funcs::assignment_maker,
+            (OPASG, _) => &opr_funcs::assign_var,
+            (OPVAR, 0) => &opr_funcs::get_variable,
+            (OPVAR, 1) => &opr_funcs::get_variable_or,
+            (OPMAS, 0) => &opr_funcs::assignment_maker,
+            (OPMAS, 1) => &opr_funcs::assignment_maker_with_default,
             (OPSTK, 0) => &opr_funcs::push_stack,
             (OPSTK, 1) => &opr_funcs::push_stack_reverse,
             (OPSTK, 2) => &opr_funcs::clear_stack,
@@ -1158,7 +1160,15 @@ impl Interpreter {
                         op_for_stack => {
                             if [OPOP1, OPOP2].contains(&op_for_stack) {
                                 needed_ops += (2 * alternative_marks_count) as usize;
-                            } else if ((op_for_stack == OPIF_) || (op_for_stack == OPWRT)) && (alternative_marks_count > 0) {
+                            } else if
+                                (
+                                    (op_for_stack == OPIF_) ||
+                                    (op_for_stack == OPWRT) ||
+                                    (op_for_stack == OPVAR) ||
+                                    (op_for_stack == OPMAS)
+                                ) &&
+                                (alternative_marks_count > 0)
+                            {
                                 needed_ops = 2;
                             } else if (op_for_stack == OPREA) && (alternative_marks_count > 0) {
                                 needed_ops = 1;
@@ -2015,7 +2025,7 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn assign_number_register(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+    pub fn assign_var(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         check_nr_operands(opr_mark, operands, 2)?;
 
         let mut name_is_string = false;
@@ -2079,8 +2089,39 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
 
-    pub fn assignment_maker(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
-        check_nr_operands(opr_mark, operands, 1)?;
+    pub fn get_variable_or(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        check_nr_operands(opr_mark, operands, 2)?;
+
+        let index = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Number(num) => ValueType::Number(num),
+            ValueType::Text(txt) => ValueType::Text(txt),
+            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
+        };
+
+        *result_value = match shuttle.get_var(&index){
+            ValueType::Empty => {
+                let new_val = operands[1].get_value();
+                shuttle.set_var(index, new_val.clone());
+
+                new_val
+            },
+            non_empty => non_empty,
+        };
+
+        Ok(())
+    }
+
+    pub fn assignment_maker_base(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle, assign_default_if_empty: bool) -> Result<(), ScriptError> {
+
+        let required_nr_ops = if assign_default_if_empty{
+            2
+        } else {
+            1
+        };
+
+        check_nr_operands(opr_mark, operands, required_nr_ops)?;
 
         let index = match operands[0].get_value() {
             ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
@@ -2101,9 +2142,25 @@ pub(crate) mod opr_funcs {
                 .push(index.clone());
         }
 
-        *result_value = shuttle.get_var(&index);
+        *result_value = match shuttle.get_var(&index) {
+            ValueType::Empty if assign_default_if_empty => {
+                let new_val = operands[1].get_value();
+                shuttle.set_var(index, new_val.clone());
+
+                new_val
+            },
+            other => other,
+        };
 
         Ok(())
+    }
+
+    pub fn assignment_maker(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        assignment_maker_base(opr_mark, result_value, operands, shuttle, false)
+    }
+
+    pub fn assignment_maker_with_default(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        assignment_maker_base(opr_mark, result_value, operands, shuttle, true)
     }
 
     pub fn push_stack(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
@@ -5425,6 +5482,21 @@ mod tests {
         }
 
         #[test]
+        fn x_var_or_had_value() {
+            assert_eq!(180f64, Interpreter::execute_with_mocked_io("$22 90 $§copy v,22 130 +v§copy v22".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_var_or_uninit() {
+            assert_eq!(2f64, Interpreter::execute_with_mocked_io("$§copy v,22 1 +v§copy v22".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_var_or_had_empty() {
+            assert_eq!(130f64, Interpreter::execute_with_mocked_io("$22 € v,22 130".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
         fn x_add_assign() {
             assert_eq!(90f64, Interpreter::execute_with_mocked_io("$18 88 +:-21 3 2 v18".to_string()).unwrap().numeric_value());
         }
@@ -5452,6 +5524,54 @@ mod tests {
         #[test]
         fn x_assignment_maker_before_and_inside_override_markers_both() {
             assert_eq!(70f64, Interpreter::execute_with_mocked_io("$1 10 $2 20 +:(1 :2 5) +v1 v2".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_assignment_maker_with_default_non_empty_found() {
+            assert_eq!(5f64, Interpreter::execute_with_mocked_io("$1 4 +:,1 2 1 v1".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_assignment_maker_with_default_empty_found() {
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("+:,1 2 1 v1".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_assignment_maker_with_default_empty_found_op_before_parenth() {
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("+:,(1 2 1) v1".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_assignment_maker_with_default_empty_found_op_before_parenth_alt_after() {
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("+:(,1 2 1) v1".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_assignment_maker_with_default_empty_found_op_after_parenth() {
+            assert_eq!(3f64, Interpreter::execute_with_mocked_io("+(:,1 2 1) v1".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_assignment_maker_several() {
+            assert_eq!(16f64, Interpreter::execute_with_mocked_io("++:,1 2 :,5 6 v5".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_assignment_maker_mixed() {
+            assert_eq!(16f64, Interpreter::execute_with_mocked_io("$5 6 ++:,1 2 :5 v5".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_assignment_maker_mixed_reversed() {
+            assert_eq!(16f64, Interpreter::execute_with_mocked_io("$5 6 ++:5 :,1 2 v5".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_assignment_maker_mixed_unassigned() {
+            assert_eq!(
+                Err(ScriptError::EmptyOperand('+')),
+                Interpreter::execute_with_mocked_io("++(:,1 2 :5 6) v5".to_string())
+            );
         }
 
         #[test]
