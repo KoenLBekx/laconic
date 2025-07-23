@@ -3530,12 +3530,12 @@ pub(crate) mod opr_funcs {
 
         for fragment in source.split(separator.as_str()) {
             if !((fragment.is_empty()) && is_separator_empty) {
-                count += 1;
-
                 shuttle.set_var(
                     ValueType::Text(format!("{name_prefix}{count}")),
                     ValueType::Text(fragment.to_string())
                 );
+
+                count += 1;
             }
         }
 
@@ -7959,17 +7959,17 @@ mod tests {
             assert_eq!(
                 "E".to_string(),
                 Interpreter::execute_with_mocked_io(
-                    "$§pre §fragment o,§split [sA;B;C;D;E] §; v§pre v+,v§pre 5"
+                    "$§pre §fragment o,§split [sA;B;C;D;E] §; v§pre v+,v§pre 4"
                         .to_string()).unwrap().string_representation());
 
             assert_eq!(
                 1_f64,
                 Interpreter::execute_with_mocked_io("
-                        $(1 §A §B §C §D §E)
+                        $(0 §A §B §C §D §E)
                         $§pre §fragment
                         o,§split [sA;B;C;D;E] §; v§pre
                         F
-                            1 5 1 20
+                            0 4 1 20
                             ?
                                 =
                                     vv20
@@ -7987,7 +7987,7 @@ mod tests {
             assert_eq!(
                 "E".to_string(),
                 Interpreter::execute_with_mocked_io(
-                    "$§pre §fragment o,§split [sA--B--C--D--E] §-- v§pre v+,v§pre 5"
+                    "$§pre §fragment o,§split [sA--B--C--D--E] §-- v§pre v+,v§pre 4"
                         .to_string()).unwrap().string_representation());
         }
 
@@ -7996,7 +7996,7 @@ mod tests {
             assert_eq!(
                 "".to_string(),
                 Interpreter::execute_with_mocked_io(
-                    "$§pre §fragment o,§split [s--A--B--C--D--E] §-- v§pre v+,v§pre 1"
+                    "$§pre §fragment o,§split [s--A--B--C--D--E] §-- v§pre v+,v§pre 0"
                         .to_string()).unwrap().string_representation());
         }
 
@@ -8005,7 +8005,7 @@ mod tests {
             assert_eq!(
                 "".to_string(),
                 Interpreter::execute_with_mocked_io(
-                    "$§pre §fragment o,§split [sA--B--C--D--E--] §-- v§pre v+,v§pre 6"
+                    "$§pre §fragment o,§split [sA--B--C--D--E--] §-- v§pre v+,v§pre 5"
                         .to_string()).unwrap().string_representation());
         }
 
@@ -8014,7 +8014,7 @@ mod tests {
             assert_eq!(
                 "A--B--C--D--E".to_string(),
                 Interpreter::execute_with_mocked_io(
-                    "$§pre §fragment o,§split [sA--B--C--D--E] §| v§pre v+,v§pre 1"
+                    "$§pre §fragment o,§split [sA--B--C--D--E] §| v§pre v+,v§pre 0"
                         .to_string()).unwrap().string_representation());
         }
 
@@ -8023,7 +8023,7 @@ mod tests {
             assert_eq!(
                 "".to_string(),
                 Interpreter::execute_with_mocked_io(
-                    "$§pre §fragment o,§split [sA:B::C:D:E] §: v§pre v+,v§pre 3"
+                    "$§pre §fragment o,§split [sA:B::C:D:E] §: v§pre v+,v§pre 2"
                         .to_string()).unwrap().string_representation());
         }
 
@@ -8032,13 +8032,13 @@ mod tests {
             assert_eq!(
                 1_f64,
                 Interpreter::execute_with_mocked_io("
-                        $(1 §A §B §C §D §E)
+                        $(0 §A §B §C §D §E)
                         $§pre §fragment
                         $
                             §count
                             o,§split [sABCDE] § v§pre
                         F
-                            1 v§count 1 20
+                            0 -v§count 1 1 20
                             ?
                                 =
                                     vv20
@@ -8061,7 +8061,7 @@ mod tests {
             assert_eq!(
                 "".to_string(),
                 Interpreter::execute_with_mocked_io(
-                    "$§pre §fragment o,§split § §: v§pre v+,v§pre 1"
+                    "$§pre §fragment o,§split § §: v§pre v+,v§pre 0"
                         .to_string()).unwrap().string_representation());
         }
 
@@ -8070,7 +8070,7 @@ mod tests {
             assert_eq!(
                 0_f64,
                 Interpreter::execute_with_mocked_io(
-                    "$§pre §fragment o,§split § § v§pre tv+,v§pre 1"
+                    "$§pre §fragment o,§split § § v§pre tv+,v§pre 0"
                         .to_string()).unwrap().numeric_value());
 
             assert_eq!(

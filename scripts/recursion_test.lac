@@ -1,0 +1,31 @@
+[c
+	Find highest multiple under maximum value by adding recursively
+	Expected parameters:
+	- factor
+	- start value
+	- maximum
+]
+R(
+	§maxmul
+
+	$§factor k
+	$§start k
+	$§max k
+
+	?
+		>v§start v§max
+		U[sStart value is greater than maximum value]
+		€
+
+	$§added + v§start v§factor
+
+	?
+		!< v§added v§max
+		v§start
+		X,(
+			§maxmul
+			v§factor
+			v§added
+			v§max
+		)
+)

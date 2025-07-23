@@ -6,7 +6,9 @@
 <style>td:first-child{font-size: 1.5rem;}</style>
 # **Laconic**
 
-> *I got carried away. I needed a concise expression interpreter, but Laconic nearly became a programming language:*
+> *I got carried away.*
+
+> *I needed a concise expression interpreter, but Laconic nearly became a programming language:*
 
 > *besides numeric and string operators, it provides variables, tests, loops, routines, standard input & output, file I/O and error handling.*
 
@@ -91,7 +93,7 @@ They can be used
 
 All operators consist of a single character that precedes its operands.
 
-***Note:** there are also "named operators" - see the O and o operators.*
+***Note:** there are also "named operations" - see the O and o operators.*
 
 See below for a detailed explanation of each operator.
 
@@ -163,6 +165,13 @@ In scripts:
 >> By the way, if the `?,` operator has a third operand, this operand's value is returned on successful execution of the first one:
 
 >>> `?,(a72 §Oops! §Ok)` yields the string "Ok".
+
+Using the `laconic` executable, one can add the `-I` parameter to a command to have the Laconic interpreter ignore errors instead of halting immediately. E.g.:
+
+> `...$ laconic -I '+[sOutcome: ] /15 0'`<br/>
+> will output<br/>
+> `Outcome: DivideByZero('/')`<br/>
+> which means that the `+` (concatenation) operator still could operate after the zero-division error occurred.
 
 ## Numbers: base 10
 
@@ -817,36 +826,40 @@ This precision margin is 0.000_000_01 by default, but can be set and changed aga
 |:|like v<br/>but has result<br/>of parent operator<br/>assigned to that<br/>variable|1|ignored|like v|`$§count 0`<br/>`  +:§count 1`<br/>`  v§count`|<br/><br/>1|
 |:,|like :<br/>but assigns<br/>and returns<br/>the second<br/>operand if the<br/>variable<br/>is empty|2|ignored|like :|`$§count €`<br/>`  +:,§count 100 1`<br/>`  v§count`|<br/><br/>101|
 
-## Stack-related operators
-|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|K|push to<br/>LIFO<br/>stack|1|pushed<br/>also|value of<br/>last<br/>operand|empty|depends<br/>on Z§ign|
-|K,|push to<br/>LIFO<br/>stack<br/>in reverse<br/>order|1|pushed<br/>also|value of<br/>last<br/>operand|empty|depends<br/>on Z§ign|
-|K,,|clears<br/>the<br/>stack|0|ignored|number<br/>of stack<br/>items<br/>cleared|n/a|n/a|
-|k|pop from<br/>LIFO<br/>stack|0|ignored|value of<br/>top stack<br/>item;<br/>empty<br/>if none|n/a|n/a|
-|k,|stack<br/>height|0|ignored|number<br/>of stack<br/>items|n/a|n/a|
+## Stack-related operators||
+|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
+|:-:|:-:|:-:|:-:|:-:|:-|:-:|
+|K|push to<br/>LIFO<br/>stack|1|pushed<br/>also|value of<br/>last<br/>operand|`K155 K30 k`<br/>`K(155 30) k`|30<br/>30|
+|K,|pushes its<br/>operands<br/>to LIFO<br/>stack<br/>in reverse<br/>order|1|pushed<br/>also|value of<br/>last<br/>operand|`K,(155 30) k`<br/>`K,155 K,30 k`|155<br/>30|
+|K,,|clears<br/>the<br/>stack|0|ignored|number<br/>of stack<br/>items<br/>cleared|`K,, k`|€<br/>(empty<br/>value)|
+|k|pop from<br/>LIFO<br/>stack|0|ignored|value of<br/>top stack<br/>item;<br/>empty<br/>if none|`K(§A 33) k k`|"A"|
+|k,|stack<br/>height|0|ignored|number<br/>of stack<br/>items|`K,, K(10 20 30) k,`|3|
 
 ## Settings-related operators
-|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|Z|setting:<br/>assign value<br/>of 2nd<br/>operand<br/>to setting<br/>designated<br/>by 1st<br/>operand|2|ignored|setting<br/>value<br/>(2nd operand)|error|error|
-|Z§prec|comparison<br/>precision<br/>setting|1|ignored|setting<br/>value<br/>(2nd operand)|error|error|
-|Z§loops|maximum<br/>number<br/>of loop<br/>iterations|1|ignored|setting<br/>value<br/>(2nd operand)|error|error|
-|Z§ign|if not 0 ignore<br/>errors,<br/>else stop<br/>script<br/>execution<br/>on errors|1|ignored|setting<br/>value<br/>(2nd operand)|error|error|
+|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
+|:-:|:-:|:-:|:-:|:-:|:-|:-:|
+|Z|setting:<br/>assign value<br/>of 2nd<br/>operand<br/>to setting<br/>designated<br/>by 1st<br/>operand|2|ignored|setting<br/>value<br/>(2nd operand)|||
+|Z§prec|comparison<br/>precision<br/>setting<br/>(Default=<br/>.000_000_01)|1|ignored|setting<br/>value<br/>(2nd operand)|`Z`<br/>`  §prec`<br/>`  .01`<br/>`=`<br/>`  .001`<br/>`  .002`|<br/><br/><br/><br/><br/>1|
+|Z§loops|maximum<br/>number<br/>of loop<br/>iterations<br/>(Default=<br/>10,000)|1|ignored|setting<br/>value<br/>(2nd operand)|`Z§loops 1_000_000`||
+|Z§ign|if not 0 ignore<br/>errors,<br/>else stop<br/>script<br/>execution<br/>on errors|1|ignored|setting<br/>value<br/>(2nd operand)|`Z§ign 1`||
 
-## Named operators
+## Named operations
 
 The number of characters to represent operators is limited.
 Moreover, for many people, non-Latin characters are difficult to enter using a keyboard. 
 
 So when Laconic wants to express every operator using only one character, it's a bit short of characters.
 
-That's why there are also operators that are designated by a name; these are called "named operators".
-The o and O operators take that name as their first operand in order to perform the operation of a named operator.
+That's why there are also operators that are designated by an operation name; these are called "named operations".
+The o and O operators take that name as their first operand in order to perform the operation of a named operation.
 
 The difference between both operators is that<br/>
-- the lower case `o` operator takes 2 operands : the named operator name and one operation operand;<br/>
-- the upper case `O` operator takes 3 operands : the named operator name and two operation operands.
+- the lower case `o` operator takes 2 operands:<br/>
+> - the operation name<br/>
+> - and 1 operation operand;<br/>
+- the upper case `O` operator takes 3 operands:<br/>
+> - the operation name<br/>
+> - and 2 operation operands.
 
 Furthermore, adding the variant operator (`,`) to both the O and o operands increases their expected number of operands by (2 * number_of_variants), so
 
@@ -859,7 +872,7 @@ Furthermore, adding the variant operator (`,`) to both the O and o operands incr
 Both operators, however, can have their number of operands overridden by parentheses,
 in which case they can be used interchangeably and following variant operators don't affect the number of expected operands (they can still affect the behaviour, though).
 
-The operator's name, which is the first operand of the `o` and `O` operators, can either be a number or a string.
+The operation name, which is the first operand of the `o` and `O` operators, can either be a number or a string.
 For readability, however, strings are chosen for the implemented operators.
 
 As stated, this string is the first operand and can be written either as<br/>
@@ -869,64 +882,231 @@ As stated, this string is the first operand and can be written either as<br/>
 or<br/>
 `o[sname]`
 
-The below named operators have been implemented:
+The below named operations have been implemented:
 
-|Operator|Description|Required<br/>operands,<br/>inc.<br/>operator<br/>name|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|o§r|rounding|2|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|error|error|
-|o§version|version|1|A 2nd<br/>operand<br/>chooses the<br/>version part<br/>(1-3).<br/>0 chooses<br/>entire version<br/>again.<br/>E.g.: 1.0.2|The<br/>Laconic<br/>interpreter's<br/>version|error|error|
-|o§fib|Fibonacci<br/>number|2|ignored|Fibonacci<br/>number<br/>chosen<br/>by index (2nd<br/>operand)|error|error|
-|o§uni|Unicode<br/>character|2|converted<br/>also|string<br/>having<br/>Unicode<br/>characters|error|error|
-|o§ucv|Unicode<br/>value|2|3rd operand<br/>is used as<br/>character<br/>position.<br/>If absent,<br/>0 is used.|Unicode<br/>code point of<br/>character|error|error|
-|o§len|length in<br/>characters|2|length is<br/>added|total length<br/>of operands|error|error|
-|o§lower|lower<br/>case|2|ignored|lower case<br/>of 2nd<br/>operand|error|error|
-|o§upper|upper<br/>case|2|ignored|upper case<br/>of 2nd<br/>operand|error|error|
-|o§proper|proper<br/>case|2|ignored|proper case<br/>of 2nd<br/>operand|error|error|
-|o,§find|find 3rd operand<br/>as part of<br/>2nd operand<br/>starting from<br/>position passed<br/>as 4th operand|3|4th operand<br/>is start position.<br/>If missing,<br/>0 is used.|If found,<br/>start position<br/>of found<br/>substring.<br/>Else, empty.|error|error|
-|o,§sub|substring|3|4th operand<br/>will be used<br/>as length|the substring|error|error|
-|O,,§repl|string<br/>replacement|4 or 7|ignored|resulting<br/>string|error|error|
-|o,§split|split string|4|ignored|number of<br/>segments|error|error|
-|o,§fmt|set number<br/>format|4|ignored|empty|error|error|
-|o§leap|leap<br/>year|2|ignored|1 if number<br/>in 1st operand<br/>is a leap year,<br/>else 0|error|error|
-|o,§dow|day of<br/>week|4:<br/>§dow,<br/>year,<br/>month<br/>and day.|ignored|0 for saturday,<br/>1-6 for<br/>following<br/>days|error|error|
-|o,§greg|Gregorian<br/>day's<br/>sequence<br/>number|4:<br/>§greg,<br/>year,<br/>month<br/>and day.|ignored|1 for january 1,<br/>year 0000,<br/>etc.|error|error|
-|o§gregy|year from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregy<br/>and seq.nr.|ignored|year|error|error|
-|o§gregm|month from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregm<br/>and seq.nr.|ignored|month (1-12)|error|error|
-|o§gregd|day from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregd<br/>and seq.nr.|ignored|day (1-31)|error|error|
-|o§gregt|date text<br/>from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregt<br/>and seq.nr.|A 3rd.<br/>operand<br/>is used as<br/>separator|A YYYYsMMsDD<br/>string where<br/>s is a<br/>separator,<br/>if any|error|error|
+|Operator|Description|Required<br/>operands,<br/>including<br/>operation<br/>name|Excess<br/>operands|Returns|Examples|Example<br/>yields|
+|:-:|:-:|:-:|:-:|:-:|:-|:-:|
+|o§r|rounding|2|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|`o§r 2.1`<br/>`o§r 2.5`<br/>`~2.5`|2<br/>3<br/>-3|
+|o§version|version|1|A 2nd<br/>operand<br/>chooses the<br/>version part<br/>(1-3).<br/>0 chooses<br/>entire version<br/>again.|The<br/>Laconic<br/>interpreter's<br/>version|`o§version 0`<br/>`o§version 1`<br/>`o§version 2`<br/>`o§version 3`|"1.0.2"<br/>1<br/>0<br/>2|
+|o§fib|Fibonacci<br/>number|2|ignored|Fibonacci<br/>number<br/>chosen<br/>by index (2nd<br/>operand)|`o§fib 0`<br/>`o§fib 1`<br/>`o§fib 2`<br/>`o§fib 3`<br/>`o§fib 4`<br/>`o§fib 5`|0<br/>1<br/>1<br/>2<br/>3<br/>5|
+|o§uni|Unicode<br/>character|2|converted<br/>also|string<br/>having<br/>Unicode<br/>characters|`o§uni 65`<br/>`o(§uni 65 66 67)`<br/>`o§uni 936`<br/>`b16 o§uni [n3A8]`<br/>`b16 o(§uni [n3A8]`<br/>`  [n3C5][n3C7]`<br/>`  [n3AE])`|"A"<br/>"ABC"<br/>"Ψ"<br/>"Ψ"<br/><br/><br/>"Ψυχή"|
+|o§ucv|Unicode<br/>value|2|3rd operand<br/>is used as<br/>character<br/>position.<br/>If absent,<br/>0 is used.|Unicode<br/>code point of<br/>character|`o§ucv §Dinant`<br/>`O§ucv §Dinant 1`|68<br/>105|
+|o§len|length in<br/>characters<br/>(not in<br/>bytes)|2|length is<br/>added|total length<br/>of operands|`o§len §Dinant`<br/>`O§len §Dinant §Mons`<br/>`o§len §易經`|6<br/>10<br/>2|
+|o§lower|lower<br/>case|2|ignored|lower case<br/>of 2nd<br/>operand|`o§lower [sThe Hague]`|"the hague"|
+|o§upper|upper<br/>case|2|ignored|upper case<br/>of 2nd<br/>operand|`o§upper [sThe Hague]`|"THE HAGUE"|
+|o§proper|proper<br/>case|2|ignored|proper case<br/>of 2nd<br/>operand|`o§proper [sADDIS ABEBA]`|"Addis Abeba"|
+|o,§find|find 3rd operand<br/>as part of<br/>2nd operand<br/>starting from<br/>position passed<br/>as 4th operand|3|4th operand<br/>is start position.<br/>If missing,<br/>0 is used.|If found,<br/>start position<br/>of found<br/>substring.<br/>Else, empty.|see below||
+|o,§sub|substring|3;<br/>see<br/>below|4th operand<br/>will be used<br/>as length|the substring|see below||
+|O,,§repl|string<br/>replacement|4 or 7;<br/>see<br/>below|ignored|resulting<br/>string|see below||
+|o,§split|split string|4;<br/>see<br/>below|ignored|number of<br/>segments|see below||
+|o,§fmt|set number<br/>format|2 or 4;<br/>see<br/>below|ignored|empty|see below||
+|o§leap|leap<br/>year|2|ignored|1 if number<br/>in 2st operand<br/>is a leap year,<br/>else 0|`o§leap 2004`<br/>`o§leap 2000`<br/>`o§leap 1900`<br/>`o§leap 2025`|1<br/>1<br/>0<br/>0|
+|o,§dow|day of<br/>week|4:<br/>§dow,<br/>year,<br/>month<br/>and day.|ignored|0 for saturday,<br/>1-6 for<br/>following<br/>days|`o,§dow 2025 1 1`<br/>`o(§dow 2025 1 4)`|4 (wed.)<br/>0 (sat.)|
+|o,§greg|Gregorian<br/>day's<br/>sequence<br/>number|4:<br/>§greg,<br/>year,<br/>month<br/>and day.|ignored|1 for january 1,<br/>year 0000,<br/>etc.|`o,§greg 2025 7 1`|739799|
+|o§gregy|year from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregy<br/>and seq.nr.|ignored|year|`o§gregy 739799`|2025|
+|o§gregm|month from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregm<br/>and seq.nr.|ignored|month (1-12)|`o§gregm 739799`|7|
+|o§gregd|day from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregd<br/>and seq.nr.|ignored|day (1-31)|`o§gregd 739799`|1|
+|o§gregt|date text<br/>from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregt<br/>and seq.nr.|A 3rd.<br/>operand<br/>is used as<br/>separator|A YYYYsMMsDD<br/>string where<br/>s is a<br/>separator,<br/>if any|`o§gregt 739799`<br/>`O§gregt 739799 §-`<br/>&nbsp;|20250701TUE<br/>2025-07-01-TUE|
 
-Note: the **o,§sub** operator takes 4 arguments:<br/>
-- §sub: the operator's name;<br/>
-- the source string;<br/>
-- the start position of the substring;<br/>
-- (optional) the length of the substring. If ommitted, the substring will be taken from the
-  start position until the end of the source string.
+&nbsp;
 
-Note: the **o,§repl** or **O,,§repl** operator takes 4 or 7 arguments:<br/>
-- §repl : the operator's name;<br/>
-- the source string;<br/>
-- the substring to be replaced;<br/>
-- the string to replace it with;<br/>
+`o§find` Find substring in a string
+> required operands: 3
+>> - operation name: `§find`<br/>
+>> - source string<br/>
+>> - substring to find in source string
 
-And optionally:<br/>
-- the number or name of the position variable;<br/>
-- the number or name of the sequence variable;<br/>
-- the number or name of the routine that can use both variables to decide if a replacement should happen.
+> excess operands: a 4th operand is used as zero-based starting position; if absent, 0 is assumed<br/>
+> returns: if found, the 0-based start position of the substring, otherwise the empty value (`€`)
 
-Note: the **0,§split** operator takes 4 arguments:
-- §split : the operator's name;<br/>
-- the source string;<br/>
-- the segment separator, like §;<br/>
-- the prefix of the numbered variable names the split segments will be assigned to.
+> e.g:<br/>
+>> `O§find §Samovar §a` yields 1<br/>
+>> `o,§find §Samovar §a 3` yields 5<br/>
+>> `o(§find §Samovar §a 3)` yields 5<br/>
+>> `O§find [sNo hay remedio] §mejor` yields €<br/>
+>> `tO§find [sNo hay remedio] §mejor` yields 0 (= the type id of `€`)<br/>
+>> `tO§find [sNo hay remedio] §hay` yields 1<br/>
+>> `$§pos O§find §Brussels §s ?tv§pos [sHas s] [sHas no s]` yields "Has s"
 
-Note: the **o,§fmt** operator takes 4 arguments:<br/>
-- §fmt : the operator's name;<br/>
-- the number of fractal digits;<br/>
-- the fractal separator (default = .);<br/>
-- the thousands grouping separator (default: no grouping).
+`o,§sub` Substring
+> required operands: 3<br/>
+>> - §sub: the operator's name;<br/>
+>> - the source string;<br/>
+>> - the start position of the substring;<br/>
+>> - (optional 4th) the length of the substring. If ommitted, the substring will be taken from the start position until the end of the source string.<br/>
 
-This number format is only used for the final output of a script,
-or for output by the w or the +(concatenation) commands.
+> excess operands after 4th: ignored<br/>
+> returns: the substring
+
+> E.g.:<br/>
+>> `O§sub [sLa Roche-en-Ardenne] 12` yields "Ardenne"<br/>
+>> `o,§sub [sLa Roche-en-Ardenne] 3 5` yields "Roche"
+
+> If the source string argument is not a string, but a number, then that number is first converted to a string according to the current `o§fmt` settings.
+
+`o,§repl` and `O,,§repl`
+> required operands: 4<br/>
+>> - §repl : the operator's name;<br/>
+>> - the source string;<br/>
+>> - the substring to be replaced;<br/>
+>> - the string to replace it with
+
+> excess operands: 3 more are used:<br/>
+>> - the number or name of the position variable;<br/>
+>> - the number or name of the sequence variable;<br/>
+>> - the number or name of the routine that can use both variables to decide if a replacement should happen.
+
+> returns: the source string with the requested replacements applied.
+
+> In other words,<br/>
+> `O,,§repl sourceString substring replacement varPos varSeq conditionRoutineName`
+
+> replaces an occurrence of substring in sourceString with replacement if the condition evaluates to a value that is truthy (not 0 (zero), empty string or € (the Empty value)).
+
+> The condition has to be passed as the name of a routine defined previously using the R, operator - the variant that declares routines that can accesses the calling code's memory.
+
+> The condition routine can make use of two variables, the identifiers (string or number) of which are passed in the varPos and varSeq operands.
+
+> (The names varSeq and varPos are examples. You can choose any name or number.)
+
+> If the condition routine hasn't been defined before, no replacement is performed.
+
+> varPos :<br/>
+> When the condition routine is called, varPos will hold the (zero-based) start of the occurrence of substring found in the original string.
+
+> varSeq:<br/>
+> When the condition routine is called, varSeq will hold the (zero-based) sequence number of the occurrence.
+
+> If the varPos, varNum and condition operands are ommitted, all occurrences of substring will be replaced.
+
+> The operator returns a string in which the requested replacements have been performed.
+
+> E.g.<br/>
+>> `$§replaced o,§repl §philadelphia §ph §f<`br/>
+>> puts "filadelfia" in variable §replaced.
+
+> `R,§replCond =v§seq 0`<br/>
+>> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
+>> puts "filadelphia" in variable §replaced.
+
+>> `R,§replCond >v§seq 0`<br/>
+>> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
+>> puts "philadelfia" in variable §replaced.
+
+>> `R,§replCond >v§seq 5`<br/>
+>> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
+>> puts "philadelphia" in variable §replaced.
+
+>> `R,§replCond =v§pos 0`<br/>
+>> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
+>> puts "filadelphia" in variable §replaced.
+
+>> `R,§replCond >v§pos 4`<br/>
+>> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
+>> puts "philadelfia" in variable §replaced.
+
+>> `R,§replCond 1`<br/>
+>> `$§replaced O,,§repl §philadelphia §ph §f §pos $seq §replCond`<br/>
+>> puts "filadelfia" in variable §replaced.
+
+>> `R,§replCond 0`<br/>
+>> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
+>> puts "philadelphia" in variable §replaced.
+
+>> `R,§replCond =v§pos 0`<br/>
+>> `$§myCity §philadelphia`<br/>
+>> `O,,§repl :§myCity §p §P §pos §seq §replCond`<br/>
+>> puts "Philadelphia" in variable §myCity (due to the : operator).
+
+> (Note that all string operations are case-sensitive.)
+
+> Note: as the R, operator returns the name of the routine itself, it can be used "in place" as the routine-name operand:
+
+<pre>
+    $
+        §replaced
+        O,,
+            §repl
+            §philadelphia
+            §ph
+            §f
+            §pos
+            §seq
+            R,
+                §replCond
+                =v§pos 0
+</pre>
+
+
+`o,§split` Split a string
+> required operands: 4<br/>
+> excess operands: ignored<br/>
+> returns: the number of segments found
+
+> The `o,§split` operator takes 4 arguments:<br/>
+> - §split : the operation's name;<br/>
+> - the source string;<br/>
+> - the segment separator, like §;<br/>
+> - the prefix of the names of the variables the split fragments will be assigned to.
+
+> E.g.:
+<pre>
+    $
+        §nrCities
+        o,
+            §split
+            [sBrugge,Arlon,Liège]
+            §,
+            §city
+    F
+        0
+        v
+            §nrCities
+        1
+        -
+            §count
+            1
+        w
+            +
+                v
+                    +,
+                        §city
+                        v§count
+                ¶
+</pre>
+>> will first store the three city names in variables city0, city1 and city2 and next write the three city names in the original string on separate lines to standard output.
+
+> If the separator is an empty string (§ or \[s\]), every character of the source string will be copied to a variable.
+
+> Note that the numbers after the varNamePrefix will have no leading zeroes, fractal part or interpunction.
+
+> In combination with the r, operator, this allows for awk-like file processing as well as reading of CSV files.
+
+`o,§fmt` Set number format for output
+> required operands: 2<br/>
+> - §fmt : the operation's name;<br/>
+> - the number of fractal digits required
+
+> excess operands: 2 more operands can be given:<br/>
+> - the fractal separator (default = .);<br/>
+> - the thousands grouping separator (default: no grouping).
+
+> returns: the empty value.
+
+> This number format is only used for<br/>
+> - the final output of a script,<br/>
+> - the output by the w operator<br/>
+> - or the `+` (concatenation) operator.
+
+> The `+,` (concatenation) operator variant does not use the settings established by an o,§fmt operation or its defaults!
+
+> Default is `o,§fmt 6 §. §`
+
+> E.g.:<br/>
+>> `o,§fmt 2 §, §.` requests numbers to be output in European continental style and two fractal digits after the comma.<br/>
+>> `o(§fmt 2 §, §.)` does the same<br/>
+>> `o§fmt 3` requests output of numbers with 3 fractal digits, but no change of fractals or thousands separators.
+
 
 ## Flow-related operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
