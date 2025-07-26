@@ -4,7 +4,7 @@
     }
 </style-->
 <style>td:first-child{font-size: 1.5rem;}</style>
-# **Laconic**
+# **Laconic: the language**
 
 > *I got carried away.*
 
@@ -89,11 +89,11 @@ They can be used
 - to terminate a simple string (see below)
 - or to enhance readability.
 
-## Operators: general
+## Operators and operations: general
 
 All operators consist of a single character that precedes its operands.
 
-***Note:** there are also "named operations" - see the O and o operators.*
+***Note:** there are also "named operations" - see the `O` and `o` operators.*
 
 See below for a detailed explanation of each operator.
 
@@ -113,9 +113,61 @@ Many operators have a different behavior when followed by one or more *variant o
 > `°1` yields one radian as degrees (ca. 57.295779).<br/>
 > `°,1` yields one degree as radians (ca. 0.017452).
 
+Note: whenever used below, the term "operation" designates an operator with all its operands, that may be operators with operands too. In fact, an operation has a tree structure that can be visualized by passing a -b and/or a -a parameter to the laconic executable. This can be a help for debugging an expression or script. For example, the command
+
+> `... $ laconic '$0 200 ?,(+v0 7 ;w++[sProblem: ] V ¶ 0 ;w+[sAddition succeeded] ¶ V)' -a`
+
+> will display the below tree:
+
+<pre>
+    Tree after operate() :
+    ;
+    │	$
+    │	│	0
+    │	│	200
+    │	└─> 200
+    │	?,(
+    │	│	+
+    │	│	│	v
+    │	│	│	│	0
+    │	│	│	└─> 200
+    │	│	│	7
+    │	│	└─> 207
+    │	│	;
+    │	│	│	w
+    │	│	│	│	+
+    │	│	│	│	│	+
+    │	│	│	│	│	│	Problem:
+    │	│	│	│	│	│	V
+    │	│	│	│	│	│	└─> no_value
+    │	│	│	│	│	└─> no_value
+    │	│	│	│	│	¶
+    │	│	│	│	│	└─> no_value
+    │	│	│	│	└─> no_value
+    │	│	│	└─> no_value
+    │	│	│	0
+    │	│	└─> no_value
+    │	│	;)
+    │	│	│	w
+    │	│	│	│	+
+    │	│	│	│	│	Addition succeeded
+    │	│	│	│	│	¶
+    │	│	│	│	│	└─>
+    │	│	│	│	│
+    │	│	│	│	└─> Addition succeeded
+    │	│	│	│
+    │	│	│	└─> 19
+    │	│	│	V
+    │	│	│	└─> 207
+    │	│	└─> 207
+    │	└─> 207
+    └─> 207
+</pre>
+
+
 ## Value types
 
-Every element, except whitespace, has a value. Likewise, every operator returns a value - it's the operator's value. The value of elements or operators can be operands of other operators.
+Every element, except whitespace and comments, has a value. Likewise, every operator returns a value - it's the operator's value. The value of elements or operators can be operands of other operators.
 
 There are 4 types of values, each having a numeric id:
 - 0: empty
@@ -427,14 +479,14 @@ For clearing the stack, one can use the `K,,` operator, which would do the same 
 In order to reuse Laconic script code, it is possible to write routines that can be called repeatedly by other code.
 
 Laconic offers two kinds of routines:
-- routines that share - can read and write - the variables of the calling operator's environment;
+- routines that share - i.e., can read and write - the variables of the calling operator's environment;
 - routines that have an isolated set of variables and can't access the ones of the calling environment.
 
 These two kinds of routines are declared using two different operator variants:
 - `R` declares routines that will run in an isolated environment;
 - `R,` declares routines that will share the caller's variables.
 
-> *Note: routines will always share the stack and routines known to their caller, and the caller will always have access to stack items pushed by a called routine or other routines declared by a called routine.*
+> *Note: routines will always share the stack and routines known to their caller, and the caller will always have access to stack items pushed by a called routine or other routines declared by a called routine. In other words, the stack and collection of routines are global.*
 
 The `R` and `R,` operators expect two operands:
 - the routine's name or identifier, which can be any value type (empty, number or string);
@@ -480,13 +532,15 @@ Alternatively, if more operands are given to the `X` operator, these are pushed 
 
 As a routine's name is just another expression value, it's possible to use variables and stack items as pointers to routines.
 
-Routines can be stored in script files. They can be declared to a main script in two ways:
-- either by preceding calling code in the script by an Evaluate-after-reading operation: `Er,§<filename> X[sRoutine from file]`
-- or else by including the script file by preceding the main code by an `-i` parameter when running the command-line Laconic interpreter: `...$ laconic -i myRoutines.lac 'X[sRoutine from file]'`
-
 A routine's code has access to its own name or identifier using the `c§rtn` operation. When this operation is used outside of any routine, it returns "main".
 
-*An example of a routine in a script file can be found in `scripts/average.lac`. This script file not only declares the "average" routine, but also an "average_unit_tests" routine that, when called, performs several unit tests on the "average" routine.*
+Routines can be stored in script files, which are UTF-8 text files containing Laconic code. These routintes can be imported to a main script in two ways:
+- either by preceding calling code in the script by an Evaluate-after-reading operation: `Er,§myRoutines.lac X[sRoutine from file]`
+- or else by including the script file by preceding the main code by an `-i` parameter when running the command-line Laconic interpreter: `...$ laconic -i myRoutines.lac 'X[sRoutine from file]'`
+
+*An example of a routine in a script file can be found in `scripts/average.lac`. This script file not only declares the "average" routine, but also an "average_unit_tests" routine. This routine is entirely coded in Laconic again. When called, it performs several unit tests on the "average" routine:*
+
+`... $ laconic -i /home/user/laconic_scripts/average.lac 'X§average_unit_tests'`
 
 ## Arithmetic operators
 
@@ -1107,37 +1161,428 @@ The below named operations have been implemented:
 >> `o(§fmt 2 §, §.)` does the same<br/>
 >> `o§fmt 3` requests output of numbers with 3 fractal digits, but no change of fractals or thousands separators.
 
-
 ## Flow-related operators
-|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|;|combines<br/>expressions|2|used|value of<br/>last one|empty|error|
-|?|if|2:<br/>1. condition<br/>2. operator<br/>executed<br/>if true<br/>3. operator<br/>executed<br/>if false|ignored|value of<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
-|?,|try<br/>operand 1;<br/>if error<br/>return<br/>operand 2|2|if a 3rd<br/>operand<br/>is given,<br/>it's returned<br/>when no error.|see prev.<br/>columns|empty|error|
-|V|value of<br/>1st operand<br/>of last ?,<br/>operator|0|ignored|Error value<br/>if operand1<br/>failed, else<br/>any value|n/a|n/a|
-|W|while|2:<br/>1. condition<br/>2. operator<br/>to be<br/>executed|executed<br/>also|value of<br/>last<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
-|F|for|5:<br/>1. start count<br/>2. end count<br/>3. increment<br/>4. counter<br/>variable<br/>number<br/>or name<br/>5. operator<br/>to be<br/>executed|executed<br/>also|value of<br/>last<br/>executed<br/>operator|empty|depends<br/>on Z§ign|
-|B|break<br/>while<br/>or for<br/>loop|1:<br/>1 = current<br/>loop;<br/>higher = nth-1<br/>nesting<br/>loop|ignored|1st<br/>operand|error|error|
-|R|definition<br/>of routine<br/>with new<br/>scope|2:<br/>1. routine<br/>name or<br/>number;<br/>2. operator<br/>to be<br/>executed|included<br/>in definition|name or<br/>number|error|error|
-|R,|definition<br/>of routine<br/>using scope<br/>of caller|2:<br/>1. routine<br/>name or<br/>number;<br/>2. operator<br/>to be<br/>executed|included<br/>in definition|name or<br/>number|error|error|
-|X|execute<br/>routine|1:<br/>routine<br/>name or<br/>number|pushed<br/>on stack as<br/>arguments|result of<br/>routine's<br/>last<br/>top-level<br/>operator|error|error|
-|X,|execute<br/>routine|1:<br/>routine<br/>name or<br/>number|pushed<br/>on stack as<br/>arguments<br/>**in reverse<br/>order**|result of<br/>routine's<br/>last<br/>top-level<br/>operator|error|error|
+|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
+|:-:|:-:|:-:|:-:|:-:|:-|:-:|
+|;|combines<br/>expressions|2|used|value of<br/>last one|`;158 28`<br/>`;;+52 8 °2.41 r52.1`<br/>`;(§A §B §C)`|28<br/>52<br/>"C"|
+|?|if|2:<br/>1. condition<br/>2. operator<br/>executed<br/>if true<br/>3. operator<br/>executed<br/>if false|ignored|value of<br/>executed<br/>operator|see below||
+|?,|try<br/>operand 1;<br/>if error<br/>return<br/>operand 2|2|if a 3rd<br/>operand<br/>is given,<br/>it's returned<br/>when no error.|see prev.<br/>columns|see below||
+|V|value of<br/>1st operand<br/>of last ?,<br/>operator|0|ignored|Error value<br/>if operand1<br/>failed, else<br/>any value|see `?,`<br/>below||
+|W|while|2:<br/>1. condition<br/>2. operator<br/>to be<br/>executed|executed<br/>also|value of<br/>last<br/>executed<br/>operator|see below||
+|F|for|5:<br/>1. start count<br/>2. end count<br/>3. increment<br/>4. counter<br/>variable<br/>number<br/>or name<br/>5. operator<br/>to be<br/>executed<br/>in iterations|executed<br/>also|value of<br/>last<br/>executed<br/>operator|see below||
+|B|break<br/>while<br/>or for<br/>loop|1:<br/>1 = current<br/>loop;<br/>higher = nth-1<br/>nesting<br/>loop|ignored|1st<br/>operand|see below||
+
+`;` Operation combinator
+> required operands: 1, expected: 2<br/>
+> excess operands: used also<br/>
+> returns: the value of its last operand
+
+> The `;` operator, or a sequence of them, can be used to group multiple operations where only one is expected, as in the second operand of the `W` (while) operator, the 2nd or 3rd operands of the ? (if) operator, and others.
+
+> e.g:<br/>
+>> `;$0 ~18 v0` groups 2 operations as 1 and yields -18<br/>
+>> `;;K7 K35 X§myRoutine` groups 3 operations as 1<br/>
+>> `;(+:§count 1 +:§sum v§count ?=v§count 20 B1 €)` groups 3 operations as 1
+
+`?` if
+> required operands: 3<br/>
+> excess operands: ignored<br/>
+> returns: if the first operand has a truthy value, the second operand, otherwise the third.
+
+> Depending on the first operand, either the second or the third operand is executed, and the resulting value is returned, thus making this operator a real *if-then-else* construct.
+
+> e.g:<br/>
+<pre>
+    $§crit 10
+    ?
+        >v§crit 5
+        ;
+            /:§crit 2
+            +§divs 1
+        €
+    v§crit
+</pre>
+>> assigns (`$`) 10 to variable "crit"; if (`?`) variable "crit" exceeds (`>`) 5, it's divided by 2 and (`;`) variable "divs" is increased, otherwise, nothing (€) happens. Afterwards, the value of variable "crit" is returned.
+
+`?,` try ... catch ...
+> required operands: 2<br/>
+> excess operands: a 3rd operand will be used to produce the return value if operand 1 executes without errors.<br/>
+> returns: if the 1st operand executes without errors, its result value, else the value of the 2nd operand's execution.
+
+> In other words:<br/>
+> `?, opr1 oprIfError optional:oprIfOk`
+
+> If operator opr1 is successful (no error),<br/>
+> then its outcome is returned,<br/>
+> else oprIfError's outcome.
+
+> If a third operator oprIfOkis present, then that operator's outcome is returned if opr1 was successful.
+
+> Both the operators oprIfOk and oprIfError can make use of a V operator, which will yield the result of the successful operation if called by oprIfOk, or the error value if called by oprIfError.
+
+> e.g:<br/>
+<pre>
+    ?,
+        +€ 7
+        ;
+            w
+                +
+                    +[sProblem: ] V
+                    ¶
+            0
+</pre>
+>> As this script tries (`?,`) to add to an empty operand (`+€ 7`), an error is raised. Therefore, the entire `?,` operation yields 0 as a fallback result after (`;`) having written (`w`) "Problem: EmptyOperand('+')\n" to standard output.
+
+<pre>
+    $0 200
+    ?,(
+        +v0 7
+        ;
+            w++[sProblem: ] V ¶
+            0
+        ;
+            w+[sAddition succeeded] ¶
+            V
+    )
+</pre>
+>> This script first assigns 200 to variable 0. Next it tries (`?,`) and adds (`+`) this variable's value (`v0`) and 7. As this operation succeeds, and the `?,`operator has a third operand, "Addition succeeded\n" is written to standard output (`w`) and (`;`) the 1st operand's value (`V`) is returned - to wit, 207.
+
+`W` while
+> required operands: 2<br/>
+> excess operands: executed also<br/>
+> returns: the value of the last executed operator
+
+> While operand 1 is truthy, operands 2 up to the last one are executed in loop iterations.
+
+>> ("Truthy" means: not<br/>
+>> - empty (`€`)<br/>
+>> - 0<br/>
+>> - empty string (`[s]`)<br/>
+>> - error value.)
+
+> If more than one statement is needed in operand 2, use the ; combinator operator or enclose the `W` operator's operands in parentheses.
+
+> Besides finding a falsy value when re-evaluation its 1st operand, the `W` operator will also stop repeating iterations if
+>> - the maximum number of iterations set by the `Z§loops` operation have been done (default = 10,000) - this is a protection against vicious loops;<br/>
+>> - a `B` operation in the current or a nested loop requests a loop break.
+
+> e.g:<br/>
+<pre>
+    $0 10
+    $1 0
+    W
+        v0
+        ;
+            +:1v0
+            -:0 1
+    v1
+</pre>
+>> yields the summation of 10, to wit 55.
+
+>>> *Note: a summation can be calculated more easily using `$§source 10 /* v§source + v§source 1 2`*
+
+<pre>
+    R(
+        §factorial
+
+        $§fact k
+        $§res 1
+        W
+            >v§fact 0
+            ;
+                *:§res v§fact
+                -:§fact 1
+        v§res
+    )
+
+    X(§factorial 6)
+</pre>
+>> defines a routine "factorial" that calculates factorials, calls it while passing value 6 on the stack and returns 720.
+
+<pre>
+    Z§loops 500
+    $§count 0
+    W
+        1
+        +:§count 1
+    v§count
+</pre>
+>> yields 500: as the 1st operand (`1`) of the `W` operator is always truthy, the maximal number of iteration set by the `Z§loops 500` operation is looped through, increasing the "count" variable every time by 1 (`+:§count 1`). As a result, that maximal number of iterations is returned (`v§count`).
+
+> Breaking from a loop: see the `B` operator.
+
+`F` for
+> required operands: 5<br/>
+> excess operands: executed also in iterations<br/>
+> returns: the value of its last executed operand
+
+> `F startValue endValue increment counterVariable statement`
+
+> The `F` operator takes 5 operands :
+> - the starting value of the loop counter
+> - the end value of the loop counter
+> - the increment step: the number the loop counter is incremented with after every iteration
+> - the variable identifier (number or string) that will hold the current loop counter
+> - an operator executed in each iteration; if there are more than 5 operands, these are executed too in each iteration.
+> 
+> The `F` operator
+> 1. starts by initializing its loop counter with its 1st operand,
+> 2. executes its 5th and subsequent operands
+> 3. increases or decreases its loop counter with its 3rd operand and stores it in the variable indicated in the 4th operand
+> 4. checks if the loop counter is still in the range between its 1st and 2nd operand, inclusive,
+> 5. checks if no break has been set on itself using the `B` operator,
+> 6. checks if the maximal number of iterations has not been reached,
+> 7. if steps 4, 5 and 6 are positive, repeats from step 2.
+
+> If you want to execute more than one operator, either
+> - use the `;` operator
+> - or use parentheses.
+
+> e.g:<br/>
+<pre>
+    $
+        0
+        1
+    F
+        3
+        11
+        2
+        1
+        *
+            :0
+            v1
+    v0
+</pre>
+>> calculates and returns the product of all odd numbers between 3 and 11, inclusive.
+
+> The `F` operator can also count down: just have the 1st operand greater than the 2nd. The step operator should remain positive. E.g.:
+<pre>
+    R(
+        §revertChars
+
+        $§orig k
+        $§nrFrag o,§split v§orig § §fragment
+        $§reverse §
+        F
+            - v§nrFrag 1    [c First index]
+            0               [c Last index]
+            1               [c Step value; positive]
+            §index          [c Id of variable that will hold loop index]
+            +               [c Concatenate character in var. "fragment"index
+                                with var. "reverse"]
+                :§reverse
+                v
+                    +,
+                        §fragment
+                        v§index
+        v§reverse
+    )
+
+    X(§revertChars §ABCDE)  [c Call routine "revertChars")
+</pre>
+> This script creates a routine "revertChars" that reverses the characters of a string popped from the stack.<br/>
+> Next, the script calls it and yields the reverted string (as the call is the last operator).
+
+> Breaking from a loop: see the `B` operator.
+
+> Just like the `W` operator, the number of loops an `F` operator can iterate through is limited by the settings of the `Z§loops` operation, or its default: 10,000.
+> If your script doesn't execute as many iterations as you thought it would, you might need to set the allowed number of iterations using this `Z§loops` operation. E.g.:
+
+<pre>
+    $§iterationsNeeded 1_000_000
+    Z§loops v§iterationsNeeded
+    F
+        1
+        v§iterationsNeeded
+        1
+        §count
+        [c Do something a million times.]
+</pre>
+
+`B` break from a loop
+> required operands: 1<br/>
+> excess operands: ignored<br/>
+> returns: its first operand
+
+> The `B` operator breaks both 'W` (while) and `F` (for) loops.
+
+> The `B` operator has been designed to both break a current loop as well as a parent loop of nested loops. Therefore, it takes 1 operand: the level of parent loops (if any) to break, where 1 is the current loop, 2 is the immediate parent loop, etc. E.g.:
+
+<pre>
+    Z§loops 10
+    $§iters 0
+    W
+        1
+        W
+            1
+            +:§iters 1
+    v§iters
+</pre>
+>> Has no break operations, and as the maximal number of iterations is set to 10, the script will execute 10 times 10 iterations of a nested loop, so variable "iters" will hold 100 at the end.
+
+<pre>
+    Z§loops 10
+    $§iters 0
+    W
+        1
+        W
+            1
+            ;
+                +:§iters 1
+                B1
+    v§iters
+</pre>
+>> Has a break operation in its nested loop, so these nested loops will only execute once. Therefore, this script will execute 10 times 1 iteration of a nested loop, so variable "iters" will hold 10 at the end.
+
+<pre>
+    Z§loops 10
+    $§iters 0
+    W
+        1
+        W
+            1
+            ;
+                +:§iters 1
+                B2
+    v§iters
+</pre>
+>> Has a break operation in its nested loop that breaks the parent loop, so both the nested and parent loops will only execute once. Therefore, this script will execute 1 time 1 iteration of a nested loop, so variable "iters" will hold 1 at the end.
+
+<pre>
+    Z§loops 10
+    $§iters 0
+    W
+        1
+        W
+            1
+            ;(
+                +:§iters 1
+                B2
+                B0
+            )
+    v§iters
+</pre>
+>> Has a break operation in its nested loop that breaks the parent loop. However the next operation is `B0`, which desactivates any breaks, so this script repeats both the parent and nested loop 10 times anyway. Therefore, variable "iters" will hold 100 at the end.
+
+## Routine-related operators
+
+For examples, see the section about routines above.
+
+|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|
+|:-:|:-:|:-:|:-:|:-:|
+|R|definition<br/>of routine<br/>with new<br/>scope|2:<br/>1. routine<br/>name or<br/>number;<br/>2. operator<br/>to be<br/>executed|included<br/>in definition|name or<br/>number|
+|R,|definition<br/>of routine<br/>using scope<br/>of caller|2:<br/>1. routine<br/>name or<br/>number;<br/>2. operator<br/>to be<br/>executed|included<br/>in definition|name or<br/>number|
+|X|execute<br/>routine|1:<br/>routine<br/>name or<br/>number|pushed<br/>on stack as<br/>arguments|result of<br/>routine's<br/>last<br/>top-level<br/>operator|
+|X,|execute<br/>routine|1:<br/>routine<br/>name or<br/>number|pushed<br/>on stack as<br/>arguments<br/>**in reverse<br/>order**|result of<br/>routine's<br/>last<br/>top-level<br/>operator|
 
 ## I/O operators
-|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|r|read<br/>from<br/>stdin|0|ignored|if input<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|n/a|n/a|
-|r,|read<br/>from<br/>file|1:<br/>file<br/>path|ignored|if input<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|n/a|n/a|
-|w|write<br/>to<br/>stdout|1|written<br/>also|number<br/>of bytes<br/>written|empty<br/>string|depends on<br/>Z§ign|
-|w,|write<br/>to<br/>file,<br/>overwriting<br/>it|2|ignored|nr. of<br/>characters<br/>written|empty<br/>string|depends on<br/>Z§ign|
+|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
+|:-:|:-:|:-:|:-:|:-:|:-|:-:|
+|r|read<br/>from<br/>stdin|0|ignored|if input<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|see below||
+|r,|read<br/>from<br/>file|1:<br/>file<br/>path|ignored|if file<br/>content<br/>is a valid<br/>number,<br/>a number;<br/>else a<br/>string|see below||
+|w|write<br/>to<br/>stdout|1|written<br/>also|number<br/>of bytes<br/>written|see below||
+|w,|write<br/>to<br/>file,<br/>overwriting<br/>it|2|ignored|nr. of<br/>characters<br/>written|see below||
+
+`r` read input from standard input
+> required operands: 0<br/>
+> excess operands: ignored<br/>
+> returns: if the input is a valid number, a number, otherwise a string. For input of a negative number, both the standard minus sign `-` as Laconic's unary minus operator `~` may be used.
+
+> e.g:<br/>
+>> `w[sEnter a number: ] r` yields 45 if the user entered "45".<br/>
+>> `w[sEnter a number: ] r` yields -45 if the user entered "-45".<br/>
+>> `w[sEnter a number: ] r` yields -45 if the user entered "~45".<br/>
+>> `w[sEnter a number: ] r` yields "Ouagadougou" if the user entered "Ouagadougou".<br/>
+>> `w[sEnter degrees: ]°,r` yields the number input understood as degrees and converted to radians (`°,`).<br/>
+>> `w[sEnter your name: ] $§name r` stores the name entered by the user to variable "name" - next, input check can be performed by the code.<br/>
+>> `w[sEnter a Laconic expression: ] Er` evaluates and executes (`E`) a string entered (`r`) as Laconic code, so if the user entered "+(22 8 12 7)", 49 would be returned.
+
+`r,` read input from a file
+> required operands: 1: the file path<br/>
+> excess operands: ignored<br/>
+> returns: the file's content as a string, even if that represents a valid number. To convert it to a number, use the `E` operator.
+
+> The file path given may be absolute or relative to the user shell's current working directory.
+
+> As the file path is a string, it can be composed and calculated like any other string.
+
+> The file should consist entirely of valid UTF-8 characters. If not, an error is thrown.
+
+> e.g:<br/>
+>> `* 2 Er, [s/home/linda/constants/lemniscate.txt]` would yield the double of the Lemniscate constant if file /home/linda/constants/lemniscate.txt would contain ".8346268".<br/>
+
+>> `Er, §routines.txt` would import all routines coded in file ./routines.txt using `R` or `R,` operators. These routines would be immediately callable from subsequent code.<br/>
+
+>> *Note: another way of importing routines from a Laconic code file is by issuing the -i parameter when using the laconic executable.*
+
+`w` write to standard output
+> required operands: 1<br/>
+> excess operands: written also<br/>
+> returns: the number of bytes written
+
+> Note that no newline or CR characters are inserted automatically. You can, however, easily add a newline to any text using the + and ¶ or c§n operators - see the example below.
+
+> If a script's last operation is a `w`, the entire script's return value will be the number of bytes that write operation did write. To avoid this often useless output, insert a `Z§quiet 1` operation in the script, or else have the script end with an empty string: `[s]` or `§`.
+
+> e.g:<br/>
+<pre>
+    Z§quiet 1
+    w[sEnter radians: ]
+    $§input r 
+    ?
+        =tv§input 1
+        w([sDegrees: ] °v§input ¶)
+        w([sHey, enter a number!] ¶)
+</pre>
+>> This script<br/>
+>> - suppresses the output of the entire script's last operation's value (`Z§quiet 1`),
+>> - writes a prompt for an input of radians (`w`),
+>> - assigns the user's input (`r`) to variable "input" (`$`),
+>> - tests (`?`) if the type (`t`) of that input (`v§input`) is numeric (`1`),
+>> - and if so, outputs (`w`) this input converted to degrees (`°`)
+>> - or else, displays an error message (`w`).
+
+`w,` write to a file, overwriting it.
+> required operands: 2<br/>
+>> - file path
+>> - content to be written
+
+> excess operands: ignored<br/>
+> returns: the number of bytes written
+
+> The file path given may be absolute or relative to the user shell's current working directory.
+
+> As the file path is a string, it can be composed and calculated like any other string.
+
+> If the write operation fails, the `w,` operator returns an error message containing the file system's error message.
+
+> e.g:<br/>
+<pre>
+    Z§quiet 1
+    $§index 5
+    $§currentData [sJust a file write test]
+    ?,(
+        w,
+            +,
+                §calcData
+                v§index 
+            v§currentData
+        w(V ¶)
+        w(q,V [s bytes written] ¶)
+    )
+</pre>
+>> This script tries (`?,`) and writes (`w,`) data in variable (`v`) "currentData" to a file having as path the concatenation (`+,`) of "calcData" and a number or string in variable "index".<br/>
+>> If the write operation fails, the error message (`V`) is written (`w`) to standard output.<br/>
+>> If it succeeds, the number of bytes written (`V`) is written to standard output. (The `q,` operator converts that number to a string without decimal digits.)
+
 
 ## Other operators
-|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Empty<br/>operand<br/>used as|Error<br/>operand<br/>used as|
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|q|quote:<br/>convert<br/>to string.<br/>Same as<br/>+§ ...|1|ignored|string;<br/>numbers are<br/>formatted<br/>according to<br/>o,§fmt settings|empty|error|
-|q,|quote:<br/>convert<br/>to string.<br/>Same as<br/>+,§ ...|1|ignored|string;<br/>fractal parts<br/>of numbers are<br/>truncated<br/>towards zero|empty|error|
-|t|type|1|ignored|0 for empty,<br/>1 for number,<br/>2 for text,<br/>90 for error.|empty|depends on<br/>Z§ign|
-|N|number<br/>of operands<br/>of preceding<br/>same-level<br/>operator|0|ignored|number|n/a|n/a|
-|E|evaluate<br/>the expression<br/>in 1st<br/>operand<br/>(should<br/>be string)|1|ignored|evaluation<br/>result|error|depends on<br/>Z§ign|
-|U|user-<br/>coded<br/>error|1:<br/>error<br/>message|ignored|error|error|error|
+|Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
+|:-:|:-:|:-:|:-:|:-:|:-|:-:|
+|q|quote:<br/>convert<br/>to string.<br/>Same as<br/>+§ ...|1|ignored|string;<br/>numbers are<br/>formatted<br/>according to<br/>o,§fmt settings|`q21`<br/>`q[sA string]`<br/>`q€`<br/>`q/1 0`|"21.000000"<br/>"A string"<br/>""<br/>"DivideByZero('/')"|
+|q,|quote:<br/>convert<br/>to string.<br/>Same as<br/>+,§ ...|1|ignored|string;<br/>fractal parts<br/>of numbers are<br/>truncated<br/>towards zero|`q,21`<br/>`q,[sA string]`<br/>`q,€`<br/>`q,/1 0`|"21"<br/>"A string"<br/>""<br/>"DivideByZero('/')"|
+|t|type|1|ignored|0 for empty,<br/>1 for number,<br/>2 for text,<br/>90 for error.|`t€`<br/>`t~55`<br/>`t+,[sRoom ] 24`<br/>t/1 0|0<br/>1<br/>2<br/>90|
+|N|number<br/>of operands<br/>of preceding<br/>same-level<br/>operator.<br/>If that was<br/>a loop (W or F),<br/>iterations<br/>executed.|0|ignored|number|`*56.77 21 N`<br/><br/>`$`<br/>`  10`<br/>`  ;`<br/>`    F1 5 1 0 €`<br/>`    N`<br/>`v10`|2<br/><br/><br/><br/><br/><br/><br/>5|
+|E|evaluates<br/>and<br/>executes<br/>the expression<br/>in 1st<br/>operand<br/>(should<br/>be string)|1|ignored|evaluation<br/>result|`E[s -70 8]`<br/><br/>`E[sR§double *2 k]`<br/>`X(§double 11)`|62<br/><br/><br/>22|
+|U|user-<br/>coded<br/>error|1:<br/>error<br/>message|ignored|error|`U[sInput`<br/>`  should be`<br/>`  a number!]`|"UserDefinedError(<br/>`"Input should be a number!"`)"|
 

@@ -1044,7 +1044,7 @@ Operators
 			use the ; combinator operator.
 			The W operator returns the value of its last executed statement.
 
-			$0 10$1 0Wv0;+:1v0:-0 1v0
+			$0 10 $1 0 Wv0 ;+:1v0 -:0 1 v1
 				yields the summation of 10 (10 + 9 + ... + 1)
 
 			For readability, this can also be written as
@@ -1056,7 +1056,7 @@ Operators
 				;
 					+:1 v0
 					-:0 1
-			v0
+			v1
 
 			Note: without the combinator operator (;),
 			variable 0 wouldn't be decreased in every iteration,

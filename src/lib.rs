@@ -8388,6 +8388,19 @@ mod tests {
         }
 
         #[test]
+        fn x_try_3_ops_no_error_write_file() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+            let outcome = interpreter.execute_opts("?,(w, §test.txt §Asprovalta V V)".to_string(), true, false, false).unwrap().numeric_value();
+
+            assert_eq!(10_f64, outcome);
+            assert!(interpreter.shuttle.try_outcome_stack.is_empty());
+            assert!(interpreter.shuttle.error_breaks);
+        }
+
+        #[test]
         fn x_try_2_ops_error() {
             let writer = Box::new(Vec::<u8>::new());
             let reader = Box::new(MockByString::new(Vec::<String>::new()));
