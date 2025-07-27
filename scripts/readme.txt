@@ -8,16 +8,11 @@ enclosed by single quotes :
 
 E.g.
 
-	target/release/laconic '$0 31' -i scripts/isPrime.lac
+	given a script isPrime.lac, that expects a preinitialized variable 0, the command
 
-will calculate the primality or smallest divisor of number 31.
-(If that's 1, the number is prime.)
+		target/release/laconic '$0 31' -i scripts/isPrime.lac
 
-E.g.
-
-	target/release/laconic '$0 12' -i scripts/write_fibonacci.lac
-
-will print the 12 first Fibonacci numbers.
+	might calculate the primality of number 31.
 
 If you want the script's statements to precede the statements in argument,
 have the -i parameter precede these statements:
@@ -30,6 +25,10 @@ And you can also have statements as arguments precede and follow the statements 
 
 Moreover, multiple script files can be included:
 
-	laconic -i script1.lac -i script2.lac -i script3.lac '[c Statements]'
+	target/release/laconic -i script1.lac -i script2.lac -i script3.lac '[c Statements]'
+
+Script files are a great way to import routines to a script:
+
+	target/release/laconic -i scripts/primeRoutine.lac 'K 101 X§isPrime'
 
 

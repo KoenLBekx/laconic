@@ -1,5 +1,5 @@
 b16
-w[sEnter a hexadecimal number:]
+w[sEnter a hexadecimal number: ]
 $0r
 ?
 	=

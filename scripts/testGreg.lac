@@ -1,13 +1,15 @@
-[c	Iterates through all days from jan 1, 0000 up to dec 31, 2025
-		and checks if the sequence number is one more than the previous one.
-
-		If, at the end the script outputs
-			2026 13 32
-		then all sequence numbers were correct.
-
-		Otherwise, the year, month and day of the first erroneous sequence number
-		are output.
-]
+w(
+	[sIterates through all days from jan 1, 0000 up to dec 31, 2025]¶
+	[sand checks if the sequence number is one more than the previous one.]¶
+	¶
+	[sIf, at the end the script outputs]¶
+	[s		2026 13 32]¶
+	[sthen all sequence numbers were correct.]¶
+	¶
+	[sOtherwise, the year, month and day of the first erroneous sequence number]¶
+	[sare output.]¶
+	¶
+)
 
 R
 	§daysInMonth
@@ -24,6 +26,7 @@ R
 					30
 					31
 
+Z§quiet 1
 o,§fmt 0 §. §
 $§y 0
 $§prev 0
@@ -95,6 +98,7 @@ W
 	)
 
 w+(
+	¶ [sFinal output:] ¶
 	§
 	v§y
 	[s ]
