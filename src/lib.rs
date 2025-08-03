@@ -2,6 +2,7 @@
 
 // The braces after the first comment slashes make Vim fold these comments also.
 //{ TODOs
+// TODO: struct NumberFormat shouldn't be simply public, but only be visible inside crate laconic.
 // TODO: resolve TODO's in code.
 // TODO: the characters for the operators should be hard-coded only once: in constants.
 //      (done; not done follows below:)
@@ -829,7 +830,12 @@ impl Shuttle {
 
     fn set_var(&mut self, name: ValueType, value: ValueType) {
         let vars = self.get_top_of_vars_stack();
-        vars.insert(name, value);
+
+        if value == ValueType::Empty {
+            vars.remove(&name);
+        } else {
+            vars.insert(name, value);
+        }
     }
 
     fn get_var(&mut self, name: &ValueType) -> ValueType {
@@ -852,6 +858,15 @@ impl Shuttle {
 
     pub fn echo_output(&self) -> Option<&[u8]> {
         self.writer.echo_bytes()
+    }
+
+    #[cfg(test)]
+    fn has_var(&mut self, name: ValueType) -> bool {
+        let vars = self.get_top_of_vars_stack();
+    
+        println!("vars: {:?}", vars);
+
+        vars.contains_key(&name)
     }
 }
 
@@ -4838,7 +4853,7 @@ mod tests {
     }
 
     mod exec {
-        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, ScriptError, are_very_near};
+        use crate::{ExecutionOutcome, Interpreter, NO_VALUE, ScriptError, ValueType, are_very_near};
         use crate::input::{MockByString, StdinReader};
         use crate::opr_funcs::{greg_sequence_to_date, is_leap_year};
         use std::ffi::OsStr;
@@ -5466,6 +5481,21 @@ mod tests {
         #[test]
         fn x_assign_to_neg_register() {
             assert_eq!(7f64, Interpreter::execute_with_mocked_io("$~10 7 v~10".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_assign_empty_removes_var() {
+            let writer = Box::new(Vec::<u8>::new());
+            let reader = Box::new(MockByString::new(Vec::<String>::new()));
+            let text_io_handler = Box::new(MockTextHandler::new());
+            let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
+
+            interpreter.execute_opts("$38 5".to_string(), true, false, false).unwrap();
+            assert_eq!(true, interpreter.shuttle.has_var(ValueType::Number(38f64)));
+            assert_eq!(5f64, interpreter.execute_opts("v38".to_string(), true, false, false).unwrap().numeric_value());
+
+            interpreter.execute_opts("$38 €".to_string(), true, false, false).unwrap();
+            assert_eq!(false, interpreter.shuttle.has_var(ValueType::Number(38f64)));
         }
 
         #[test]
