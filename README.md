@@ -434,6 +434,8 @@ Variable identifiers can also be calculated:
 
 > Expressions like these, together with variables holding a pointer like v§month, allow for array-like constructs.
 
+Assigning the empty value (`€` or an empty operation outcome) to a variable, removes it from the variables collection.
+
 ## Serial assignment of variables
 
 It is possible to assign a series of values to a series of variables using one `$` operation:
