@@ -6,7 +6,7 @@
 <style>td:first-child{font-size: 1.5rem;}</style>
 # **Laconic: the language**
 
-> *I got carried away.*
+> *I got carried away, because I had fun.*
 
 > *I needed a concise expression interpreter, but Laconic nearly became a programming language:*
 
@@ -97,8 +97,10 @@ All operators consist of a single character that precedes its operands.
 
 See below for a detailed explanation of each operator.
 
-There's never a need to separate an operator from preceding or following elements using a whitespace,
+As all operators consist of only one character, there's nearly never a need to separate an operator from preceding or following elements using a whitespace,
 but it's permitted for readability.
+
+> *The only instance where an operator needs to be separated by whitespace from a previous element, is when that previous element is a simple string - otherwise, the operator is interpreted as a continuation of that simple string.*
 
 Every operator has a default number of operands it expects. E.g., the `+` operator expects two operands :
 

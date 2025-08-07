@@ -10,12 +10,6 @@
 //      holding also other data like number of operands, operator function, e.a.
 //      (even data for documentation).
 //      The function isKnownOperator should also use this constant array.
-// TODO: make private whatever can remain private.
-// TODO: include the explanations in analysis/laconic.txt in markdown format as documentation
-//      comments.
-// TODO: The ScriptError variants that carry an operator mark as char should carry a string
-//      so the full enumerated operator name can be passed, e.g.: "o,§dow".
-// TODO: check using cargo clippy.
 // TODO: use some other numeric type that supports very large numbers with higher precision instead of f64 - see crates.io (dashu?)
 //}
 
@@ -35,7 +29,7 @@ use string_io_and_mock::{FileTextHandler, MockTextHandler, TextIOHandler};
 // the fourth one to the Shuttle containing other state.
 type OperatorFunc = &'static dyn Fn(&mut char, &mut ValueType, &mut [Expression], &mut Shuttle) -> Result<(), ScriptError>;
 
-// --------------------------- Operator constants {
+// --------------------------- Operator and other constants {
 const OPNUM: char = '0';
 const OPSTR: char = '§';
 const OPNEG: char = '~';
@@ -111,6 +105,8 @@ const CH_CLAUSE_END: char = ']';
 const MARK_STRING: char = 's';
 const MARK_COMMENT: char = 'c';
 const MARK_NUMBER: char = 'n';
+
+const NO_VALUE: &str = "(no_value)";
 // ---------------------------------- }
 
 #[derive(PartialEq)]
@@ -133,37 +129,107 @@ impl fmt::Debug for Atom {
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
+/// Whenever an `Interpreter` halts a script's execution due to an error condition, an
+/// `Err<ScriptError>` is returned.
+///
+/// Whenever a `ScriptError` variant has a `char` field, that character is the operator that "threw" the
+/// `ScriptError`.
+///
+/// Whenever a variant includes a position field, this field indicates a 1-based character position
+/// in the script.
 pub enum ScriptError {
+    /// The same character was requested both as fractals separator and as thousands
+    /// separator.
     ConflictingNumberPartSeparators,
-    DigitParsingFailure{position: usize, reason: String},
+
+    /// A zero divisor was found, usually by the division or modulus operators.
     DivideByZero(char),
+
+    /// An empty operand was found where that makes no sense.
     EmptyOperand(char),
+
+    /// A file read operation failed. The fields report the file path and the operation
+    /// system's error message as reason.
     FileReadFailure{path: String, reason: String},
+
+    /// An attempt was made to find a substring in a source string, but the substring given was
+    /// longer than the source string.
     FindStringLongerThanSourceString(char),
+
+    /// An operator got less operands than expected.
     InsufficientOperands(char),
+
+    /// A 13th month, a 32nd day, a negative year, or other invalid date parts were fed as operands to date-related operators.
     InvalidDatePart(char),
+
+    /// An invalid Gregorian date sequence number was fed to a date-related operator, e.g. a
+    /// negative number.
     InvalidDateSequenceNumber(String),
+
+    /// A number base smaller than 2 or equal to f64::INFINITY was requested.
     InvalidNumberBase(f64),
-    InvalidOperandMax(char),
+
+    /// A version part not between 0 or 3, inclusive, has been requested.
     InvalidVersionPart(f64),
+
+    /// A logarithm of zero or smaller has been requested.
     LogarithmOfZeroOrNegativeNumberIsNotSupported,
+
+    /// A non-integer power of a negative number has been requested.
     NonIntegerPowerOfNegativeNumberIsNotSupported,
+
+    /// A non-numeric operand was found where only numeric operands are expected.
     NonNumericOperand(char),
+
+    /// A non-string operand was found where only string operands are expected.
     NonTextOperand(char),
+
+    /// An invalid string to be parsed as a number was found. The string field reports the reason.
     NumberParsingFailure(String),
+
+    /// An operation involving a too high character position was attempted, e.g. past
+    /// end-of-string.
     PositionPastLastPossible(usize),
-    ReadingUninitializedVariable(String),
+
+    /// At the end of the script, some `[` was not closed by a matching `]`.
     UnclosedBracketsAtEnd,
+
+    /// A `]` in the script doesn't have a matching `[`. The position of that `]` character is
+    /// reported in the 1-based position field.
     UnexpectedClosingBracket{position: usize},
+
+    /// A `)` in the script doesn't have a matching `(`.
     UnexpectedClosingParenthesis,
+
+    /// A negative number was found where only positive numbers as operands are allowed.
     UnexpectedNegativeOperand(char),
+
+    /// The content of a bracket clause (like `[s...]`) should always start with a type marker character
+    /// like `s` for strings, but an unknown marker was found.
     UnknownBracketContentTypeMarker{position: usize, marker: char},
+    
+    /// The `c` operator found an unknown constant choice string operand, which is reported in the
+    /// string field.
     UnknownConstant(String),
-    UnknownNamedOperator(String),
+
+    /// The `O` or `o` operator found an unknown named operation name operand, which is reported in the
+    /// string field.
+    UnknownNamedOperation(String),
+
+    /// An unknown operator character was found where a known operator was expected.
     UnknownOperator{position: usize, operator: char},
+
+    /// A not-yet-defined routine was called.
     UnknownRoutine(String),
+
+    /// An error coded by the script author was "thrown".
     UserDefinedError(String),
+
+    /// Writing to standard output - or its mock - failed. The underlying error is reported in the
+    /// string field.
     WriteFailure(String),
+
+    /// A logarithm in a zero of negative base was requested.
     ZeroOrNegativeLogarithmBaseIsNotSupported,
 }
 
@@ -174,9 +240,6 @@ enum ValueType {
     Number(f64),
     Text(String),
     Error(ScriptError),
-
-    /// Only to be used to serve functionality like opr_funcs::min.
-    Max,
 }
 
 impl ValueType {
@@ -186,7 +249,6 @@ impl ValueType {
             ValueType::Number(_) => 1_f64,
             ValueType::Text(_) => 2_f64,
             ValueType::Error(_) => 90_f64,
-            ValueType::Max => 99_f64,
         }
     }
 
@@ -202,7 +264,6 @@ impl ValueType {
             ValueType::Text(txt) => txt.clone(),
             ValueType::Number(num) => format!("{num}"),
             ValueType::Error(script_err) => format!("{script_err:?}"), 
-            ValueType::Max => "ValueType::Max".to_string(),
             ValueType::Empty => default,
         }
     }
@@ -229,7 +290,6 @@ impl PartialEq for ValueType {
             (ValueType::Number(s), ValueType::Number(o)) => s == o,
             (ValueType::Text(s), ValueType::Text(o)) => *s == *o,
             (ValueType::Error(s), ValueType::Error(o)) => *s == *o,
-            (ValueType::Max, ValueType::Max) => true,
             _ => false,
         }
     }
@@ -240,11 +300,10 @@ impl Eq for ValueType {}
 impl Hash for ValueType {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            ValueType::Empty => 0u8.hash(state),
+            ValueType::Empty => NO_VALUE.to_string().hash(state),
             ValueType::Text(s) => s.hash(state),
             ValueType::Number(f) => f.to_be_bytes().hash(state),
             ValueType::Error(_) => self.get_string_value("Error".to_string()).hash(state),
-            ValueType::Max => 99u8.hash(state),
         };
     }
 }
@@ -648,7 +707,7 @@ impl Expression {
                 _ => "(invalid)".to_string(),
             },
             OPSTR => match self.value {
-                ValueType::Empty => "no_value".to_string(),
+                ValueType::Empty => NO_VALUE.to_string(),
                 ValueType::Text(ref txt) => txt.clone(),
                 _ => "(invalid)".to_string(),
             },
@@ -687,7 +746,7 @@ impl Expression {
             exp_rep.push_str("\n\u{0_2514}\u{0_2500}> ");
 
             let val_rep = match self.value {
-                ValueType::Empty => "no_value".to_string(),
+                ValueType::Empty => NO_VALUE.to_string(),
                 ValueType::Number(num) => num.to_string(),
                 ValueType::Text(ref txt) => txt.clone(),
                 _ => "(invalid)".to_string(),
@@ -704,7 +763,7 @@ impl fmt::Debug for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let representation = match self.opr_mark  {
             OPNUM => format!("{}", self.get_num_value(0f64)),
-            OPSTR => self.get_string_value("(no_value)".to_string()),
+            OPSTR => self.get_string_value(NO_VALUE.to_string()),
             _   => String::new(),
         };
 
@@ -896,8 +955,6 @@ impl ExecutionOutcome {
     }
 }
 
-const NO_VALUE: &str = "(no_value)";
-
 pub struct Interpreter {
     shuttle: Shuttle,
 }
@@ -958,7 +1015,6 @@ impl Interpreter {
             ValueType::Number(ref n) => ExecutionOutcome::Number{value: *n, format_info: self.shuttle.number_format.clone()},
             ValueType::Text(ref s) => ExecutionOutcome::Text(s.clone()),
             ValueType::Error(ref s_err) => ExecutionOutcome::Error(format!("{s_err:?}")),
-            ValueType::Max => ExecutionOutcome::Error("Invalid Max operand".to_string()),
         })
     }
 
@@ -1406,7 +1462,6 @@ pub(crate) mod opr_funcs {
             ValueType::Number(num) => ValueType::Number(operation(num)),
             ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         Ok(())
@@ -1564,7 +1619,7 @@ pub(crate) mod opr_funcs {
         Ok(())
     }
     
-    fn concat_expressions(opr_mark: &mut char, operands: &mut [Expression], shuttle: &mut Shuttle, do_truncate: bool) -> Result<String, ScriptError> {
+    fn concat_expressions(_opr_mark: &mut char, operands: &mut [Expression], shuttle: &mut Shuttle, do_truncate: bool) -> Result<String, ScriptError> {
         let mut string_outcome = "".to_string();
 
         for op in operands {
@@ -1575,7 +1630,6 @@ pub(crate) mod opr_funcs {
                     ValueType::Number(num) => shuttle.number_format.format(num),
                     ValueType::Text(txt) => txt,
                     ValueType::Error(s_err) => format!("{s_err:?}"),
-                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 }).as_str()
             );
         }
@@ -1598,7 +1652,6 @@ pub(crate) mod opr_funcs {
                     ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                     ValueType::Number(num) => num_outcome += num,
                     ValueType::Error(s_err) => return Err(s_err),
-                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                     _ => (),
                 }
             }
@@ -1627,7 +1680,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Number(num) => outcome *= num,
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -1654,7 +1706,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -1676,7 +1727,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -1704,7 +1754,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -1742,7 +1791,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -1770,7 +1818,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -1791,19 +1838,18 @@ pub(crate) mod opr_funcs {
     pub fn min(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         check_nr_operands(opr_mark, operands, 2)?;
 
-        let mut outcome = ValueType::Max;
+        let mut outcome = ValueType::Empty;
         let mut current: ValueType;
 
-        for op in &*operands {
+        for (count, op) in operands.iter().enumerate() {
             current = op.get_value();
 
-            if outcome > current {
-                outcome = current;
+            match count {
+                0 => outcome = current,
+                _ => if outcome > current {
+                        outcome = current;
+                    },
             }
-        }
-
-        if outcome == ValueType::Max {
-            outcome = ValueType::Empty;
         }
 
         *result_value = outcome;
@@ -1928,7 +1974,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             };
         }
 
@@ -1953,7 +1998,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2034,7 +2078,6 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "rtn" => shuttle.running_routine_name(),
             ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             _ => return Err(ScriptError::UnknownConstant(const_index.get_string_value("???".to_string()))),
         };
 
@@ -2061,7 +2104,6 @@ pub(crate) mod opr_funcs {
                 name_is_string = true;
             }
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }
 
         let mut counter = 0f64;
@@ -2097,7 +2139,6 @@ pub(crate) mod opr_funcs {
             ValueType::Number(num) => ValueType::Number(num),
             ValueType::Text(txt) => ValueType::Text(txt),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         *result_value = shuttle.get_var(&index);
@@ -2113,7 +2154,6 @@ pub(crate) mod opr_funcs {
             ValueType::Number(num) => ValueType::Number(num),
             ValueType::Text(txt) => ValueType::Text(txt),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         *result_value = match shuttle.get_var(&index){
@@ -2144,7 +2184,6 @@ pub(crate) mod opr_funcs {
             ValueType::Number(num) => ValueType::Number(num),
             ValueType::Text(txt) => ValueType::Text(txt),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let stack_len = shuttle.assignment_indexes_stack.len();
@@ -2306,7 +2345,7 @@ pub(crate) mod opr_funcs {
         check_nr_operands(opr_mark, operands, 2)?;
 
         let mut outcome = true;
-        let mut previous = ValueType::Max;
+        let mut previous = ValueType::Empty;
         let mut current: ValueType;
         let ops = operands.iter().enumerate();
 
@@ -2345,7 +2384,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Text(ref s) => outcome &= s.is_empty(),
                 ValueType::Number(n) => outcome &= are_near(0f64, n, shuttle.orb),
                 ValueType::Error(_) => (), // an Error is considered a falsy value.
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2369,7 +2407,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Text(ref s) => outcome &= !s.is_empty(),
                 ValueType::Number(n) => outcome &= !are_near(0f64, n, shuttle.orb),
                 ValueType::Error(_) => outcome = false,
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2393,7 +2430,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Text(ref s) => outcome |= !s.is_empty(),
                 ValueType::Number(n) => outcome |= !are_near(0f64, n, shuttle.orb),
                 ValueType::Error(_) => (),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2425,7 +2461,6 @@ pub(crate) mod opr_funcs {
                     }
                 },
                 ValueType::Error(_) => (),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2453,7 +2488,6 @@ pub(crate) mod opr_funcs {
                     _ => (),
                 },
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2498,9 +2532,8 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "gregn" => gregorian_days_in_month,
             ValueType::Text(name) if name == "version" => get_version,
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             unknown =>  {
-                return Err(ScriptError::UnknownNamedOperator(
+                return Err(ScriptError::UnknownNamedOperation(
                     unknown.get_string_value("???".to_string())));
             },
         };
@@ -2555,7 +2588,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         };
 
@@ -2574,21 +2606,18 @@ pub(crate) mod opr_funcs {
                     ValueType::Number(num) => shuttle.number_format.set_fractal_digits(num),
                     ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                     ValueType::Error(s_err) => return Err(s_err),
-                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 },
                 1 => match op.get_value() {
                     ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                     ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
                     ValueType::Text(txt) => shuttle.number_format.set_fractal_separator(txt),
                     ValueType::Error(s_err) => return Err(s_err),
-                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 },
                 2 => match op.get_value() {
                     ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                     ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
                     ValueType::Text(txt) => shuttle.number_format.set_thousands_separator(txt),
                     ValueType::Error(s_err) => return Err(s_err),
-                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 },
                 _ => (),
             }
@@ -2627,7 +2656,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2678,7 +2706,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -2699,7 +2726,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Text(txt) => txt,
                 ValueType::Number(num) => shuttle.number_format.format(num),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }.chars().collect::<Vec<char>>().len();
         }
 
@@ -2763,7 +2789,6 @@ pub(crate) mod opr_funcs {
             ValueType::Number(num) => num,
             ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let month = match operands[1].get_value() {
@@ -2771,7 +2796,6 @@ pub(crate) mod opr_funcs {
             ValueType::Number(num) => num,
             ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         if (year < 0_f64) || !(1_f64..=12_f64).contains(&month) {
@@ -2837,7 +2861,6 @@ pub(crate) mod opr_funcs {
                         },
                         ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                         ValueType::Error(s_err) => return Err(s_err),
-                        ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                     }
                 }
 
@@ -2888,7 +2911,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -3160,7 +3182,6 @@ pub(crate) mod opr_funcs {
             ValueType::Number(num) => num,
             ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let date_info_opt = match shuttle.last_calculated_gregorian_day {
@@ -3230,7 +3251,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
                 ValueType::Text(t) => t,
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         } else {
             String::new()
@@ -3270,7 +3290,6 @@ pub(crate) mod opr_funcs {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let pos = if operands.len() < 2 {
@@ -3281,7 +3300,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Number(num) => num as usize,
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         };
 
@@ -3339,7 +3357,6 @@ pub(crate) mod opr_funcs {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let source_len = characters.len();
@@ -3349,7 +3366,6 @@ pub(crate) mod opr_funcs {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let find_len = find_characters.len();
@@ -3364,7 +3380,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Number(num) => num as usize,
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         } else {
             0_usize
@@ -3404,7 +3419,6 @@ pub(crate) mod opr_funcs {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let source_len = characters.len();
@@ -3414,7 +3428,6 @@ pub(crate) mod opr_funcs {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let find_len = find_characters.len();
@@ -3428,7 +3441,6 @@ pub(crate) mod opr_funcs {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let repl_len = repl_characters.len();
@@ -3439,7 +3451,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Text(content) => ValueType::Text(content),
                 ValueType::Number(content) => ValueType::Number(content),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         } else {
             ValueType::Empty
@@ -3451,7 +3462,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Text(content) => ValueType::Text(content),
                 ValueType::Number(content) => ValueType::Number(content),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         } else {
             ValueType::Empty
@@ -3469,7 +3479,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Text(content) => ValueType::Text(content),
                 ValueType::Number(content) => ValueType::Number(content),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             };
 
             if let Some(rout) = shuttle.routines.get(&name) {
@@ -3536,7 +3545,6 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -3568,7 +3576,6 @@ pub(crate) mod opr_funcs {
             ValueType::Text(txt) => txt.chars().collect(),
             ValueType::Number(num) => shuttle.number_format.format(num).chars().collect(),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let start_pos = match operands[1].get_value() {
@@ -3582,7 +3589,6 @@ pub(crate) mod opr_funcs {
             }, 
             ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         if start_pos > characters.len() {
@@ -3601,7 +3607,6 @@ pub(crate) mod opr_funcs {
                 }, 
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         } else {
             characters.len() - start_pos
@@ -3626,7 +3631,6 @@ pub(crate) mod opr_funcs {
             ValueType::Text(txt) => txt,
             ValueType::Number(num) => shuttle.number_format.format(num),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }.to_lowercase());
 
         Ok(())
@@ -3640,7 +3644,6 @@ pub(crate) mod opr_funcs {
             ValueType::Text(txt) => txt,
             ValueType::Number(num) => shuttle.number_format.format(num),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }.to_uppercase());
 
         Ok(())
@@ -3657,7 +3660,6 @@ pub(crate) mod opr_funcs {
             ValueType::Text(txt) => txt,
             ValueType::Number(num) => shuttle.number_format.format(num),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }.chars(){
             let new_chars: Box<dyn Iterator<Item = char>> =  
                 if is_new_word {
@@ -3703,7 +3705,6 @@ pub(crate) mod opr_funcs {
             },
             ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         Ok(())
@@ -3727,7 +3728,6 @@ pub(crate) mod opr_funcs {
             },
             ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         Ok(())
@@ -3744,7 +3744,6 @@ pub(crate) mod opr_funcs {
                     ValueType::Number(num) => shuttle.number_format.format(num),
                     ValueType::Text(txt) => txt,
                     ValueType::Error(s_err) => format!("{s_err:?}"),
-                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 }).as_bytes()
             ) {
                 Ok(nr_bytes) => tot_written += nr_bytes,
@@ -3794,7 +3793,6 @@ pub(crate) mod opr_funcs {
                 }
             },
             ValueType::Error(s_err) => *result_value = ValueType::Error(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }
         
         Ok(())
@@ -3829,7 +3827,6 @@ pub(crate) mod opr_funcs {
             },
             ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }
 
         Ok(())
@@ -3843,7 +3840,6 @@ pub(crate) mod opr_funcs {
             ValueType::Number(num) => shuttle.number_format.format(num),
             ValueType::Text(txt) => txt,
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         let len = content.len();
@@ -3860,7 +3856,6 @@ pub(crate) mod opr_funcs {
                 }
             },
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }
 
         Ok(())
@@ -3880,7 +3875,6 @@ pub(crate) mod opr_funcs {
                 }
             },
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         Ok(())
@@ -3979,7 +3973,6 @@ pub(crate) mod opr_funcs {
                 ValueType::Text(txt) if op_count == 3 => counter_var = ValueType::Text(txt),
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
-                ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
             }
         }
 
@@ -4044,7 +4037,6 @@ pub(crate) mod opr_funcs {
             ValueType::Number(num) => num ,
             ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
-            ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
         };
 
         if target < 0_f64 {
@@ -4103,7 +4095,6 @@ pub(crate) mod opr_funcs {
                     ValueType::Number(_) => true,
                     ValueType::Text(_) => true,
                     ValueType::Error(_) => false,
-                    ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                 }
             },
             Err(s_err) => {
@@ -4182,7 +4173,6 @@ pub(crate) mod opr_funcs {
                         ValueType::Number(num) => ValueType::Number(num),
                         ValueType::Text(txt) => ValueType::Text(txt),
                         ValueType::Error(s_err) => return Err(s_err),
-                        ValueType::Max => return Err(ScriptError::InvalidOperandMax(*opr_mark)),
                     };
                 },
                 (_, op) => {
@@ -4285,7 +4275,6 @@ pub(crate) mod opr_funcs {
             ValueType::Number(num) => Err(ScriptError::UserDefinedError(shuttle.number_format.format(num))),
             ValueType::Text(msg) => Err(ScriptError::UserDefinedError(msg.clone())),
             ValueType::Error(s_err) => Err(s_err),
-            ValueType::Max => Err(ScriptError::InvalidOperandMax(*opr_mark)),
         }
     }
 }
@@ -6146,7 +6135,7 @@ mod tests {
         #[test]
         fn x_enum_opr_unknown() {
             assert_eq!(
-                Err(ScriptError::UnknownNamedOperator("1.5".to_string())),
+                Err(ScriptError::UnknownNamedOperation("1.5".to_string())),
                 Interpreter::new_and_execute_with_mocked_io("o1.5 2".to_string()));
         }
 
