@@ -59,7 +59,7 @@ fn main() {
         let mut interpreter = Interpreter::new_stdio_filesys();
 
         if ignore_errors {
-            interpreter.suppress_exit_on_error();
+            interpreter.suppress_exit_on_error(true);
         }
 
         let exe_result = interpreter.execute_opts(

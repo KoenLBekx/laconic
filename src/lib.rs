@@ -1283,8 +1283,8 @@ impl Interpreter {
         self.shuttle.is_quiet
     }
 
-    pub fn suppress_exit_on_error(&mut self) {
-        self.shuttle.error_breaks = false;
+    pub fn suppress_exit_on_error(&mut self, do_suppress: bool) {
+        self.shuttle.error_breaks = !do_suppress;
     }
 }
 
@@ -8341,7 +8341,7 @@ mod tests {
             let reader = Box::new(MockByString::new(Vec::<String>::new()));
             let text_io_handler = Box::new(MockTextHandler::new());
             let mut interpreter = Interpreter::new(writer, reader, text_io_handler);
-            interpreter.suppress_exit_on_error();
+            interpreter.suppress_exit_on_error(true);
 
             assert_eq!(
                 "end".to_string(),
