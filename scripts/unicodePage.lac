@@ -1,0 +1,27 @@
+Z§quiet 1
+w[sUnicode page start in hex: ]
+b,16
+b16
+$§start r
+F
+	0
+	[nFF]
+	10
+	§line
+	;
+		F
+			0
+			[nF]
+			1
+			§ix
+			;(
+				$§unicp +(v§start v§line v§ix)
+				w
+					+(
+						q,v§unicp
+						[s-]
+						o§uni v§unicp
+						[s   ]
+					)
+			)
+		w¶
