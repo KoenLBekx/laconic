@@ -29,7 +29,7 @@ use string_io_and_mock::{FileTextHandler, MockTextHandler, TextIOHandler};
 // the fourth one to the Shuttle containing other state.
 type OperatorFunc = &'static dyn Fn(&mut char, &mut ValueType, &mut [Expression], &mut Shuttle) -> Result<(), ScriptError>;
 
-// --------------------------- Operator and other constants {
+// --------------------------- Operator- and other constants {
 const OPNUM: char = '0';
 const OPSTR: char = '§';
 const OPNEG: char = '~';
@@ -955,17 +955,119 @@ impl ExecutionOutcome {
     }
 }
 
+/// `struct Interpreter` interpretes all Laconic expressions and scripts.
+/// In order to use it,
+/// > 1. Create an instance using one of the new... methods;
+/// > 2. Optionally, set the error handling behavior using the `suppress_exit_on_error` method;
+/// > 3. Have your instance interprete a script using one of the execute... methods;
+/// > 4. Read the `Interpreter` instance's `is_quiet` property to check if the script requested the script's final value or error condition not to be displayed;
+/// > 5. Inspect, use or display the `Result<ExecutionOutcome, ScriptError>` object returned by the execution method.
+///
+/// E.g.:
+/// ```
+/// use laconic::Interpreter;
+///
+/// // 1. Create an instance.
+/// let mut interpreter = Interpreter::new_stdio_filesys();
+///
+/// // 2. Set error handling behavior to stop on errors (is default).
+/// interpreter.suppress_exit_on_error(false);
+///
+/// // 3. Interprete a script.
+/// // Say we got the script from a file in a format that allows
+/// // Laconic expressions to be embedded.
+/// let script = "S°,57".to_string();
+/// let outcome = interpreter.execute(script);
+///
+/// // 4. Do I need to suppress output of final value?
+/// if !interpreter.is_quiet(){
+///     // 5. Display outcome.
+///     match outcome {
+///         Ok(ref final_value) => println!("{}", final_value.string_representation()),
+///         Err(ref script_err) => println!("Error in Laconic expression: {:?}", script_err),
+///     }
+/// }
+///
+/// // 5. Instead of display, an application might have other uses for the outcome:
+/// let horizontal_projection_factor = match outcome {
+///     Ok(ref final_value) => final_value.numeric_value(),
+///     Err(ref script_err) => panic!("Error in Laconic expression: {:?}", script_err),
+/// };
+///
+/// ```
+/// Note that an `Interpreter` instance can interprete or execute several scripts or expressions
+/// after one another, and preserves Laconic variables and routines that were assigned or declared
+/// in previous executions.
+///
+/// This would allow some Laconic snippets in a specific file type to assign values to variables
+/// which can be used by subsequent snippets.
+///
+/// Practical example: a PostScript image file that would contain Laconic expression snippets in double
+/// quotes.
+/// An application could preprocess this file by replacing the
+/// snippets with the actual value returned by their interpretation by the same Laconic
+/// `Interpreter` instance and, next, removing the
+/// single-value lines that aren't valid PostScript commands:
+/// <pre>
+///     "[c Letter Q having vertical strike-through bar at centre]"
+///     
+///     "[c Variables]"
+///     "$§centx 300"
+///     "$§top 600"
+///     "$§halfWidth 200"
+///     "$§bottom -v§top *2 v§halfWidth"
+///     "$§left -v§centx v§halfWidth"
+///     "$§right +v§centx v§halfWidth"
+///     "$§ctrlDist 120"
+///     "$§halfStroke 170"
+///     
+///     "[c Circle]"
+///     "v§centx" "v§top" m
+///     "+v§centx v§ctrlDist" "v§top" "v§right" "+-v§top v§halfWidth v§ctrlDist" "v§right" "-v§top v§halfWidth" c
+///     "v§right" "-(v§top v§halfWidth v§ctrlDist)" "+v§centx v§ctrlDist" "v§bottom" "v§centx" "v§bottom" c
+///     "-v§centx v§ctrlDist" "v§bottom" "v§left" "-(v§top v§halfWidth v§ctrlDist)" "v§left" "-v§top v§halfWidth" c
+///     "v§left" "+-v§top v§halfWidth v§ctrlDist" "-v§centx v§ctrlDist" "v§top" "v§centx" "v§top" c
+///     
+///     "[c Stroke through bottom of circle]"
+///     "v§centx" "+v§bottom v§halfStroke" m
+///     "v§centx" "v§bottom" l
+///     "v§centx" "-v§bottom v§halfStroke" l
+/// </pre>
 pub struct Interpreter {
     shuttle: Shuttle,
 }
 
 impl Interpreter {
+    /// Returns a new `Interpreter` instance having the writer, reader and text IO handler objects
+    /// passed as arguments.
+    /// This function is used by the easier `new_stdio_filesys` and `new_with_mocks` functions.
+    ///
+    /// Arguments:
+    /// > `writer`:
+    /// >> The object passed for the `writer` argument is used to receive output from the Laconic
+    /// `w` operator. E.g.: `Box::new(std::io::stdout())`.
+    ///
+    /// > `reader`:
+    /// >> The object passed for the `reader` argument is used to provide input to the Laconic `r`
+    /// operator. E.g.: `Box::new(laconic::input::StdinReader::new())`.
+    ///
+    /// > `text_io_handler`:
+    /// >> The object passed for the `text_io_handler` argument is used to provide or mock UTF-8
+    /// file read-and-write operations. E.g.:
+    /// `Box::new(string_io_and_mock::FileTextHandler::new())`.
+    ///
+    /// See the unit tests for the many uses of mocked writers, readers and text IO handlers.
     pub fn new(writer: Box<dyn output::EchoingWriter>, reader: Box<dyn input::StdinOrMock>, text_io_handler: Box<dyn TextIOHandler>) -> Self {
         let shuttle = Shuttle::new(writer, reader, text_io_handler);
 
         Interpreter{ shuttle, }
     }
 
+    /// Returns a new `Interpreter` instance using
+    /// - standard output for output by Laconic's `w` (write) operator,
+    /// - standard input for input to Laconic's `r` (read) operator
+    /// - and the running environment's file system for Laconic's `w,` (file write) and `r,` (file
+    /// read) operators.
     pub fn new_stdio_filesys() -> Self {
         let writer = Box::new(stdout());
         let reader = Box::new(input::StdinReader::new());
@@ -973,17 +1075,26 @@ impl Interpreter {
         Interpreter::new(writer, reader, text_io_handler)
     }
 
-    pub fn execute(&mut self, program: String) -> Result<ExecutionOutcome, ScriptError> {
-        self.execute_opts(program, true, false, false)
-    }
-
-    pub fn new_and_execute_with_mocked_io(program: String) -> Result<ExecutionOutcome, ScriptError> {
+    /// Returns a new `Interpreter` instance using
+    /// - a `Vec<u8>` for output by Laconic's `w` (write) operator,
+    /// - a `laconic::input::MockByString` instance initiated with an empty `String` for input to Laconic's `r` (read) operator
+    /// - and a `string_io_and_mock::MockTextHandler` instance for Laconic's `w,` (file write) and `r,` (file
+    /// read) operators.
+    ///
+    /// This method is used by many unit tests in Laconic's source code.
+    ///
+    /// It can also be used to
+    /// sandbox Laconic scripts by precluding them to interact with standard input, standard output or a real file system.
+    pub fn new_with_mocks() -> Self {
         let writer = Box::new(Vec::<u8>::new());
         let reader = Box::new(input::MockByString::new(Vec::<String>::new()));
         let text_io_handler = Box::new(MockTextHandler::new());
-        let mut interpreter = Self::new(writer, reader, text_io_handler);
 
-        interpreter.execute_opts(program, true, false, false)
+        Self::new(writer, reader, text_io_handler)
+    }
+
+    pub fn execute(&mut self, program: String) -> Result<ExecutionOutcome, ScriptError> {
+        self.execute_opts(program, true, false, false)
     }
 
     pub fn execute_opts(
@@ -1342,6 +1453,12 @@ impl Interpreter {
     pub fn suppress_exit_on_error(&mut self, do_suppress: bool) {
         self.shuttle.error_breaks = !do_suppress;
     }
+
+    #[cfg(test)]
+    fn new_and_execute_with_mocked_io(program: String) -> Result<ExecutionOutcome, ScriptError> {
+        let mut interpreter = Self::new_with_mocks();
+        interpreter.execute_opts(program, true, false, false)
+    }
 }
 
 fn are_near(num1: f64, num2: f64, precision: f64) -> bool {
@@ -1626,7 +1743,11 @@ pub(crate) mod opr_funcs {
             string_outcome.push_str(
                 (match op.get_value() {
                     ValueType::Empty => "".to_string(),   
-                    ValueType::Number(num) if do_truncate => format!("{}", num.trunc() as i64),
+                    ValueType::Number(num) if do_truncate => {
+                            let mut num_fmt = shuttle.number_format.clone();
+                            num_fmt.set_fractal_digits(0f64);
+                            num_fmt.format(num.trunc())
+                    },
                     ValueType::Number(num) => shuttle.number_format.format(num),
                     ValueType::Text(txt) => txt,
                     ValueType::Error(s_err) => format!("{s_err:?}"),
@@ -4882,6 +5003,11 @@ mod tests {
         #[test]
         fn x_add_variant_2_numbers() {
             assert_eq!(226f64, Interpreter::new_and_execute_with_mocked_io("+,111 115".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_add_variant_negative_number_as_hex() {
+            assert_eq!("=-C", Interpreter::new_and_execute_with_mocked_io("b,16 +, §= ~12.5".to_string()).unwrap().string_representation());
         }
 
         #[test]
@@ -8510,6 +8636,13 @@ mod tests {
             assert_eq!(
                 r#"-3helloUserDefinedError("xxx")"#.to_string(),
                 Interpreter::new_and_execute_with_mocked_io("Z§ign 1 o,§fmt 2 §, § q,(~3.5 € §hello U§xxx)".to_string()).unwrap().string_representation());
+        }
+    
+        #[test]
+        fn x_quote_truncate_num_as_hex() {
+            assert_eq!(
+                "2A".to_string(),
+                Interpreter::new_and_execute_with_mocked_io("b,16 q,42.3".to_string()).unwrap().string_representation());
         }
     }
 

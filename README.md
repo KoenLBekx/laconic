@@ -35,6 +35,8 @@ The Laconic crate provides both
 
  > `...$ laconic '*+4 2 3'`
 
+ > Execute the `laconic` executable without any parameters to get help.
+
 ## General syntax of the Laconic language
 
 As said, Laconic interpretes "Polish" expressions: operators precede their operands.
