@@ -10,7 +10,7 @@
 
 > *I needed a concise expression interpreter, but Laconic nearly became a programming language:*
 
-> *besides numeric and string operators, it provides variables, tests, loops, routines, standard input & output, file I/O and error handling.*
+> *besides numeric, boolean, string and date operators, it provides variables, tests, loops, routines, standard input & output, file I/O and error handling.*
 
 > *- Koen Bekx*
 
@@ -36,6 +36,8 @@ The Laconic crate provides both
  > `...$ laconic '*+4 2 3'`
 
  > Execute the `laconic` executable without any parameters to get help.
+
+The many operators understood by the Laconic interpreter, together with the way it expects numbers and strings to be represented, constitute the *Laconic language* - see below.
 
 ## General syntax of the Laconic language
 

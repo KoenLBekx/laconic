@@ -128,7 +128,7 @@ impl fmt::Debug for Atom {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+//{ Documentation
 /// Whenever an `Interpreter` halts a script's execution due to an error condition, an
 /// `Err<ScriptError>` is returned.
 ///
@@ -137,6 +137,8 @@ impl fmt::Debug for Atom {
 ///
 /// Whenever a variant includes a position field, this field indicates a 1-based character position
 /// in the script.
+//}
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum ScriptError {
     /// The same character was requested both as fractals separator and as thousands
     /// separator.
@@ -308,6 +310,21 @@ impl Hash for ValueType {
     }
 }
 
+//{ Documentation
+/// A `NumberFormat` object contains information about the formatting of output numbers requested
+/// by the executed Laconic script - it's the type of the `format_info` field of the `ExecutionOutcome::Number`
+/// variant.
+///
+/// If the execution of a Laconic script returns an `ExecutionOutcome::Number{number, format_info}` variant,
+/// you can use the `format_info.format` method to display that number exactly as the script requested.
+///
+/// The default values for a `NumberFormat`'s inner properties are:
+/// - output number base: 10
+/// - fractal separator: `.`
+/// - number of fractal digits: 6
+/// - thousands grouping separator: `,`
+/// - use thousands grouping separator: false
+//}
 #[derive(Clone, Debug, PartialEq)]
 pub struct NumberFormat {
     base: f64,
@@ -354,6 +371,14 @@ impl NumberFormat {
         }
     }
 
+
+    //{ Documentation
+    /// If the execution of a Laconic script returns an `ExecutionOutcome::Number{number, format_info}` variant,
+    /// you can use the `format_info.format` method to display that number exactly as the script requested.
+    ///
+    /// This method is also used by the `ExecutionOutcome.string_representation` method if the
+    /// interpretion result is a number.
+    //}
     pub fn format(&self, numr: f64) -> String {
         match numr {
             n if n.is_nan() => "NaN".to_string(),
@@ -929,15 +954,33 @@ impl Shuttle {
     }
 }
 
+//{ Documentation
+/// Whenever a `laconic::Interpreter` executes a Laconic script without halting on any errors, it returns an `ExecutionOutcome` variant, depending on the type of the value of the last top-level operator in the parsed script's operator tree.
+///
+/// However, all variants can be converted to either an `f64` or `String` value using the
+/// `ExecutionOutcome`'s `numeric_value` or `string_representation` methods.
+//}
 #[derive(Debug, PartialEq)]
 pub enum ExecutionOutcome {
+    /// The outcome of the script execution was empty. This can happen for several reasons,
+    /// like a substring not being found by the `O§find` operator.
     Empty,
+    
+    /// The outcome of the script execution was a number. The very `f64` number is returned in the
+    /// `value` field, whereas the `format_info` field contains information about formatting
+    /// requested by the script.
     Number{value: f64, format_info: NumberFormat},
+
+    /// The outcome of the script execution was a string or "text".
     Text(String),
+
+    /// The outcome of the script was an error value, even if the `laconic::Interpreter` didn't
+    /// halt execution immediately. The `String` field contains the error message.
     Error(String),
 }
 
 impl ExecutionOutcome {
+    /// Returns the corresponding `f64` value for an `ExecutionOutcome::Number` variant, and `0f64` for everything else.
     pub fn numeric_value(&self) -> f64 {
         match self {
             ExecutionOutcome::Number{value: n, ..} => *n,
@@ -945,6 +988,8 @@ impl ExecutionOutcome {
         }
     }
 
+    /// Returns an appropriate string representation for every `ExecutionOutcome` variant. For a `Number`
+    /// variant, its `format_info`'s `format` method is used.
     pub fn string_representation(&self) -> String {
         match self {
             ExecutionOutcome::Empty => NO_VALUE.to_string(),
@@ -955,6 +1000,7 @@ impl ExecutionOutcome {
     }
 }
 
+//{ Documentation
 /// `struct Interpreter` interpretes all Laconic expressions and scripts.
 /// In order to use it,
 /// > 1. Create an instance using one of the new... methods;
@@ -988,7 +1034,7 @@ impl ExecutionOutcome {
 ///     }
 /// }
 ///
-/// // 5. Instead of display, an application might have other uses for the outcome:
+/// // 5. Instead of display output, an application might have other uses for the outcome:
 /// let horizontal_projection_factor = match outcome {
 ///     Ok(ref final_value) => final_value.numeric_value(),
 ///     Err(ref script_err) => panic!("Error in Laconic expression: {:?}", script_err),
@@ -1033,41 +1079,41 @@ impl ExecutionOutcome {
 ///     "v§centx" "v§bottom" l
 ///     "v§centx" "-v§bottom v§halfStroke" l
 /// </pre>
+//}
 pub struct Interpreter {
     shuttle: Shuttle,
 }
 
 impl Interpreter {
+    //{ Documentation
     /// Returns a new `Interpreter` instance having the writer, reader and text IO handler objects
     /// passed as arguments.
     /// This function is used by the easier `new_stdio_filesys` and `new_with_mocks` functions.
     ///
     /// Arguments:
     /// > `writer`:
-    /// >> The object passed for the `writer` argument is used to receive output from the Laconic
-    /// `w` operator. E.g.: `Box::new(std::io::stdout())`.
+    /// >> The object passed for the `writer` argument is used to receive output from the Laconic `w` operator. E.g.: `Box::new(std::io::stdout())`.
     ///
     /// > `reader`:
-    /// >> The object passed for the `reader` argument is used to provide input to the Laconic `r`
-    /// operator. E.g.: `Box::new(laconic::input::StdinReader::new())`.
+    /// >> The object passed for the `reader` argument is used to provide input to the Laconic `r` operator. E.g.: `Box::new(laconic::input::StdinReader::new())`.
     ///
     /// > `text_io_handler`:
-    /// >> The object passed for the `text_io_handler` argument is used to provide or mock UTF-8
-    /// file read-and-write operations. E.g.:
-    /// `Box::new(string_io_and_mock::FileTextHandler::new())`.
+    /// >> The object passed for the `text_io_handler` argument is used to provide or mock UTF-8 file read-and-write operations. E.g.: `Box::new(string_io_and_mock::FileTextHandler::new())`.
     ///
     /// See the unit tests for the many uses of mocked writers, readers and text IO handlers.
+    //}
     pub fn new(writer: Box<dyn output::EchoingWriter>, reader: Box<dyn input::StdinOrMock>, text_io_handler: Box<dyn TextIOHandler>) -> Self {
         let shuttle = Shuttle::new(writer, reader, text_io_handler);
 
         Interpreter{ shuttle, }
     }
 
+    //{ Documentation
     /// Returns a new `Interpreter` instance using
     /// - standard output for output by Laconic's `w` (write) operator,
     /// - standard input for input to Laconic's `r` (read) operator
-    /// - and the running environment's file system for Laconic's `w,` (file write) and `r,` (file
-    /// read) operators.
+    /// - and the running environment's file system for Laconic's `w,` (file write) and `r,` (file read) operators.
+    //}
     pub fn new_stdio_filesys() -> Self {
         let writer = Box::new(stdout());
         let reader = Box::new(input::StdinReader::new());
@@ -1075,16 +1121,16 @@ impl Interpreter {
         Interpreter::new(writer, reader, text_io_handler)
     }
 
+    //{ Documentation
     /// Returns a new `Interpreter` instance using
     /// - a `Vec<u8>` for output by Laconic's `w` (write) operator,
     /// - a `laconic::input::MockByString` instance initiated with an empty `String` for input to Laconic's `r` (read) operator
-    /// - and a `string_io_and_mock::MockTextHandler` instance for Laconic's `w,` (file write) and `r,` (file
-    /// read) operators.
+    /// - and a `string_io_and_mock::MockTextHandler` instance for Laconic's `w,` (file write) and `r,` (file read) operators.
     ///
     /// This method is used by many unit tests in Laconic's source code.
     ///
-    /// It can also be used to
-    /// sandbox Laconic scripts by precluding them to interact with standard input, standard output or a real file system.
+    /// It can also be used to sandbox Laconic scripts by precluding them to interact with standard input, standard output or a real file system.
+    //}
     pub fn new_with_mocks() -> Self {
         let writer = Box::new(Vec::<u8>::new());
         let reader = Box::new(input::MockByString::new(Vec::<String>::new()));
@@ -1093,10 +1139,27 @@ impl Interpreter {
         Self::new(writer, reader, text_io_handler)
     }
 
+    //{ Documentation
+    /// The `execute` method reads a string, passed as argument, holding a Laconic expression or script and returns
+    /// either an `Ok(ExecutionOutcome)` or an `Err(ScriptError)` object.
+    /// 
+    /// *(For Laconic, expressions and scripts are technically the same.)*
+    ///
+    /// As the execution of a Laconic script changes the internal state of the `Interpreter`
+    /// instance, this instance needs to be mutable. (Variables, routines and properties can be
+    /// manipulated by operators in the script.)
+    //}
     pub fn execute(&mut self, program: String) -> Result<ExecutionOutcome, ScriptError> {
         self.execute_opts(program, true, false, false)
     }
 
+    //{ Documentation
+    /// The `execute_opts` method also executes a Laconic script passed as argument, but takes
+    /// some more arguments:
+    /// - `do_execute`: if false, the script is never executed. This might be useful if you only want to inspect how the script is parsed into an operators tree before execution. This method parameter is used by the Laconic executable for its -n parameter.
+    /// - `show_before`: if true, the operators tree parsed from the script is written to the `Interpreter`'s `writer` object before that tree is executed. This method parameter is used by the Laconic executable for its -b parameter.
+    /// - `show_after`: if true, the operators tree parsed from the script is written to the `Interpreter`'s `writer` object after that tree has been executed and the operators carry a result value. This method parameter is used by the Laconic executable for its -a parameter.
+    //}
     pub fn execute_opts(
         &mut self,
         program: String,
@@ -1108,7 +1171,6 @@ impl Interpreter {
         let mut tree: Expression = Self::make_tree(atoms)?;
 
         if show_before {
-            // println!("\nTree before operate() :\n{}", tree.get_representation());
             self.print_state(&tree, true);
         }
 
@@ -1117,7 +1179,6 @@ impl Interpreter {
         }
 
         if show_after {
-            // println!("\nTree after operate() :\n{}", tree.get_representation());
             self.print_state(&tree, false);
         }
 
@@ -1127,6 +1188,23 @@ impl Interpreter {
             ValueType::Text(ref s) => ExecutionOutcome::Text(s.clone()),
             ValueType::Error(ref s_err) => ExecutionOutcome::Error(format!("{s_err:?}")),
         })
+    }
+
+    //{ Documentation
+    /// Using the `Z§quiet 1` operator, a Laconic script can request output of the final value to
+    /// be suppressed.
+    ///
+    /// This method returns `true` if that has been requested indeed.
+    //}
+    pub fn is_quiet(&self) -> bool {
+        self.shuttle.is_quiet
+    }
+
+    /// This method directs the `Interpreter`'s error handling behavior to exit immediately on any
+    /// error or not.  Passing a `true` value suppresses immediate exit, allowing the script to
+    /// handle any errors, while passing a `false` value has the interpreter stop script execution on any error.
+    pub fn suppress_exit_on_error(&mut self, do_suppress: bool) {
+        self.shuttle.error_breaks = !do_suppress;
     }
 
     #[cfg(test)]
@@ -1434,24 +1512,26 @@ impl Interpreter {
         "~+-*/^lia%°SCTApec$v:Kk§,?WF;mMNn()=<>!&|xZoOwrstbRX€BE¶UVq".contains(op)
     }
 
-    fn print_state(&self, tree: &Expression, before: bool) {
+    fn print_state(&mut self, tree: &Expression, before: bool) {
         for (name, routine) in self.shuttle.routines.iter() {
-            println!("{}", routine.get_representation(name));
+            // println!("{}", routine.get_representation(name));
+            let _ = self.shuttle.writer.write(format!("\n{}", routine.get_representation(name)).as_bytes());
         }
 
+        /*
         println!(
             "\nTree {} operate() :\n{}",
             if before {"before"} else {"after"},
             tree.get_representation()
         );
-    }
-
-    pub fn is_quiet(&self) -> bool {
-        self.shuttle.is_quiet
-    }
-
-    pub fn suppress_exit_on_error(&mut self, do_suppress: bool) {
-        self.shuttle.error_breaks = !do_suppress;
+        */
+        let _ = self.shuttle.writer.write(
+            format!(
+                "\nTree {} operate() :\n{}",
+                if before {"before"} else {"after"},
+                tree.get_representation()
+            ).as_bytes()
+        );
     }
 
     #[cfg(test)]
