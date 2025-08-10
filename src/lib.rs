@@ -939,7 +939,6 @@ impl Shuttle {
         self.routine_name_stack[last_index].clone()
     }
 
-    #[cfg(test)]
     pub fn echo_output(&self) -> Option<&[u8]> {
         self.writer.echo_bytes()
     }
@@ -1001,7 +1000,8 @@ impl ExecutionOutcome {
 }
 
 //{ Documentation
-/// `struct Interpreter` interpretes all Laconic expressions and scripts.
+/// `struct Interpreter` interpretes strings containing Laconic expressions or scripts.
+///
 /// In order to use it,
 /// > 1. Create an instance using one of the new... methods;
 /// > 2. Optionally, set the error handling behavior using the `suppress_exit_on_error` method;
@@ -1046,39 +1046,11 @@ impl ExecutionOutcome {
 /// in previous executions.
 ///
 /// This would allow some Laconic snippets in a specific file type to assign values to variables
-/// which can be used by subsequent snippets.
+/// which can be used by subsequent snippets in the same file.
 ///
-/// Practical example: a PostScript image file that would contain Laconic expression snippets in double
-/// quotes.
-/// An application could preprocess this file by replacing the
-/// snippets with the actual value returned by their interpretation by the same Laconic
-/// `Interpreter` instance and, next, removing the
-/// single-value lines that aren't valid PostScript commands:
-/// <pre>
-///     "[c Letter Q having vertical strike-through bar at centre]"
-///     
-///     "[c Variables]"
-///     "$§centx 300"
-///     "$§top 600"
-///     "$§halfWidth 200"
-///     "$§bottom -v§top *2 v§halfWidth"
-///     "$§left -v§centx v§halfWidth"
-///     "$§right +v§centx v§halfWidth"
-///     "$§ctrlDist 120"
-///     "$§halfStroke 170"
-///     
-///     "[c Circle]"
-///     "v§centx" "v§top" m
-///     "+v§centx v§ctrlDist" "v§top" "v§right" "+-v§top v§halfWidth v§ctrlDist" "v§right" "-v§top v§halfWidth" c
-///     "v§right" "-(v§top v§halfWidth v§ctrlDist)" "+v§centx v§ctrlDist" "v§bottom" "v§centx" "v§bottom" c
-///     "-v§centx v§ctrlDist" "v§bottom" "v§left" "-(v§top v§halfWidth v§ctrlDist)" "v§left" "-v§top v§halfWidth" c
-///     "v§left" "+-v§top v§halfWidth v§ctrlDist" "-v§centx v§ctrlDist" "v§top" "v§centx" "v§top" c
-///     
-///     "[c Stroke through bottom of circle]"
-///     "v§centx" "+v§bottom v§halfStroke" m
-///     "v§centx" "v§bottom" l
-///     "v§centx" "-v§bottom v§halfStroke" l
-/// </pre>
+/// A application could use a `laconic::Interpreter` instance to preprocess that file by 
+/// replacing the snippets with the actual numerical value
+/// returned by their interpretation by the same Laconic `Interpreter`.
 //}
 pub struct Interpreter {
     shuttle: Shuttle,
@@ -1207,7 +1179,14 @@ impl Interpreter {
         self.shuttle.error_breaks = !do_suppress;
     }
 
-    #[cfg(test)]
+    //{ Documentation
+    /// This method is meant to be used in unit tests: after execution, if the `Interpreter`
+    /// instance was created with a `writer` that preserves output, this interpreter instance can
+    /// "echo" the output from the script's `w` (write) operators when its `echo_output` method is
+    /// called.
+    ///
+    /// See the `laconic::output` module.
+    //}
     pub fn echo_output(&self) -> Option<&[u8]> {
         self.shuttle.echo_output()
     }
@@ -1550,13 +1529,110 @@ fn are_very_near(num1: f64, num2: f64) -> bool {
     are_near(num1, num2, 0.00000001f64)
 }
 
+//{ Documentation
+/// The Laconic language offers a `r` (read) operator, that's meant to read from standard input.
+///
+/// This means the Laconic interpreter needs to be able to read from standard input.
+///
+/// But how to test this input in unit tests?
+///
+/// Or how to sandbox a Laconic interpreter so as never to read from standard input?
+///
+/// The solution is to provide a `Box<dyn laconic::input::StdinOrMock>` object when instantiating a new `laconic::Interpreter`.
+///
+/// Therefore, module `input` provides components meant to offer line-by-line input for Laconic's `r` (read) operator :
+///
+/// - `struct laconic::input::StdinReader` reads input lines from standard input;
+/// - `struct laconic::input::MockByString` reads input lines from a `String` supplied during instantiation;
+/// - `trait  laconic::input::StdinOrMock` allows implementation of other components that can provide linewise input.
+///
+/// The `MockByString` structure is widely used by unit tests in Laconic's code base.
+//}
 pub mod input {
     use std::io::stdin;
 
+    //{ Documentation
+    /// This trait allows the creation of new components that can provide input to Laconic's `r` (read) operator.
+    ///
+    /// Implementers should implement the `read_line` method.
+    ///
+    /// As the read_line method might need to manipulate an implementer's internal state, instances of
+    /// these implementers should always be mutable.
+    ///
+    /// E.g.: a counting input provider: (I *know* there are better ways to count.)
+    /// ```
+    /// use laconic::{Interpreter, input::StdinOrMock};
+    ///
+    /// struct CountingInput {
+    ///     next_count: usize,
+    ///     stop_after: usize,
+    /// }
+    ///
+    /// impl CountingInput {
+    ///     fn new(stop_after: usize) -> Self {
+    ///         CountingInput {
+    ///             next_count: 1_usize,
+    ///             stop_after,
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// impl StdinOrMock for CountingInput {
+    ///     fn read_line(&mut self) -> Option<String>{
+    ///         let current_value = self.next_count;
+    ///
+    ///         let return_value =
+    ///             if current_value <= self.stop_after {
+    ///                 self.next_count += 1;
+    ///                 Some(format!("{}", current_value))
+    ///             } else {
+    ///                 None
+    ///             };
+    ///
+    ///         return_value
+    ///     }
+    /// }
+    ///
+    /// let mut counter = CountingInput::new(5_usize);
+    ///
+    /// let mut interpreter = Interpreter::new(
+    ///     Box::new(Vec::<u8>::new()),
+    ///     Box::new(counter),
+    ///     Box::new(string_io_and_mock::MockTextHandler::new())
+    /// );
+    ///
+    /// let outcome_result = interpreter.execute("
+    ///     F
+    ///         1
+    ///         10
+    ///         1
+    ///         §dummy
+    ///         ;(
+    ///             $ §read r
+    ///             ?
+    ///                 n v§read
+    ///                 $ §lastRead v§read
+    ///                 €
+    ///         )
+    ///     +, [sLast read: ] v§lastRead
+    /// ".to_string());
+    ///
+    /// assert!(outcome_result.is_ok());
+    ///
+    /// assert_eq!(
+    ///     "Last read: 5".to_string(),
+    ///     outcome_result.unwrap().string_representation());
+    /// ```
+    //}
     pub trait StdinOrMock {
         fn read_line(&mut self) -> Option<String>;
     }
 
+    //{ Documentation
+    /// A `StdinReader` uses standard input to obtain input for Laconic's `r` (read) operator.
+    ///
+    /// It is used by the `laconic` executable when it instantiates a `laconic::Interpreter`.
+    //}
     pub struct StdinReader {
     }
 
@@ -1583,6 +1659,38 @@ pub mod input {
         }
     }
 
+    //{ Documentation
+    /// On every call of its `read_line` method, a `MockByString` object pops and returns
+    /// another element from the `Vec<String>` it was instantiated with,
+    /// thus providing input for Laconic's `r` (read) operator.
+    ///
+    /// It is used by many unit tests that execute a script containing the `r` operator, thus
+    /// avoiding the test execution to wait for user input. E.g.:
+    /// ```
+    /// use laconic::{Interpreter, input::MockByString};
+    ///
+    /// let fake_input = vec![
+    ///     "Rebonjour".to_string(),
+    ///     "Bonjour".to_string(),
+    /// ];
+    ///
+    /// let mut interpreter = Interpreter::new(
+    ///     Box::new(Vec::<u8>::new()),
+    ///     Box::new(MockByString::new(fake_input)),
+    ///     Box::new(string_io_and_mock::MockTextHandler::new())
+    /// );
+    ///
+    /// let outcome_result = interpreter.execute("
+    ///     r r
+    /// ".to_string());
+    ///
+    /// assert!(outcome_result.is_ok());
+    ///
+    /// assert_eq!(
+    ///     "Rebonjour".to_string(),
+    ///     outcome_result.unwrap().string_representation());
+    /// ```
+    //}
     pub struct MockByString {
         fake_input: Vec<String>,
     }
@@ -1602,7 +1710,107 @@ pub mod input {
     }
 }
 
+//{ Documentation
+/// The Laconic language offers a `w` (write) operator, that's meant to write to standard output.
+///
+/// This means the Laconic interpreter needs to be able to write to standard output.
+///
+/// But how to test this output in unit tests?
+///
+/// Or how to sandbox a Laconic interpreter so as never to write to standard output?
+///
+/// The solution is to provide a `Box<dyn laconic::output::EchoingWriter>` object when instantiating a new `laconic::Interpreter`.
+///
+/// Therefore, the `laconic::output` module provides components that allow a `laconic::Interpreter` instance to
+/// - write to standard output
+/// - or write to a mocked output and, after script execution, return, or "echo", whatever was written to this mock.
+///
+/// Trait `laconic::output::EchoingWriter` unites both of these functions, as it combines the traits
+/// - `std::io::Write`
+/// - `laconic::output::OutputEchoer`
+///
+/// This module implements `EchoingWriter` for
+/// - `std::io::Stdout`
+/// - `std::io::Sink`
+/// - `std::vec::Vec<u8>`, which is really able to echo whatever was written to it.
+///
+/// Note that `std::io::Stdout` and `std::io::Sink` are effortless implementers of the `laconic::output::OutputEchoer` trait, because
+/// - they already implement the `std::io::Write` trait
+/// - and the default implementation of the `OutputEchoer` trait's required method simply returns an `Option::<&[u8]>::None`.
+///
+/// Whenever a `laconic::Interpreter` is constructed with an `EchoingWriter` object that really
+/// keeps whatever is written to it, this `Interpreter` object will "echo" the output of any `w`
+/// operators when its `echo_output` method is called. E.g.:
+/// 
+/// ```
+/// let writer = Box::new(Vec::<u8>::new());
+/// let reader = Box::new(laconic::input::MockByString::new(Vec::<String>::new()));
+/// let text_io_handler = Box::new(string_io_and_mock::MockTextHandler::new());
+/// let mut interpreter = laconic::Interpreter::new(writer, reader, text_io_handler);
+/// interpreter.execute_opts("w[sHello!]".to_string(), true, false, false).unwrap();
+/// 
+/// assert_eq!(b'H', interpreter.echo_output().unwrap()[0]);
+/// ```
+//}
 pub mod output {
+    //{ Documentation
+    /// This trait's `echo_bytes` method allows implementers to
+    /// - either really return a reference to whatever was written to them,
+    /// - or just return `None` if data written to it weren't preserved in their internal state, as is the case with `std::io::Stdout` and `std::io::Sink`.
+    ///
+    /// Moreover, as echoing `None` is the behavior of the default implementation, any component can implement this trait. E.g.:
+    /// ```
+    /// use laconic::Interpreter;
+    /// use laconic::output::{EchoingWriter, OutputEchoer};
+    ///
+    /// struct EmptyBag {}
+    ///
+    /// impl EmptyBag {
+    ///     fn new() -> Self {
+    ///         Self {}
+    ///     }
+    /// }
+    ///
+    /// // Hey, a propertyless object can't return a reference to any internal state!
+    /// impl OutputEchoer for EmptyBag {}
+    ///
+    /// // That's right:
+    /// assert!(EmptyBag::new().echo_bytes().is_none());
+    ///
+    /// // Let's prepare EmptyBag for EchoingWriter by implementing the Write trait for it:
+    /// impl std::io::Write for EmptyBag {
+    ///     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    ///         // Hey, I'm an empty bag and empty I will stay!
+    ///         Ok(0)
+    ///     }
+    ///
+    ///     fn flush(&mut self) -> std::io::Result<()> {
+    ///         // Easy - I've got no data.
+    ///         Ok(())
+    ///     }
+    /// }
+    /// 
+    /// // And now EmptyBag is ready to implement EchoingWriter
+    /// // in order to be used with an Interpreter that mustn't touch real standard output:
+    /// impl EchoingWriter for EmptyBag {}
+    ///
+    /// let mut forgetful = Box::new(EmptyBag::new());
+    /// let reader = Box::new(laconic::input::MockByString::new(Vec::<String>::new()));
+    /// let text_io_handler = Box::new(string_io_and_mock::MockTextHandler::new());
+    ///
+    /// let mut interpreter = Interpreter::new(forgetful, reader, text_io_handler);
+    ///
+    /// let wild_writer_script = "
+    ///     w [s Whoohoo! I'm a wild writer!]
+    /// ".to_string();
+    ///
+    /// let _ = interpreter.execute(wild_writer_script);
+    ///
+    /// assert!(interpreter.echo_output().is_none());
+    /// ```
+    ///
+    /// For a mock that really echoes whatever was written to it, see the implementation of `OutputEchoer` for `Vec<u8>` in this module.
+    //}
     pub trait OutputEchoer {
         fn echo_bytes(&self) -> Option<&[u8]> {
             None
@@ -1618,6 +1826,17 @@ pub mod output {
     impl OutputEchoer for std::io::Stdout {}
     impl OutputEchoer for std::io::Sink {}
 
+    //{ Documentation
+    /// This trait combines the
+    /// - `std::io::Write`
+    /// - `laconic::output::OutputEchoer`
+    ///
+    /// traits to make implementers
+    /// - accept output of Laconic's `w` (write) operator
+    /// - return a reference to whatever internal state it wants to expose, like data written to it, or return `None`.
+    ///
+    /// For an example that really echoes whatever was written to it, see the implementation of `EchoingWriter` for `Vec<u8>` in this module.
+    //}
     pub trait EchoingWriter: std::io::Write + OutputEchoer {}
 
     impl EchoingWriter for Vec<u8> {}
