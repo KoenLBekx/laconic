@@ -235,6 +235,13 @@ pub enum ScriptError {
     ZeroOrNegativeLogarithmBaseIsNotSupported,
 }
 
+impl std::fmt::Display for ScriptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let output = format!("{:?}", self);
+        write!(f, "{}", output)
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialOrd)]
 enum ValueType {
     #[default]
@@ -959,7 +966,7 @@ impl Shuttle {
 /// However, all variants can be converted to either an `f64` or `String` value using the
 /// `ExecutionOutcome`'s `numeric_value` or `string_representation` methods.
 //}
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ExecutionOutcome {
     /// The outcome of the script execution was empty. This can happen for several reasons,
     /// like a substring not being found by the `O§find` operator.
