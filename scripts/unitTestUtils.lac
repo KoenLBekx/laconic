@@ -1,0 +1,60 @@
+[c ---------- assert helper routine;
+   Put on stack before call:
+	 1. test name
+	 2. expected value
+	 3. actual value.
+]
+R(
+	§assert_eq
+	$§actual k
+	$§expected k
+	$§testName k
+
+	?
+		=v§expected v§actual
+		;
+			w+([sSuccess: ] v§testName ¶)
+			1
+		;
+			w+([sFailed: ] v§testName [s: Expected: ] v§expected [s - Actual: ] v§actual ¶)
+			0
+)
+
+[c ---------- Executes all unit tests the names of which are put on the stack]
+R(
+	§executeUnitTests
+	$§succeeded 0
+	$§nrTests k,
+	$§testBaseName §utest
+
+	[c Store unit test routine names from stack in variables.]
+	F
+		1
+		v§nrTests
+		1
+		§testCounter
+		$
+			+,
+				v§testBaseName
+				v§testCounter
+			k
+
+	[c Execute the unit test routines.]
+	F
+		1
+		v§nrTests
+		1
+		§testCounter
+		+
+			:§succeeded
+			X
+				v
+					+,
+						v§testBaseName
+						v§testCounter
+
+	w+,([sSucceeded tests: ] v§succeeded ¶)
+	w+,([sFailed tests: ] -v§nrTests v§succeeded ¶)
+	§
+)
+

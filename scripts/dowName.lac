@@ -1,0 +1,102 @@
+[c
+	On top of the stack, this routine wants to find a number indicating the day of the week (0=saturday).
+	The routine returns the English name for the day of the week.
+
+	Execute the unit tests from the working directory where the unitTestUtils.lac scripts is stored.
+]
+
+R(
+	§dowName
+
+	$0 k
+
+	?
+		!=1 tv0
+		U+([sRoutine ] c§rtn [s failed to find a day number on stack.])
+		;(
+			%:0 7
+
+			?
+				<v0 0
+				+7 :0
+				€
+
+			i:0
+
+			?=v0 0
+			§saturday
+			?=v0 1
+			§sunday		
+			?=v0 2
+			§monday
+			?=v0 3
+			§tuesday
+			?=v0 4
+			§wednesday
+			?=v0 5
+			§thursday
+			§friday
+		)
+)
+
+R(
+	§utDowName0
+	K0
+	X(§assert_eq c§rtn §saturday X§dowName)
+)
+
+R(
+	§utDowName6
+	K6
+	X(§assert_eq c§rtn §friday X§dowName)
+)
+
+R(
+	§utDowName24
+	K24
+	X(§assert_eq c§rtn §tuesday X§dowName)
+)
+
+R(
+	§utDowName-19
+	K~19
+	X(§assert_eq c§rtn §monday X§dowName)
+)
+
+R(
+	§utDowNameFractal
+	K4.5
+	X(§assert_eq c§rtn §wednesday X§dowName)
+)
+
+R(
+	§utDowNameNegativeFractal
+	K~4.5
+	X(§assert_eq c§rtn §monday X§dowName)
+)
+
+R(
+	§utDowNameNonNumeric
+	K§six
+	?,
+		X(§assert_eq c§rtn 90 tX§dowName)
+		V
+)
+	
+R(
+	§dowNameUnitTests
+
+	Er,§unitTestUtils.lac
+
+	K,(
+		§utDowName0
+		§utDowName6
+		§utDowName24
+		§utDowName-19
+		§utDowNameFractal
+		§utDowNameNegativeFractal
+		§utDowNameNonNumeric
+	)
+
+	X§executeUnitTests
+)

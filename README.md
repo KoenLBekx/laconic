@@ -561,9 +561,35 @@ Routines can be stored in script files, which are UTF-8 text files containing La
 - either by preceding calling code in the script by an Evaluate-after-reading operation: `Er,§myRoutines.lac X[sRoutine from file]`
 - or else by including the script file by preceding the main code by an `-i` parameter when running the command-line Laconic interpreter: `...$ laconic -i myRoutines.lac 'X[sRoutine from file]'`
 
-*An example of a routine in a script file can be found in `scripts/average.lac`. This script file not only declares the "average" routine, but also an "average_unit_tests" routine. This routine is entirely coded in Laconic again. When called, it performs several unit tests on the "average" routine:*
+## Unit tests on routines
 
-`... $ laconic -i /home/user/laconic_scripts/average.lac 'X§average_unit_tests'`
+Routines are mainly written to reuse code. So they tend to contain important code you want to rely on.
+
+A popular way to ensure you really can rely on your code is submitting it to *unit tests*: little test programs that use a routine and compare its outcome to an expected result.
+
+These unit tests should test both normal, common cases as well as boundary cases (lowest and highest input values, erroneous input, negative input where only positive numbers are expected, etc.)
+
+It is entirely possible to use Laconic scripts to write unit tests on routines in Laconic scripts:
+
+In scripts/unitTestUtils.lac, you'll find two routines that will help you in adding unit tests to your "production" routines:
+- `assert_eq`
+- `executeUnitTests`
+
+An example of their usage can be found in `scripts/dowName.lac`, which contains
+- routine `dowName`, which converts a weekday number to the English name of the day of the week;
+- several individual unit test routines;
+- routine `dowNameUnitTests`, which executes all the unit tests and reports on their outcome.
+
+In order to use the `dowName` routine, include it using the -i parameter:
+
+`... $ laconic -i /home/user/path_to_laconic_scripts/dowName.lac 'X(§downName 5)'`
+
+In order to execute the unit tests on routine `dowName`, be sure to `cd` to the directory where `unitTestUtils.lac` resides, and execute:
+
+<pre>
+... $ cd path_where_unitTestUtils.lac_is_stored
+... $ laconic -i /home/user/path_to_other_laconic_scripts/dowName.lac 'X§downNameUnitTests'
+</pre>
 
 ## Arithmetic operators
 
@@ -1227,6 +1253,30 @@ The below named operations have been implemented:
 </pre>
 >> assigns (`$`) 10 to variable "crit"; if (`?`) variable "crit" exceeds (`>`) 5, it's divided by 2 and (`;`) variable "divs" is increased, otherwise, nothing (€) happens. Afterwards, the value of variable "crit" is returned.
 
+`switch ... case ... case ... default` - like constructs can also be coded using the `?` - operator:
+
+<pre>
+    R(
+        §thanksWord
+
+        $§language k
+
+        ?=v§language §en      [c Test ? and first operand: the condition]
+        [sthank you]          [c Second operand: return value if condition is true]
+        ?=v§language §fr      [c Third operand: a subsequent test]
+        §merci
+        ?=v§language §de
+        [sdanke schön]
+        ?=v§language §nl
+        [sdank u]
+        ?=v§language §el
+        §ευχαριστώ
+        [sthank you]          [c Default value]
+    )
+</pre>
+>> defines (`R`) a routine `thanksWord` that reads a language abbreviation string from the stack (`k`) and assigns (`$`) it to the `language` variable.
+>> Next, it tests (`?`) several known abbreviations; if a match is found, the return value of the `?` operators is given as their second argument. Otherwise, a subsequent test is performed in the test's third operand. The last test operator (`?`) has a default value in its third operand.
+
 `?,` try ... catch ...
 > required operands: 2<br/>
 > excess operands: a 3rd operand will be used to produce the return value if operand 1 executes without errors.<br/>
@@ -1403,8 +1453,8 @@ The below named operations have been implemented:
 
     X(§revertChars §ABCDE)  [c Call routine "revertChars")
 </pre>
-> This script creates a routine "revertChars" that reverses the characters of a string popped from the stack.<br/>
-> Next, the script calls it and yields the reverted string (as the call is the last operator).
+>> This script creates a routine "revertChars" that reverses the characters of a string popped from the stack.<br/>
+>> Next, the script calls it and yields the reverted string (as the call is the last operator).
 
 > Breaking from a loop: see the `B` operator.
 
