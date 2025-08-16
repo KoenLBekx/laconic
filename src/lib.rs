@@ -3,7 +3,8 @@
 // The braces after the first comment slashes make Vim fold these comments also.
 //{ TODOs
 // TODO: resolve TODO's in code.
-// TODO: comment all public entities.
+// TODO: document the time- and date-related operators in README.md.
+// TODO: document all public entities (done)
 // TODO: the characters for the operators should be hard-coded only once: in constants.
 //      (done; not done follows below:)
 //      These constants can figure in a constant array of tuples
@@ -1855,9 +1856,14 @@ pub(crate) mod opr_funcs {
     use crate::{CH_DOT, CH_SEPA_DIGITS, CH_SEPA_VERSION, OPCMB, OPEMP, OPMNS, OPNEG};
     use std::collections::HashMap;
     use std::ffi::OsStr;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use super::{DateInfoItem, Expression, GregorianDateInfo, Interpreter, NO_VALUE, Routine, ScriptError, Shuttle, ValueType, are_near};
 
     const DAYS_IN_YEAR :u32 = 365;
+    const DAY_SECS: f64 = 86400.0;
+    const HOUR_SECS: f64 = 3600.0;
+    const MINUTE_SECS: f64 = 60.0;
+    const UNIX_EPOCH_GREGORIAN_OFFSET: f64 = 719529.0;
 
     const WEEKDAYS: [&str; 7] = [
         "SAT",
@@ -2488,6 +2494,13 @@ pub(crate) mod opr_funcs {
         }
     }
 
+    fn get_system_time() -> f64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0_u64))
+            .as_secs_f64()
+    }
+
     pub fn constants(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         if operands.is_empty() {
             return Err(ScriptError::InsufficientOperands(*opr_mark));
@@ -2503,6 +2516,7 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "n" => ValueType::Text("\n".to_string()),
             ValueType::Text(name) if name == "empty" => ValueType::Empty,
             ValueType::Text(name) if name == "rtn" => shuttle.running_routine_name(),
+            ValueType::Text(name) if name == "utc" => ValueType::Number(get_system_time()),
             ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
             ValueType::Error(s_err) => return Err(s_err),
             _ => return Err(ScriptError::UnknownConstant(const_index.get_string_value("???".to_string()))),
@@ -2957,6 +2971,12 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "gregd" => gregorian_day,
             ValueType::Text(name) if name == "gregt" => gregorian_text,
             ValueType::Text(name) if name == "gregn" => gregorian_days_in_month,
+            ValueType::Text(name) if name == "utcd" => unix_epoch_secs_2_greg_date,
+            ValueType::Text(name) if name == "utch" => utc_hours,
+            ValueType::Text(name) if name == "utcm" => utc_minutes,
+            ValueType::Text(name) if name == "utcs" => utc_seconds,
+            ValueType::Text(name) if name == "utcf" => utc_seconds_fraction,
+            ValueType::Text(name) if name == "utct" => utc_text,
             ValueType::Text(name) if name == "version" => get_version,
             ValueType::Error(s_err) => return Err(s_err),
             unknown =>  {
@@ -3230,6 +3250,108 @@ pub(crate) mod opr_funcs {
         }
 
         *result_value = ValueType::Number(days_in_month(month as u32, is_leap_year(year)) as f64);
+
+        Ok(())
+    }
+
+    pub fn unix_epoch_secs_2_greg_date(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        single_number_operation(
+            opr_mark,
+            result_value,
+            operands,
+            |n| {
+                (n / DAY_SECS).floor() + UNIX_EPOCH_GREGORIAN_OFFSET
+            })
+    }
+
+    fn secs_2_hours(n: f64) -> f64 {
+        ((n % DAY_SECS) / HOUR_SECS).floor()
+    }
+
+    fn secs_2_minutes(n: f64) -> f64 {
+        ((n % HOUR_SECS) / MINUTE_SECS).floor()
+    }
+
+    fn secs_2_seconds(n: f64) -> f64 {
+        (n % MINUTE_SECS).floor()
+    }
+
+    fn secs_2_fraction(n: f64) -> f64 {
+        n.fract()
+    }
+
+    pub fn utc_hours(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        single_number_operation(
+            opr_mark,
+            result_value,
+            operands,
+            |n| {
+                secs_2_hours(n)
+            })
+    }
+
+    pub fn utc_minutes(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        single_number_operation(
+            opr_mark,
+            result_value,
+            operands,
+            |n| {
+                secs_2_minutes(n)
+            })
+    }
+
+    pub fn utc_seconds(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        single_number_operation(
+            opr_mark,
+            result_value,
+            operands,
+            |n| {
+                secs_2_seconds(n)
+            })
+    }
+
+    pub fn utc_seconds_fraction(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], _shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        single_number_operation(
+            opr_mark,
+            result_value,
+            operands,
+            |n| {
+                secs_2_fraction(n)
+            })
+    }
+
+    pub fn utc_text(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
+        check_nr_operands(opr_mark, operands, 1)?;
+
+        let sepa = if operands.len() > 1 {
+            match operands[1].get_value() {
+                ValueType::Empty => String::new(),
+                ValueType::Number(_) => return Err(ScriptError::NonTextOperand(*opr_mark)),
+                ValueType::Text(t) => t,
+                ValueType::Error(s_err) => return Err(s_err),
+            }
+        } else {
+            String::new()
+        };
+
+        let utc = match operands[0].get_value() {
+            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Number(num) => num,
+            ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+            ValueType::Error(s_err) => return Err(s_err),
+        };
+
+        let seconds = utc % MINUTE_SECS;
+
+        *result_value = ValueType::Text(format!(
+            "{:02}{}{:02}{}{:02}{}UTC",
+            secs_2_hours(utc),
+            sepa.clone(),
+            secs_2_minutes(utc),
+            sepa,
+            shuttle.number_format.format(seconds),
+            sepa
+        ));
 
         Ok(())
     }
@@ -8949,6 +9071,83 @@ mod tests {
             assert_eq!(
                 "2A".to_string(),
                 Interpreter::new_and_execute_with_mocked_io("b,16 q,42.3".to_string()).unwrap().string_representation());
+        }
+    
+        #[test]
+        fn x_utc() {
+            assert_eq!(
+                1_f64,
+                Interpreter::new_and_execute_with_mocked_io("t c§utc".to_string()).unwrap().numeric_value());
+        }
+    
+        #[test]
+        fn x_utcd() {
+            assert_eq!(
+                719529_f64,
+                Interpreter::new_and_execute_with_mocked_io("o§utcd 18.3289".to_string()).unwrap().numeric_value());
+        }
+    
+        #[test]
+        fn x_utcd_from_ymd_unix_epoch_first() {
+            assert_eq!(
+                1_f64,
+                Interpreter::new_and_execute_with_mocked_io("= o§utcd 18.3289 o,§greg 1970 1 1".to_string()).unwrap().numeric_value());
+        }
+    
+        #[test]
+        fn x_utcd_from_ymd_2025() {
+            assert_eq!(
+                1_f64,
+                Interpreter::new_and_execute_with_mocked_io("= o§utcd 1755373786 o,§greg 2025 8 16".to_string()).unwrap().numeric_value());
+        }
+    
+        #[test]
+        fn x_utch() {
+            assert_eq!(
+                20_f64,
+                Interpreter::new_and_execute_with_mocked_io("o§utch 1755375996.805945".to_string()).unwrap().numeric_value());
+        }
+    
+        #[test]
+        fn x_utcm() {
+            assert_eq!(
+                26_f64,
+                Interpreter::new_and_execute_with_mocked_io("o§utcm 1755375996.805945".to_string()).unwrap().numeric_value());
+        }
+    
+        #[test]
+        fn x_utcs() {
+            assert_eq!(
+                36_f64,
+                Interpreter::new_and_execute_with_mocked_io("o§utcs 1755375996.805945".to_string()).unwrap().numeric_value());
+        }
+    
+        #[test]
+        fn x_utcf() {
+            assert_eq!(
+                1_f64,
+                Interpreter::new_and_execute_with_mocked_io("Z§prec .01 = .806 o§utcf 1755375996.806".to_string()).unwrap().numeric_value());
+        }
+    
+        #[test]
+        fn x_utct() {
+            assert_eq!(
+                "20:26:36,80:UTC".to_string(),
+                Interpreter::new_and_execute_with_mocked_io("o,§fmt 2 §, § O§utct 1755375996.80 §:".to_string()).unwrap().string_representation());
+        }
+    
+        #[test]
+        fn x_utct_no_separator() {
+            assert_eq!(
+                "202636UTC".to_string(),
+                Interpreter::new_and_execute_with_mocked_io("o§fmt 0 o§utct 1755375996".to_string()).unwrap().string_representation());
+        }
+    
+        #[test]
+        fn x_utct_no_separator_rounded() {
+            assert_eq!(
+                "202637UTC".to_string(),
+                Interpreter::new_and_execute_with_mocked_io("o§fmt 0 o§utct 1755375996.80".to_string()).unwrap().string_representation());
         }
     }
 

@@ -757,6 +757,9 @@ Operators
 				the name of the executing routine.
 				If called outside of a routine, returns "main".
 
+			c§utc system time as universal time in seconds since 1970-01-01 00:00:00 UTC.
+				(Seconds in Unix Epoch)
+
 	Variables
 
 		$ Variable assignment
@@ -1595,7 +1598,50 @@ Operators
 			O§gregn year month
 
 				Days in month: returns the days in a given month in a given year.
-		
+
+			o§utcd number
+			
+				Converts a system time returned by c§time to a Gregorian day number as handled by o§gregt e.a.
+
+			o§utch number
+
+				Gets the hours since 00:00:00 UTC from a system time returned by c§time.
+
+			o§utcm number
+
+				Gets the minutes since last hour UTC from a system time returned by c§time.
+
+			o§utcs number
+
+				Gets the seconds as integer number since last minute UTC from a system time returned by c§time.
+
+			o§utcf number
+
+				Gets the fraction of the last second from a system time returned by c§time.
+
+			o§utct number
+
+				Converts a system time returned by c§time to an "HHMMSS UTC" string where SS are seconds
+				formatted as dictated by the o,§fmt operator.
+
+				If a third string argument is given, this is used as a separator. E.g.:
+					o,§fmt 3 §, § O§utct 72074 §:
+						yields
+					"02:02:02,000:UTC"
+
+				This separator can be any length; if a space is desired, pass it as [s ]:
+					o§fmt 0 O§utct 72074 [s ]
+						yields
+					"02 02 02 UTC"
+
+				Mind that the fractal part of the seconds is rounded, not truncated,
+				to the number of fractal digits requested.
+
+				E.g.:
+					o,§fmt 2 §. § $§now + c§utc 7200 ++O§gregt o§utcd v§now §- §, O§utct v§now §:
+						yields
+					2025-08-16-SAT,23:29:41.08:UTC
+
 		O Operator designated by name, 3 operands
 		
 			(upper case O)
