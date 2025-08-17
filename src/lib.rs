@@ -2971,12 +2971,12 @@ pub(crate) mod opr_funcs {
             ValueType::Text(name) if name == "gregd" => gregorian_day,
             ValueType::Text(name) if name == "gregt" => gregorian_text,
             ValueType::Text(name) if name == "gregn" => gregorian_days_in_month,
-            ValueType::Text(name) if name == "utcd" => unix_epoch_secs_2_greg_date,
-            ValueType::Text(name) if name == "utch" => utc_hours,
-            ValueType::Text(name) if name == "utcm" => utc_minutes,
-            ValueType::Text(name) if name == "utcs" => utc_seconds,
-            ValueType::Text(name) if name == "utcf" => utc_seconds_fraction,
-            ValueType::Text(name) if name == "utct" => utc_text,
+            ValueType::Text(name) if name == "timed" => unix_epoch_secs_2_greg_date,
+            ValueType::Text(name) if name == "timeh" => utc_hours,
+            ValueType::Text(name) if name == "timem" => utc_minutes,
+            ValueType::Text(name) if name == "times" => utc_seconds,
+            ValueType::Text(name) if name == "timef" => utc_seconds_fraction,
+            ValueType::Text(name) if name == "timet" => utc_text,
             ValueType::Text(name) if name == "version" => get_version,
             ValueType::Error(s_err) => return Err(s_err),
             unknown =>  {
@@ -9081,73 +9081,73 @@ mod tests {
         }
     
         #[test]
-        fn x_utcd() {
+        fn x_timed() {
             assert_eq!(
                 719529_f64,
-                Interpreter::new_and_execute_with_mocked_io("o§utcd 18.3289".to_string()).unwrap().numeric_value());
+                Interpreter::new_and_execute_with_mocked_io("o§timed 18.3289".to_string()).unwrap().numeric_value());
         }
     
         #[test]
-        fn x_utcd_from_ymd_unix_epoch_first() {
+        fn x_timed_from_ymd_unix_epoch_first() {
             assert_eq!(
                 1_f64,
-                Interpreter::new_and_execute_with_mocked_io("= o§utcd 18.3289 o,§greg 1970 1 1".to_string()).unwrap().numeric_value());
+                Interpreter::new_and_execute_with_mocked_io("= o§timed 18.3289 o,§greg 1970 1 1".to_string()).unwrap().numeric_value());
         }
     
         #[test]
-        fn x_utcd_from_ymd_2025() {
+        fn x_timed_from_ymd_2025() {
             assert_eq!(
                 1_f64,
-                Interpreter::new_and_execute_with_mocked_io("= o§utcd 1755373786 o,§greg 2025 8 16".to_string()).unwrap().numeric_value());
+                Interpreter::new_and_execute_with_mocked_io("= o§timed 1755373786 o,§greg 2025 8 16".to_string()).unwrap().numeric_value());
         }
     
         #[test]
-        fn x_utch() {
+        fn x_timeh() {
             assert_eq!(
                 20_f64,
-                Interpreter::new_and_execute_with_mocked_io("o§utch 1755375996.805945".to_string()).unwrap().numeric_value());
+                Interpreter::new_and_execute_with_mocked_io("o§timeh 1755375996.805945".to_string()).unwrap().numeric_value());
         }
     
         #[test]
-        fn x_utcm() {
+        fn x_timem() {
             assert_eq!(
                 26_f64,
-                Interpreter::new_and_execute_with_mocked_io("o§utcm 1755375996.805945".to_string()).unwrap().numeric_value());
+                Interpreter::new_and_execute_with_mocked_io("o§timem 1755375996.805945".to_string()).unwrap().numeric_value());
         }
     
         #[test]
-        fn x_utcs() {
+        fn x_times() {
             assert_eq!(
                 36_f64,
-                Interpreter::new_and_execute_with_mocked_io("o§utcs 1755375996.805945".to_string()).unwrap().numeric_value());
+                Interpreter::new_and_execute_with_mocked_io("o§times 1755375996.805945".to_string()).unwrap().numeric_value());
         }
     
         #[test]
-        fn x_utcf() {
+        fn x_timef() {
             assert_eq!(
                 1_f64,
-                Interpreter::new_and_execute_with_mocked_io("Z§prec .01 = .806 o§utcf 1755375996.806".to_string()).unwrap().numeric_value());
+                Interpreter::new_and_execute_with_mocked_io("Z§prec .01 = .806 o§timef 1755375996.806".to_string()).unwrap().numeric_value());
         }
     
         #[test]
-        fn x_utct() {
+        fn x_timet() {
             assert_eq!(
                 "20:26:36,80:UTC".to_string(),
-                Interpreter::new_and_execute_with_mocked_io("o,§fmt 2 §, § O§utct 1755375996.80 §:".to_string()).unwrap().string_representation());
+                Interpreter::new_and_execute_with_mocked_io("o,§fmt 2 §, § O§timet 1755375996.80 §:".to_string()).unwrap().string_representation());
         }
     
         #[test]
-        fn x_utct_no_separator() {
+        fn x_timet_no_separator() {
             assert_eq!(
                 "202636UTC".to_string(),
-                Interpreter::new_and_execute_with_mocked_io("o§fmt 0 o§utct 1755375996".to_string()).unwrap().string_representation());
+                Interpreter::new_and_execute_with_mocked_io("o§fmt 0 o§timet 1755375996".to_string()).unwrap().string_representation());
         }
     
         #[test]
-        fn x_utct_no_separator_rounded() {
+        fn x_timet_no_separator_rounded() {
             assert_eq!(
                 "202637UTC".to_string(),
-                Interpreter::new_and_execute_with_mocked_io("o§fmt 0 o§utct 1755375996.80".to_string()).unwrap().string_representation());
+                Interpreter::new_and_execute_with_mocked_io("o§fmt 0 o§timet 1755375996.80".to_string()).unwrap().string_representation());
         }
     }
 

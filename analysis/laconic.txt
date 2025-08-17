@@ -1599,38 +1599,38 @@ Operators
 
 				Days in month: returns the days in a given month in a given year.
 
-			o§utcd number
+			o§timed number
 			
-				Converts a system time returned by c§time to a Gregorian day number as handled by o§gregt e.a.
+				Converts a system time returned by c§utc to a Gregorian day number as handled by o§gregt e.a.
 
-			o§utch number
+			o§timeh number
 
-				Gets the hours since 00:00:00 UTC from a system time returned by c§time.
+				Gets the hours since 00:00:00 UTC from a system time returned by c§utc.
 
-			o§utcm number
+			o§timem number
 
-				Gets the minutes since last hour UTC from a system time returned by c§time.
+				Gets the minutes since last hour UTC from a system time returned by c§utc.
 
-			o§utcs number
+			o§times number
 
-				Gets the seconds as integer number since last minute UTC from a system time returned by c§time.
+				Gets the seconds as integer number since last minute UTC from a system time returned by c§utc.
 
-			o§utcf number
+			o§timef number
 
-				Gets the fraction of the last second from a system time returned by c§time.
+				Gets the fraction of the last second from a system time returned by c§utc.
 
-			o§utct number
+			o§timet number
 
-				Converts a system time returned by c§time to an "HHMMSS UTC" string where SS are seconds
+				Converts a system time returned by c§utc to an "HHMMSS UTC" string where SS are seconds
 				formatted as dictated by the o,§fmt operator.
 
 				If a third string argument is given, this is used as a separator. E.g.:
-					o,§fmt 3 §, § O§utct 72074 §:
+					o,§fmt 3 §, § O§timet 72074 §:
 						yields
 					"02:02:02,000:UTC"
 
 				This separator can be any length; if a space is desired, pass it as [s ]:
-					o§fmt 0 O§utct 72074 [s ]
+					o§fmt 0 O§timet 72074 [s ]
 						yields
 					"02 02 02 UTC"
 
@@ -1638,7 +1638,7 @@ Operators
 				to the number of fractal digits requested.
 
 				E.g.:
-					o,§fmt 2 §. § $§now + c§utc 7200 ++O§gregt o§utcd v§now §- §, O§utct v§now §:
+					o,§fmt 2 §. § $§now + c§utc 7200 ++O§gregt o§timed v§now §- §, O§timet v§now §:
 						yields
 					2025-08-16-SAT,23:29:41.08:UTC
 
