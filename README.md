@@ -340,6 +340,11 @@ Strings are either<br/>
 
 ***Note** that the `§` character doesn't terminate a simple string, so it can be part of one.*
 
+*Please don't confuse the simple string prefix `§` with the `$` assignment operator.*
+
+A blank can be expressed by<br/>
+`[s ]`
+
 An empty string can be expressed by
 - `[s]`
 - `§` on itself: followed by whitespace, `[`, `(`, `)` or at the end of a script.
@@ -420,13 +425,76 @@ One can supply a default value when reading a variable, in case it's uninitializ
 When the variable referred to by the first operand is empty or uninitialized, the value of the second operand is assigned to it and returned.
 
 > E.g.:
->> `[cVariable 5 is uninitialized] v,5 1` yields 1
->> `[cVariable 5 is uninitialized] v,5 1 v5` yields 1
+>> `[cVariable 5 is uninitialized] v,5 1` yields 1<br/>
+>> `[cVariable 5 is uninitialized] v,5 1 v5` yields 1<br/>
 >> `$5 240 v,5 1` yields 240
+
+Variables can also hold pointers to other variables:
+
+> `$§pointer 5 vv§pointer` returns the value of variable having identifier 5.
+
+Variable identifiers can also be calculated:
+
+> `$§month 1 $+,§daysInMonth v§month 31` assigns the value 31 to variable having identifier "daysInMonth1".
+
+> Expressions like these, together with variables holding a pointer like v§month, allow for array-like constructs.
+
+Assigning the empty value (`€` or an empty operation outcome) to a variable, removes it from the variables collection.
+
+## Reading & assigning a variable
 
 There is a shorthand way of making an operator assign its return value to a variable that's one of its operands: replace the `v` operator with the `:` read-and-assign operator:
 
-> `+:§index 1` increases the value of variable "index" with 1.
+Say you have a counter variable "counter" that needs to be increased every time something specific occurs.
+
+Your script initializes that counter variable using a<br/>
+`$§counter 0`<br/>
+operation. Next, your script executes a loop. In every iteration of that loop, a condition is tested and, if true, your counter needs to be increased by 1.
+
+Your script could perform that increase using the below operation:
+
+<pre>
+$
+    §counter
+    +
+        v §counter
+        1
+</pre>
+
+This would work all right, but there's a shorter way:
+
+<pre>
++
+    : §counter
+    1
+</pre>
+
+The `:` read-and-assign operator has one operand and does two things:
+- it reads the value of the variable designed by its operand;
+- it tells the parent operator to assign its outcome to that operand.
+
+So, if variable "counter" holds value `4`, operation
+
+> `+ :§counter 1`
+
+where `+` is the parent operator of `:`, would process as follows:
+- `:§counter` returns `4`
+- `+ 4 1` returns `5`
+- this value `5` is assigned to variable "counter"
+- and the entire operation returns `5` again, which may or may not be used by encapsulating parent operators.
+
+Note that the two below operations are identical, as the `+` operator is commutative:
+> `+ :§counter 1`<br/>
+> `+ 1 :§counter`
+
+It's even possible to assign a calculation outcome to more than one variable at once:
+
+<pre>
+    $0 21
+    $1 5
+    * :0 :1
+</pre>
+This script would result in both variables 0 and 1 having the value 105.
 
 There is also a variant `:,` operator, that takes two arguments
 - the identifier of the variable to be read and assigned;
@@ -445,17 +513,39 @@ There is also a variant `:,` operator, that takes two arguments
 </pre>
 > yields 1 - if the non-variant version of the `:` operator would have been used, the `+` operator would have raised an error about an empty operand.
 
-Variables can also hold pointers to other variables:
+One might wonder if, using this `:` operator, the `$` (assignment) operator becomes redundant.
 
-> `$§pointer 5 vv§pointer` returns the value of variable having identifier 5.
+Functionally, one could indeed replace all<br/>
+`$ §myVar §value`<br/>
+expressions with<br/>
+`; :§myVar §value`<br/>
+as the `;` (combination) operator would read, but not use, the value of variable "myVar", and then assign the value of its second operand to it due to the `:` operator used to read variable "myVar".
 
-Variable identifiers can also be calculated:
+However, technically, the `$` (assignment) operator entails less processing, as evidenced by the expression trees:
 
-> `$§month 1 $+,§daysInMonth v§month 31` assigns the value 31 to variable having identifier "daysInMonth1".
+<pre>
+$ laconic -aq '$ §myVar 8'
 
-> Expressions like these, together with variables holding a pointer like v§month, allow for array-like constructs.
+Tree after operate() :
+$
+│	myVar
+│	8
+└─> 8
+</pre>
 
-Assigning the empty value (`€` or an empty operation outcome) to a variable, removes it from the variables collection.
+Use of the `;:` way involves two instead of one operators, so more processing:
+
+<pre>
+$ laconic -aq '; :§myVar 8'
+
+Tree after operate() :
+;
+│	:
+│	│	myVar
+│	└─> (no_value)
+│	8
+└─> 8
+</pre>
 
 ## Serial assignment of variables
 
@@ -929,7 +1019,7 @@ This precision margin is 0.000_000_01 by default, but can be set and changed aga
 |:|like v<br/>but has result<br/>of parent operator<br/>assigned to that<br/>variable|1|ignored|like v|`$§count 0`<br/>`  +:§count 1`<br/>`  v§count`|<br/><br/>1|
 |:,|like :<br/>but assigns<br/>and returns<br/>the second<br/>operand if the<br/>variable<br/>is empty|2|ignored|like :|`$§count €`<br/>`  +:,§count 100 1`<br/>`  v§count`|<br/><br/>101|
 
-## Stack-related operators||
+## Stack-related operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-|:-:|
 |K|push to<br/>LIFO<br/>stack|1|pushed<br/>also|value of<br/>last<br/>operand|`K155 K30 k`<br/>`K(155 30) k`|30<br/>30|
