@@ -3,6 +3,8 @@
 // The braces after the first comment slashes make Vim fold these comments also.
 //{ TODOs
 // TODO: resolve TODO's in code.
+// TODO: Expression.get_string_representation: put closing parenthesis after value of operator
+// having the opening one, not after its last operand's operator.
 // TODO: document the time- and date-related operators in README.md.
 // TODO: document all public entities (done)
 // TODO: the characters for the operators should be hard-coded only once: in constants.
@@ -145,6 +147,10 @@ pub enum ScriptError {
     /// separator.
     ConflictingNumberPartSeparators,
 
+    /// A date preceding the introduction of the Gregorian calendar on 1582-10-15 was used with
+    /// operations that only process Gregorian dates.
+    DateBeforeGregorianCalendar(char),
+
     /// A zero divisor was found, usually by the division or modulus operators.
     DivideByZero(char),
 
@@ -162,8 +168,11 @@ pub enum ScriptError {
     /// An operator got less operands than expected.
     InsufficientOperands(char),
 
-    /// A 13th month, a 32nd day, a negative year, or other invalid date parts were fed as operands to date-related operators.
-    InvalidDatePart(char),
+    /// A a 32nd day or other invalid day was fed as operand to date-related operators.
+    InvalidDay(char),
+
+    /// A 13th month or other invalid month was fed as operand to date-related operators.
+    InvalidMonth(char),
 
     /// An invalid Gregorian date sequence number was fed to a date-related operator, e.g. a
     /// negative number.
@@ -1863,7 +1872,8 @@ pub(crate) mod opr_funcs {
     const DAY_SECS: f64 = 86400.0;
     const HOUR_SECS: f64 = 3600.0;
     const MINUTE_SECS: f64 = 60.0;
-    const UNIX_EPOCH_GREGORIAN_OFFSET: f64 = 719529.0;
+    const UNIX_EPOCH_GREGORIAN_OFFSET: f64 = 141428.0;
+    const GREG_OFFSET: u32 = 578101;
 
     const WEEKDAYS: [&str; 7] = [
         "SAT",
@@ -3245,9 +3255,7 @@ pub(crate) mod opr_funcs {
             ValueType::Error(s_err) => return Err(s_err),
         };
 
-        if (year < 0_f64) || !(1_f64..=12_f64).contains(&month) {
-            return Err(ScriptError::InvalidDatePart(*opr_mark));
-        }
+        check_date(year as u32, month as u32, 1, opr_mark)?;
 
         *result_value = ValueType::Number(days_in_month(month as u32, is_leap_year(year)) as f64);
 
@@ -3374,6 +3382,30 @@ pub(crate) mod opr_funcs {
         (year_offset + month_offset + day) % 7
     }
 
+    fn check_date(year: u32, month: u32, day: u32, opr_mark: &char) -> Result<(), ScriptError> {
+        match year {
+            y if y < 1582 =>
+                return Err(ScriptError::DateBeforeGregorianCalendar(*opr_mark)),
+            y if (y == 1582) && (month < 10) =>
+                return Err(ScriptError::DateBeforeGregorianCalendar(*opr_mark)),
+            y if (y == 1582) && (month == 10) && (day < 15) =>
+                return Err(ScriptError::DateBeforeGregorianCalendar(*opr_mark)),
+            _ => (),
+        }
+
+        if !(1..=12).contains(&month) {
+            return Err(ScriptError::InvalidMonth(*opr_mark));
+        }
+
+        let max_day = days_in_month(month, is_leap_year(year as f64));
+
+        if (day == 0) || (day > max_day) {
+            return Err(ScriptError::InvalidDay(*opr_mark));
+        }
+
+        Ok(())
+    }
+
     pub fn dow(opr_mark: &mut char, result_value: &mut ValueType, operands: &mut [Expression], shuttle: &mut Shuttle) -> Result<(), ScriptError> {
         let mut year = 0_u32;
         let mut month = 0_u32;
@@ -3413,13 +3445,7 @@ pub(crate) mod opr_funcs {
                     }
                 }
 
-                if (month) == 0 || (month > 12) {
-                    return Err(ScriptError::InvalidDatePart(*opr_mark));
-                }
-
-                if (day == 0) || (day > 31) {
-                    return Err(ScriptError::InvalidDatePart(*opr_mark));
-                }
+                check_date(year, month, day, opr_mark)?;
             },
         }
 
@@ -3463,13 +3489,7 @@ pub(crate) mod opr_funcs {
             }
         }
 
-        if (month) == 0 || (month > 12) {
-            return Err(ScriptError::InvalidDatePart(*opr_mark));
-        }
-
-        if (day == 0) || (day > 31) {
-            return Err(ScriptError::InvalidDatePart(*opr_mark));
-        }
+        check_date(year, month, day, opr_mark)?;
 
         // One leap year
         let days_in_four_years = (DAYS_IN_YEAR * 4) + 1;
@@ -3575,6 +3595,7 @@ pub(crate) mod opr_funcs {
         }
 
         result += day;
+        result -= GREG_OFFSET;
 
         *result_value = ValueType::Number(result as f64);
 
@@ -3612,6 +3633,7 @@ pub(crate) mod opr_funcs {
         */
 
         let mut seq = seq_nr as u32;
+        seq += GREG_OFFSET;
         let mut year = 0;
         let mut month: u32;
         let day: u32;
@@ -7999,57 +8021,80 @@ mod tests {
 
         #[test]
         fn x_dow_seq_nr() {
-            assert_eq!(5f64, Interpreter::new_and_execute_with_mocked_io("o,§dow 720593".to_string()).unwrap().numeric_value());
+            assert_eq!(5f64, Interpreter::new_and_execute_with_mocked_io("o§dow 142492".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_dow_year_before_gregorian() {
+            assert_eq!(
+                Err(ScriptError::DateBeforeGregorianCalendar('o')),
+                Interpreter::new_and_execute_with_mocked_io("o,§dow 1581 12 5".to_string()));
+        }
+
+        #[test]
+        fn x_dow_month_before_gregorian() {
+            assert_eq!(
+                Err(ScriptError::DateBeforeGregorianCalendar('o')),
+                Interpreter::new_and_execute_with_mocked_io("o,§dow 1582 9 15".to_string()));
+        }
+
+        #[test]
+        fn x_dow_day_before_gregorian() {
+            assert_eq!(
+                Err(ScriptError::DateBeforeGregorianCalendar('o')),
+                Interpreter::new_and_execute_with_mocked_io("o,§dow 1582 10 14".to_string()));
         }
 
         #[test]
         fn x_greg_first() {
-            assert_eq!(1_f64, Interpreter::new_and_execute_with_mocked_io("o,§greg 0 1 1".to_string()).unwrap().numeric_value());
+            assert_eq!(1_f64, Interpreter::new_and_execute_with_mocked_io("o,§greg 1582 10 15".to_string()).unwrap().numeric_value());
         }
 
         #[test]
         fn x_greg_first_month_of_march() {
-            assert_eq!(70_f64, Interpreter::new_and_execute_with_mocked_io("o,§greg 0 3 10".to_string()).unwrap().numeric_value());
+            assert_eq!(147_f64, Interpreter::new_and_execute_with_mocked_io("o,§greg 1583 3 10".to_string()).unwrap().numeric_value());
         }
 
         #[test]
         fn x_greg_last_of_first_year() {
-            assert_eq!(366_f64, Interpreter::new_and_execute_with_mocked_io("o,§greg 0 12 31".to_string()).unwrap().numeric_value());
+            assert_eq!(78_f64, Interpreter::new_and_execute_with_mocked_io("o,§greg 1582 12 31".to_string()).unwrap().numeric_value());
         }
 
         #[test]
         fn x_greg_one_year_plus() {
-            assert_eq!(731_f64, Interpreter::new_and_execute_with_mocked_io("o,§greg 1 12 31".to_string()).unwrap().numeric_value());
+            let expected: f64 = 78.0 + 365.0;
+            assert_eq!(expected, Interpreter::new_and_execute_with_mocked_io("o,§greg 1583 12 31".to_string()).unwrap().numeric_value());
         }
 
         #[test]
         fn x_greg_last_of_first_century() {
-            let expected = ((365 * 100) + 25) as f64;
-            assert_eq!(expected, Interpreter::new_and_execute_with_mocked_io("o,§greg 99 12 31".to_string()).unwrap().numeric_value());
+            let expected = (78 + (365 * 17) + 4) as f64;
+            assert_eq!(expected, Interpreter::new_and_execute_with_mocked_io("o,§greg 1599 12 31".to_string()).unwrap().numeric_value());
         }
 
         #[test]
         fn x_greg_last_of_second_century() {
-            let expected = ((365 * 200) + (24 * 2) + 1) as f64;
-            assert_eq!(expected, Interpreter::new_and_execute_with_mocked_io("o,§greg 199 12 31".to_string()).unwrap().numeric_value());
+            let expected = (78 + (365 * 117) + 4 + 25) as f64;
+            assert_eq!(expected, Interpreter::new_and_execute_with_mocked_io("o,§greg 1699 12 31".to_string()).unwrap().numeric_value());
         }
 
         #[test]
-        fn x_greg_last_of_fourth_century() {
-            let expected = ((365 * 400) + (24 * 4) + 1) as f64;
-            assert_eq!(expected, Interpreter::new_and_execute_with_mocked_io("o,§greg 399 12 31".to_string()).unwrap().numeric_value());
-        }
-
-        #[test]
-        fn x_greg_last_of_fifth_century() {
-            let expected = ((365 * 500) + (24 * 5) + 2) as f64;
-            assert_eq!(expected, Interpreter::new_and_execute_with_mocked_io("o,§greg 499 12 31".to_string()).unwrap().numeric_value());
+        fn x_greg_last_of_third_century() {
+            let expected = (78 + (365 * 217) + 4 + 49) as f64;
+            assert_eq!(expected, Interpreter::new_and_execute_with_mocked_io("o,§greg 1799 12 31".to_string()).unwrap().numeric_value());
         }
 
         #[test]
         fn x_greg_in_2000() {
-            let expected = ((365 * 2000) + (24 * 20) + 5 + 61) as f64;
+            let expected = (6287 + (365 * 400) + (24 * 4) + 1 + 31 + 29 + 1) as f64;
             assert_eq!(expected, Interpreter::new_and_execute_with_mocked_io("o,§greg 2000 3 1".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_greg_invalid_day() {
+            assert_eq!(
+                Err(ScriptError::InvalidDay('o')),
+                Interpreter::new_and_execute_with_mocked_io("o,§greg 2000 4 31".to_string()));
         }
 
         #[test]
@@ -8061,126 +8106,126 @@ mod tests {
         #[test]
         fn greg_seq_1() {
             let date_info = greg_sequence_to_date(1_f64).unwrap();
-            assert_eq!(0_f64, date_info.year);
-            assert_eq!(1_f64, date_info.month);
-            assert_eq!(1_f64, date_info.day);
+            assert_eq!(1582_f64, date_info.year);
+            assert_eq!(10_f64, date_info.month);
+            assert_eq!(15_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_0_2_29() {
-            let date_info = greg_sequence_to_date(60_f64).unwrap();
-            assert_eq!(0_f64, date_info.year);
+        fn greg_seq_1600_2_29() {
+            let date_info = greg_sequence_to_date(6347_f64).unwrap();
+            assert_eq!(1600_f64, date_info.year);
             assert_eq!(2_f64, date_info.month);
             assert_eq!(29_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_0_12_31() {
-            let date_info = greg_sequence_to_date(366_f64).unwrap();
-            assert_eq!(0_f64, date_info.year);
+        fn greg_seq_1582_12_31() {
+            let date_info = greg_sequence_to_date(78_f64).unwrap();
+            assert_eq!(1582_f64, date_info.year);
             assert_eq!(12_f64, date_info.month);
             assert_eq!(31_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_1_1_1() {
-            let date_info = greg_sequence_to_date(367_f64).unwrap();
-            assert_eq!(1_f64, date_info.year);
+        fn greg_seq_1583_1_1() {
+            let date_info = greg_sequence_to_date(79_f64).unwrap();
+            assert_eq!(1583_f64, date_info.year);
             assert_eq!(1_f64, date_info.month);
             assert_eq!(1_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_1_12_31() {
-            let date_info = greg_sequence_to_date(731_f64).unwrap();
-            assert_eq!(1_f64, date_info.year);
+        fn greg_seq_1583_12_31() {
+            let date_info = greg_sequence_to_date(443_f64).unwrap();
+            assert_eq!(1583_f64, date_info.year);
             assert_eq!(12_f64, date_info.month);
             assert_eq!(31_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_2_1_1() {
-            let date_info = greg_sequence_to_date(732_f64).unwrap();
-            assert_eq!(2_f64, date_info.year);
+        fn greg_seq_1584_1_1() {
+            let date_info = greg_sequence_to_date(444_f64).unwrap();
+            assert_eq!(1584_f64, date_info.year);
             assert_eq!(1_f64, date_info.month);
             assert_eq!(1_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_4_2_29() {
-            let date_info = greg_sequence_to_date(1521_f64).unwrap();
-            assert_eq!(4_f64, date_info.year);
+        fn greg_seq_1584_2_29() {
+            let date_info = greg_sequence_to_date(503_f64).unwrap();
+            assert_eq!(1584_f64, date_info.year);
             assert_eq!(2_f64, date_info.month);
             assert_eq!(29_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_6_3_1() {
-            let date_info = greg_sequence_to_date(2252_f64).unwrap();
-            assert_eq!(6_f64, date_info.year);
+        fn greg_seq_1606_3_1() {
+            let date_info = greg_sequence_to_date(8539_f64).unwrap();
+            assert_eq!(1606_f64, date_info.year);
             assert_eq!(3_f64, date_info.month);
             assert_eq!(1_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_99_12_31() {
-            let date_info = greg_sequence_to_date(36525_f64).unwrap();
-            assert_eq!(99_f64, date_info.year);
+        fn greg_seq_1599_12_31() {
+            let date_info = greg_sequence_to_date(6287_f64).unwrap();
+            assert_eq!(1599_f64, date_info.year);
             assert_eq!(12_f64, date_info.month);
             assert_eq!(31_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_100_1_1() {
-            let date_info = greg_sequence_to_date(36526_f64).unwrap();
-            assert_eq!(100_f64, date_info.year);
+        fn greg_seq_1700_1_1() {
+            let date_info = greg_sequence_to_date(42813_f64).unwrap();
+            assert_eq!(1700_f64, date_info.year);
             assert_eq!(1_f64, date_info.month);
             assert_eq!(1_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_100_3_1() {
-            let date_info = greg_sequence_to_date(36585_f64).unwrap();
-            assert_eq!(100_f64, date_info.year);
+        fn greg_seq_1700_3_1() {
+            let date_info = greg_sequence_to_date(42872_f64).unwrap();
+            assert_eq!(1700_f64, date_info.year);
             assert_eq!(3_f64, date_info.month);
             assert_eq!(1_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_399_12_31() {
-            let date_info = greg_sequence_to_date(146097_f64).unwrap();
-            assert_eq!(399_f64, date_info.year);
+        fn greg_seq_1999_12_31() {
+            let date_info = greg_sequence_to_date(152384_f64).unwrap();
+            assert_eq!(1999_f64, date_info.year);
             assert_eq!(12_f64, date_info.month);
             assert_eq!(31_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_400_1_1() {
-            let date_info = greg_sequence_to_date(146098_f64).unwrap();
-            assert_eq!(400_f64, date_info.year);
+        fn greg_seq_2000_1_1() {
+            let date_info = greg_sequence_to_date(152385_f64).unwrap();
+            assert_eq!(2000_f64, date_info.year);
             assert_eq!(1_f64, date_info.month);
             assert_eq!(1_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_400_3_1() {
-            let date_info = greg_sequence_to_date(146158_f64).unwrap();
-            assert_eq!(400_f64, date_info.year);
+        fn greg_seq_2000_3_1() {
+            let date_info = greg_sequence_to_date(152445_f64).unwrap();
+            assert_eq!(2000_f64, date_info.year);
             assert_eq!(3_f64, date_info.month);
             assert_eq!(1_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_600_3_1() {
-            let date_info = greg_sequence_to_date(219206_f64).unwrap();
-            assert_eq!(600_f64, date_info.year);
+        fn greg_seq_1800_3_1() {
+            let date_info = greg_sequence_to_date(79396_f64).unwrap();
+            assert_eq!(1800_f64, date_info.year);
             assert_eq!(3_f64, date_info.month);
             assert_eq!(1_f64, date_info.day);
         }
 
         #[test]
         fn greg_seq_2024_12_31() {
-            let date_info = greg_sequence_to_date(739617_f64).unwrap();
+            let date_info = greg_sequence_to_date(161516_f64).unwrap();
             assert_eq!(2024_f64, date_info.year);
             assert_eq!(12_f64, date_info.month);
             assert_eq!(31_f64, date_info.day);
@@ -8188,23 +8233,15 @@ mod tests {
 
         #[test]
         fn greg_seq_2025_9_10() {
-            let date_info = greg_sequence_to_date(739870_f64).unwrap();
+            let date_info = greg_sequence_to_date(161769_f64).unwrap();
             assert_eq!(2025_f64, date_info.year);
             assert_eq!(9_f64, date_info.month);
             assert_eq!(10_f64, date_info.day);
         }
 
         #[test]
-        fn greg_seq_101_1_1() {
-            let date_info = greg_sequence_to_date(36891_f64).unwrap();
-            assert_eq!(101_f64, date_info.year);
-            assert_eq!(1_f64, date_info.month);
-            assert_eq!(1_f64, date_info.day);
-        }
-
-        #[test]
         fn greg_seq_1972_11_30() {
-            let date_info = greg_sequence_to_date(720593_f64).unwrap();
+            let date_info = greg_sequence_to_date(142492_f64).unwrap();
             assert_eq!(1972_f64, date_info.year);
             assert_eq!(11_f64, date_info.month);
             assert_eq!(30_f64, date_info.day);
@@ -8212,17 +8249,17 @@ mod tests {
 
         #[test]
         fn x_gregy() {
-            assert_eq!(2025_f64, Interpreter::new_and_execute_with_mocked_io("o§gregy 739870".to_string()).unwrap().numeric_value());
+            assert_eq!(2025_f64, Interpreter::new_and_execute_with_mocked_io("o§gregy 161769".to_string()).unwrap().numeric_value());
         }
 
         #[test]
         fn x_gregm() {
-            assert_eq!(9_f64, Interpreter::new_and_execute_with_mocked_io("o§gregm 739870".to_string()).unwrap().numeric_value());
+            assert_eq!(9_f64, Interpreter::new_and_execute_with_mocked_io("o§gregm 153733".to_string()).unwrap().numeric_value());
         }
 
         #[test]
         fn x_gregd() {
-            assert_eq!(10_f64, Interpreter::new_and_execute_with_mocked_io("o§gregd 739870".to_string()).unwrap().numeric_value());
+            assert_eq!(10_f64, Interpreter::new_and_execute_with_mocked_io("o§gregd 133217".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -8240,32 +8277,27 @@ mod tests {
 
         #[test]
         fn x_gregt_no_separator_argument() {
-            assert_eq!("20250401TUE".to_string(), Interpreter::new_and_execute_with_mocked_io("o§gregt 739708".to_string()).unwrap().string_representation());
+            assert_eq!("20250401TUE".to_string(), Interpreter::new_and_execute_with_mocked_io("o§gregt 161607".to_string()).unwrap().string_representation());
         }
 
         #[test]
         fn x_gregt_separator_argument_length_zero() {
-            assert_eq!("20250401TUE".to_string(), Interpreter::new_and_execute_with_mocked_io("O§gregt 739708 §".to_string()).unwrap().string_representation());
+            assert_eq!("20250401TUE".to_string(), Interpreter::new_and_execute_with_mocked_io("O§gregt 161607 §".to_string()).unwrap().string_representation());
         }
 
         #[test]
         fn x_gregt_separator_dash() {
-            assert_eq!("2025-04-01-TUE".to_string(), Interpreter::new_and_execute_with_mocked_io("O§gregt 739708 §-".to_string()).unwrap().string_representation());
+            assert_eq!("2025-04-01-TUE".to_string(), Interpreter::new_and_execute_with_mocked_io("O§gregt 161607 §-".to_string()).unwrap().string_representation());
         }
 
         #[test]
         fn x_gregt_separator_blank() {
-            assert_eq!("2025 04 01 TUE".to_string(), Interpreter::new_and_execute_with_mocked_io("O§gregt 739708 [s ]".to_string()).unwrap().string_representation());
-        }
-
-        #[test]
-        fn x_gregt_year_two_digits() {
-            assert_eq!("0055-04-01-THU".to_string(), Interpreter::new_and_execute_with_mocked_io("O§gregt 20180 §-".to_string()).unwrap().string_representation());
+            assert_eq!("2025 04 01 TUE".to_string(), Interpreter::new_and_execute_with_mocked_io("O§gregt 161607 [s ]".to_string()).unwrap().string_representation());
         }
 
         #[test]
         fn x_gregt_year_five_digits() {
-            assert_eq!("10001-04-01-SUN".to_string(), Interpreter::new_and_execute_with_mocked_io("O§gregt 3652882 §-".to_string()).unwrap().string_representation());
+            assert_eq!("10001-04-01-SUN".to_string(), Interpreter::new_and_execute_with_mocked_io("O§gregt 3074781 §-".to_string()).unwrap().string_representation());
         }
 
         #[test]
@@ -8459,7 +8491,7 @@ mod tests {
 
         #[test]
         fn x_gregn_year_0() {
-            assert_eq!(29_f64, Interpreter::new_and_execute_with_mocked_io("O§gregn 0 2".to_string()).unwrap().numeric_value());
+            assert_eq!(29_f64, Interpreter::new_and_execute_with_mocked_io("O§gregn 1600 2".to_string()).unwrap().numeric_value());
         }
 
         #[test]
@@ -8505,17 +8537,17 @@ mod tests {
         }
     
         #[test]
-        fn x_gregn_year_negative() {
+        fn x_gregn_before_gregorian() {
             assert_eq!(
-                Err(ScriptError::InvalidDatePart('O')),
-                Interpreter::new_and_execute_with_mocked_io("O§gregn ~2 5".to_string())
+                Err(ScriptError::DateBeforeGregorianCalendar('O')),
+                Interpreter::new_and_execute_with_mocked_io("O§gregn 1582 9".to_string())
             );
         }
     
         #[test]
         fn x_gregn_month_0() {
             assert_eq!(
-                Err(ScriptError::InvalidDatePart('O')),
+                Err(ScriptError::InvalidMonth('O')),
                 Interpreter::new_and_execute_with_mocked_io("O§gregn 1980 0".to_string())
             );
         }
@@ -8523,7 +8555,7 @@ mod tests {
         #[test]
         fn x_gregn_month_13() {
             assert_eq!(
-                Err(ScriptError::InvalidDatePart('O')),
+                Err(ScriptError::InvalidMonth('O')),
                 Interpreter::new_and_execute_with_mocked_io("O§gregn 1980 13".to_string())
             );
         }
@@ -9083,7 +9115,7 @@ mod tests {
         #[test]
         fn x_timed() {
             assert_eq!(
-                719529_f64,
+                141428_f64,
                 Interpreter::new_and_execute_with_mocked_io("o§timed 18.3289".to_string()).unwrap().numeric_value());
         }
     
@@ -9091,14 +9123,14 @@ mod tests {
         fn x_timed_from_ymd_unix_epoch_first() {
             assert_eq!(
                 1_f64,
-                Interpreter::new_and_execute_with_mocked_io("= o§timed 18.3289 o,§greg 1970 1 1".to_string()).unwrap().numeric_value());
+                Interpreter::new_and_execute_with_mocked_io("= o§timed 1000.05 o,§greg 1970 1 1".to_string()).unwrap().numeric_value());
         }
     
         #[test]
         fn x_timed_from_ymd_2025() {
             assert_eq!(
                 1_f64,
-                Interpreter::new_and_execute_with_mocked_io("= o§timed 1755373786 o,§greg 2025 8 16".to_string()).unwrap().numeric_value());
+                Interpreter::new_and_execute_with_mocked_io("= o§timed 1755894414.68 o,§greg 2025 8 22".to_string()).unwrap().numeric_value());
         }
     
         #[test]

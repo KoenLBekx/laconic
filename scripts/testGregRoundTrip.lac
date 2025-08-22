@@ -1,5 +1,5 @@
 w(
-	[sTests every day sequence number in the range 1 ... 740000]¶
+	[sTests every day sequence number in the range 1 ... 161881]¶
 	[scalculating the corresponding year, month and day]¶
 	[sand checking if the sequence number for these numbers]¶
 	[sis the original one again.]¶
@@ -8,7 +8,7 @@ w(
 
 Z§quiet 1
 $§first 1
-$§last  740000 [c 2026-01-18]
+$§last  161881 [c 2025-12-31]
 Z§loops +v§last 1
 $§testOk 1 
 
