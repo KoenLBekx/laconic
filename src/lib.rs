@@ -5,7 +5,6 @@
 // TODO: resolve TODO's in code.
 // TODO: Expression.get_string_representation: put closing parenthesis after value of operator
 // having the opening one, not after its last operand's operator.
-// TODO: document the time- and date-related operators in README.md.
 // TODO: document all public entities (done)
 // TODO: the characters for the operators should be hard-coded only once: in constants.
 //      (done; not done follows below:)

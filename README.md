@@ -119,7 +119,7 @@ See below for a detailed explanation of each operator.
 As all operators consist of only one character, there's nearly never a need to separate an operator from preceding or following elements using a whitespace,
 but it's permitted for readability.
 
-> *The only instance where an operator needs to be separated by whitespace from a previous element, is when that previous element is a simple string - otherwise, the operator is interpreted as a continuation of that simple string.*
+> *The only instance where an operator needs to be separated by whitespace from a previous element, is when that previous element is a simple string - without preceding whitespace, the operator would be interpreted as a continuation of that simple string.*
 
 Every operator has a default number of operands it expects. E.g., the `+` operator expects two operands :
 
@@ -185,6 +185,49 @@ Note: whenever used below, the term "operation" designates an operator with all 
     └─> 207
 </pre>
 
+## Named operations
+
+The number of viable characters to represent operators is limited as, for many people, non-Latin characters are difficult to enter using a keyboard. 
+
+So when Laconic wants to express every operator using only one character, it's a bit short of characters.
+
+That's why there are also operators that are designated by an operation name; these are called "named operations".
+
+The o and O operators take that name as their first operand in order to perform the operation of a named operation.
+
+The difference between both operators is that<br/>
+- the lower case `o` operator takes 2 operands:<br/>
+> - the operation name<br/>
+> - and 1 operation operand;<br/>
+- the upper case `O` operator takes 3 operands:<br/>
+> - the operation name<br/>
+> - and 2 operation operands.
+
+Furthermore, adding the variant operator (`,`) to both the O and o operands increases their expected number of operands by (2 * number_of_variants), so
+
+- the `o,` operator takes 4 operands;<br/>
+- the `O,` operator takes 5 operands;<br/>
+- the `o,,` operator takes 6 operands;<br/>
+- the `O,,` operator takes 7 operands;<br/>
+- etc.
+
+Both operators, however, can have their number of operands overridden by parentheses,
+in which case they can be used interchangeably and following variant operators don't affect the number of expected operands (they can still affect the behaviour, though).
+
+The operation name, which is the first operand of the `o` and `O` operators, can either be a number or a string.
+For readability, however, strings are chosen for the implemented operators.
+
+As stated, this string is the first operand and can be written in any valid way a first-operand-string can follow an operator:<br/>
+`o §name`<br/>
+`o§name`<br/>
+`o [sname]`<br/>
+or even on a new line:<br/>
+<pre>
+o
+  §name
+</pre>
+
+See the *Named Operations List* section below for the implemented named operations.
 
 ## Value types
 
@@ -209,7 +252,7 @@ The type of any element or any operator's return value can be tested using the `
 > `t€` yields 0: empty<br/>
 > `t/9 3` yields 1: number<br/>
 > `t[sI am a string]` yields 2: string<br/>
-> `Z§ign 1 t/33 0` yields 90: error (because of division by 0; the `Z§ign 1` operation is needed to prevent the error halting execution immediately)
+> `Z§ign 1 t/33 0` yields 90: error (because of division by 0; without the `Z§ign 1` operation execution would have stopped immediately after the division-by-zero and the `t` operation would never have been executed completely.)
 
 ## Error handling
 
@@ -369,6 +412,47 @@ String brackets support nesting, so<br/>
 > `+ §!!! [s [s...]]`<br/>
 > yields<br/>
 > "!!! [s...]"
+
+A newline can be expressed by one of both newline constant operators:
+- `¶`
+- `c§n`
+
+E.g.:<br/>
+> `Z§quiet 1 $§sum 500 w+,(§Total: c§n v§sum c§n)`<br/>
+> will write "Total:" and "500" on two consecutive lines.
+
+## Date and time.
+
+### Date
+
+Laconic offers several date-related named operations, the names of which begin with `greg`, as Laconic only handles dates in the Gregorian Calendar that started at Friday, October 15, 1582.
+
+The `o,§greg year month day` named operation calculates a sequence number for any given date in the Gregorian era:<br/>
+> `o,§greg 1582 10 15` yields 1<br/>
+> `o,§greg 1582 10 18` yields 4<br/>
+> `o,§greg 1970 1 1` yields 141418
+
+The `o,§dow year month day` named operation yields a number from 0 to 6 for Saturday to Friday:<br/>
+> `o,§dow 1582 10 15` yields 6: Friday<br/>
+> `o,§dow 1582 10 18` yields 2: Monday
+
+*(This numbering is consistent with Greek tradition: Monday is δευτέρα, the "second", Tuesday is τρίτη, the "third", etc.)*
+
+The `o§dow sequenceNumber` named operation also yields a weekday number from 0 to 6:<br/>
+> `o§dow 1` yields 6: Friday<br/>
+> `o§dow 4` yields 2: Monday
+
+For other date-related operations, see the `o§greg...` operations in the *Named operations list* section.
+
+### Time
+
+Laconic handles time as a number of seconds since the start of the Unix Epoch at January 1, 1970, 00h00m00s UTC.
+
+Laconic doesn't know about time zones: all hour, minute or second values derived from this number of seconds express Universal Time.
+
+The `c§utc` operation returns the number of seconds elapsed since the start of the Unix Epoch, as reported by your system.
+
+Several other operations convert that number of seconds to a date, or hour, minute and seconds-in-minute values - see the `o§time...` operations in the *Named operations list* section.
 
 ## Comments
 
@@ -1008,6 +1092,7 @@ This precision margin is 0.000_000_01 by default, but can be set and changed aga
 |c§n|newline<br/>character<br/>=<br/>¶|0|ignored|"\n", U+000A|+(`$Decem- c§n §ber`)|"Decem-<br/>ber"|
 |c§empty|empty<br/>value<br/>=<br/>€|0|ignored|empty value|||
 |c§rtn|the running<br/>routine's<br/>name|0|ignored|"main" if not<br/>in routine;<br/>else the running<br/>routine's<br/>name|`R(`<br/>` §percent`<br/>` $0k`<br/>` $1k`<br/>` ?`<br/>`  !v1`<br/>`  U`<br/>`   +`<br/>`    c§rtn`<br/>`    [s: zero div.]`<br/>`  /*v0 100 v1`<br/>`)`|The "percent"<br/>routine<br/>includes<br/>its own name<br/>in an error<br/>message.|
+|c§utc|UTC<br/>system<br/>time|0|ignored|Number<br/>of seconds<br/>elapsed<br/>since<br/>1970-1-1<br/>00:00:00|`c§utc`|1755978527<br/>   .526352|
 
 ## Variable-related operators
 
@@ -1036,44 +1121,7 @@ This precision margin is 0.000_000_01 by default, but can be set and changed aga
 |Z§loops|maximum<br/>number<br/>of loop<br/>iterations<br/>(Default=<br/>10,000)|1|ignored|setting<br/>value<br/>(2nd operand)|`Z§loops 1_000_000`||
 |Z§ign|if not 0 ignore<br/>errors,<br/>else stop<br/>script<br/>execution<br/>on errors|1|ignored|setting<br/>value<br/>(2nd operand)|`Z§ign 1`||
 
-## Named operations
-
-The number of characters to represent operators is limited.
-Moreover, for many people, non-Latin characters are difficult to enter using a keyboard. 
-
-So when Laconic wants to express every operator using only one character, it's a bit short of characters.
-
-That's why there are also operators that are designated by an operation name; these are called "named operations".
-The o and O operators take that name as their first operand in order to perform the operation of a named operation.
-
-The difference between both operators is that<br/>
-- the lower case `o` operator takes 2 operands:<br/>
-> - the operation name<br/>
-> - and 1 operation operand;<br/>
-- the upper case `O` operator takes 3 operands:<br/>
-> - the operation name<br/>
-> - and 2 operation operands.
-
-Furthermore, adding the variant operator (`,`) to both the O and o operands increases their expected number of operands by (2 * number_of_variants), so
-
-- the `o,` operator takes 4 operands;<br/>
-- the `O,` operator takes 5 operands;<br/>
-- the `o,,` operator takes 6 operands;<br/>
-- the `O,,` operator takes 7 operands;<br/>
-- etc.
-
-Both operators, however, can have their number of operands overridden by parentheses,
-in which case they can be used interchangeably and following variant operators don't affect the number of expected operands (they can still affect the behaviour, though).
-
-The operation name, which is the first operand of the `o` and `O` operators, can either be a number or a string.
-For readability, however, strings are chosen for the implemented operators.
-
-As stated, this string is the first operand and can be written either as<br/>
-`o §name`<br/>
-`o§name`<br/>
-`o [sname]`<br/>
-or<br/>
-`o[sname]`
+## Named operations list
 
 The below named operations have been implemented:
 
@@ -1094,12 +1142,18 @@ The below named operations have been implemented:
 |o,§split|split string|4;<br/>see<br/>below|ignored|number of<br/>segments|see below||
 |o,§fmt|set number<br/>format|2 or 4;<br/>see<br/>below|ignored|empty|see below||
 |o§leap|leap<br/>year|2|ignored|1 if number<br/>in 2st operand<br/>is a leap year,<br/>else 0|`o§leap 2004`<br/>`o§leap 2000`<br/>`o§leap 1900`<br/>`o§leap 2025`|1<br/>1<br/>0<br/>0|
-|o,§dow|day of<br/>week|4:<br/>§dow,<br/>year,<br/>month<br/>and day.|ignored|0 for saturday,<br/>1-6 for<br/>following<br/>days|`o,§dow 2025 1 1`<br/>`o(§dow 2025 1 4)`|4 (wed.)<br/>0 (sat.)|
-|o,§greg|Gregorian<br/>day's<br/>sequence<br/>number|4:<br/>§greg,<br/>year,<br/>month<br/>and day.|ignored|1 for january 1,<br/>year 0000,<br/>etc.|`o,§greg 2025 7 1`|739799|
-|o§gregy|year from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregy<br/>and seq.nr.|ignored|year|`o§gregy 739799`|2025|
-|o§gregm|month from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregm<br/>and seq.nr.|ignored|month (1-12)|`o§gregm 739799`|7|
-|o§gregd|day from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregd<br/>and seq.nr.|ignored|day (1-31)|`o§gregd 739799`|1|
-|o§gregt|date text<br/>from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregt<br/>and seq.nr.|A 3rd.<br/>operand<br/>is used as<br/>separator|A YYYYsMMsDD<br/>string where<br/>s is a<br/>separator,<br/>if any|`o§gregt 739799`<br/>`O§gregt 739799 §-`<br/>&nbsp;|20250701TUE<br/>2025-07-01-TUE|
+|o,§dow|day of<br/>week|4 or 2:<br/>§dow,<br/>year,<br/>month<br/>and day<br/>--or--<br/>§dow,<br/>sequence<br/>number.|ignored|0 for<br/>saturday,<br/>1-6 for<br/>following<br/>days|`o,§dow 2025 1 1`<br/>`o(§dow 2025 1 4)`<br/>`o§dow 161517`|4 (wed.)<br/>0 (sat.)<br/>4 (wed.)|
+|o,§greg|Gregorian<br/>day's<br/>sequence<br/>number|4:<br/>§greg,<br/>year,<br/>month<br/>and day.|ignored|1 for<br/>October<br/>15, 1582,<br/>etc.|`o,§greg 2025 7 1`|161698|
+|o§gregy|year from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregy<br/>and seq.nr.|ignored|year|`o§gregy 161698`|2025|
+|o§gregm|month from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregm<br/>and seq.nr.|ignored|month (1-12)|`o§gregm 161698`|7|
+|o§gregd|day from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregd<br/>and seq.nr.|ignored|day (1-31)|`o§gregd 161698`|1|
+|o§gregt|date text<br/>from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregt<br/>and seq.nr.|A 3rd.<br/>operand<br/>is used as<br/>separator|A YYYYsMMsDD<br/>string where<br/>s is a<br/>separator,<br/>if any|`o§gregt 161698`<br/>`O§gregt 161698 §-`<br/>&nbsp;|20250701TUE<br/>2025-07-01-TUE|
+|o§timed|time<br/>to<br/>Gregorian<br/>day<br/>sequence<br/>number|2:<br/>§timed<br/>and UTC<br/>seconds|ignored|date<br/>sequence<br/>number<br/>like the<br/>ones<br/>returned<br/>by `o,greg`|`o§timed c§utc`|161751|
+|o§timeh|time<br/>to<br/>hours in<br/>day|2:<br/>§timeh<br/>and UTC<br/>seconds|ignored|The hour<br/>(0-23)<br/>in<br/>Universal<br/>Time|`o§timeh c§utc`|20|
+|o§timem|time<br/>to<br/>minutes in<br/>hour|2:<br/>§timem<br/>and UTC<br/>seconds|ignored|The minutes<br/>(0-59)<br/>in<br/>Universal<br/>Time|`o§timem c§utc`|9|
+|o§times|time<br/>to<br/>seconds in<br/>minute|2:<br/>§times<br/>and UTC<br/>seconds|ignored|The seconds<br/>(0-59)<br/>in<br/>Universal<br/>Time|`o§times c§utc`|26|
+|o§timef|time<br/>to<br/>seconds<br/>fraction in<br/>second|2:<br/>§timef<br/>and UTC<br/>seconds|ignored|The fraction<br/>of the second<br/>(0.nnn...)<br/>in<br/>Universal<br/>Time|`o§timef c§utc`|0.682822|
+|o§timet|time<br/>to<br/>text|2:<br/>§timet<br/>and UTC<br/>seconds|A third<br/>operand<br/>is used<br/>as a<br/>separator|A "time-<br/>stamp"<br/>text<br/>in<br/>Universal<br/>Time|`o§timet c§utc`<br/>`O§timet c§utc §:`<br/><br/>`o§fmt 2`<br/>`  O§timet`<br/>`  c§utc [s ]`|201927.139002UTC<br/>20:20:15.635714:UTC<br/><br/><br/><br/>20 22 59.23 UTC|
 
 &nbsp;
 
