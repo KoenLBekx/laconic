@@ -3,8 +3,6 @@
 // The braces after the first comment slashes make Vim fold these comments also.
 //{ TODOs
 // TODO: resolve TODO's in code.
-// TODO: Expression.get_string_representation: put closing parenthesis after value of operator
-//      having the opening one, not after its last operand's operator.
 // TODO: document all public entities (done)
 // TODO: the characters for the operators should be hard-coded only once: in constants.
 //      (done; not done follows below:)
@@ -23,8 +21,6 @@ use std::io::stdout;
 use string_io_and_mock::{FileTextHandler, MockTextHandler, TextIOHandler};
 //}
 
-// Static lifetime: justified, because the functions referenced
-// are compiled into the application and live as long as it runs.
 // The first parameter should pass a mutable reference to the character that encoded the expression,
 // The second one to an Expression's value property,
 // the third one to a Expression's operands property (operands are Expression objects),
@@ -765,11 +761,6 @@ impl Expression {
             exp_rep.push(CH_OVR_START);
         }
 
-        if self.is_last_of_override {
-            exp_rep.push(CH_OVR_END);
-
-        }
-
         let mut ops = String::new();
         for op in &self.operands {
             ops.push('\n');
@@ -783,6 +774,13 @@ impl Expression {
         // Vim folding fix brace: {
         ops = ops.replace('\n', "\n\u{0_2502}\t");
         exp_rep.push_str(ops.as_str());
+
+        if self.has_overridden_nr_of_ops {
+            // Vim folding fix brace: {
+            exp_rep.push_str("\n\u{0_2502}");
+
+            exp_rep.push(CH_OVR_END);
+        }
 
         if !("0#".contains(self.opr_mark)) {
             // Vim folding fix braces: {{
@@ -1511,20 +1509,12 @@ impl Interpreter {
 
     fn print_state(&mut self, tree: &Expression, before: bool) {
         for (name, routine) in self.shuttle.routines.iter() {
-            // println!("{}", routine.get_representation(name));
-            let _ = self.shuttle.writer.write(format!("\n{}", routine.get_representation(name)).as_bytes());
+            let _ = self.shuttle.writer.write(format!("{}\n", routine.get_representation(name)).as_bytes());
         }
 
-        /*
-        println!(
-            "\nTree {} operate() :\n{}",
-            if before {"before"} else {"after"},
-            tree.get_representation()
-        );
-        */
         let _ = self.shuttle.writer.write(
             format!(
-                "\nTree {} operate() :\n{}",
+                "Tree {} execution :\n{}\n",
                 if before {"before"} else {"after"},
                 tree.get_representation()
             ).as_bytes()

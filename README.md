@@ -141,48 +141,49 @@ Note: whenever used below, the term "operation" designates an operator with all 
 > will display the below tree:
 
 <pre>
-    Tree after operate() :
-    ;
-    │	$
-    │	│	0
-    │	│	200
-    │	└─> 200
-    │	?,(
-    │	│	+
-    │	│	│	v
-    │	│	│	│	0
-    │	│	│	└─> 200
-    │	│	│	7
-    │	│	└─> 207
-    │	│	;
-    │	│	│	w
-    │	│	│	│	+
-    │	│	│	│	│	+
-    │	│	│	│	│	│	Problem:
-    │	│	│	│	│	│	V
-    │	│	│	│	│	│	└─> no_value
-    │	│	│	│	│	└─> no_value
-    │	│	│	│	│	¶
-    │	│	│	│	│	└─> no_value
-    │	│	│	│	└─> no_value
-    │	│	│	└─> no_value
-    │	│	│	0
-    │	│	└─> no_value
-    │	│	;)
-    │	│	│	w
-    │	│	│	│	+
-    │	│	│	│	│	Addition succeeded
-    │	│	│	│	│	¶
-    │	│	│	│	│	└─>
-    │	│	│	│	│
-    │	│	│	│	└─> Addition succeeded
-    │	│	│	│
-    │	│	│	└─> 19
-    │	│	│	V
-    │	│	│	└─> 207
-    │	│	└─> 207
-    │	└─> 207
-    └─> 207
+	Tree after execution :
+	;
+	│	$
+	│	│	0
+	│	│	200
+	│	└─> 200
+	│	?,(
+	│	│	+
+	│	│	│	v
+	│	│	│	│	0
+	│	│	│	└─> 200
+	│	│	│	7
+	│	│	└─> 207
+	│	│	;
+	│	│	│	w
+	│	│	│	│	+
+	│	│	│	│	│	+
+	│	│	│	│	│	│	Problem:
+	│	│	│	│	│	│	V
+	│	│	│	│	│	│	└─> (no_value)
+	│	│	│	│	│	└─> (no_value)
+	│	│	│	│	│	¶
+	│	│	│	│	│	└─> (no_value)
+	│	│	│	│	└─> (no_value)
+	│	│	│	└─> (no_value)
+	│	│	│	0
+	│	│	└─> (no_value)
+	│	│	;
+	│	│	│	w
+	│	│	│	│	+
+	│	│	│	│	│	Addition succeeded
+	│	│	│	│	│	¶
+	│	│	│	│	│	└─>
+	│	│	│	│	│
+	│	│	│	│	└─> Addition succeeded
+	│	│	│	│
+	│	│	│	└─> 19
+	│	│	│	V
+	│	│	│	└─> 207
+	│	│	└─> 207
+	│	│)
+	│	└─> 207
+	└─> 207
 </pre>
 
 ## Named operations
@@ -608,7 +609,7 @@ However, technically, the `$` (assignment) operator entails less processing, as 
 <pre>
 $ laconic -aq '$ #myVar 8'
 
-Tree after operate() :
+Tree after execution :
 $
 │	myVar
 │	8
@@ -620,7 +621,7 @@ Use of the `;:` way involves two instead of one operators, so more processing:
 <pre>
 $ laconic -aq '; :#myVar 8'
 
-Tree after operate() :
+Tree after execution :
 ;
 │	:
 │	│	myVar
