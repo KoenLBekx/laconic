@@ -1,26 +1,26 @@
-Z§quiet 1
+Z#quiet 1
 w[sUnicode page start in hex: ]
 b,16
 b16
-$§start r
+$#start r
 F
 	0
 	[nFF]
 	10
-	§line
+	#line
 	;
 		F
 			0
 			[nF]
 			1
-			§ix
+			#ix
 			;(
-				$§unicp +(v§start v§line v§ix)
+				$#unicp +(v#start v#line v#ix)
 				w
 					+(
-						q,v§unicp
+						q,v#unicp
 						[s-]
-						o§uni v§unicp
+						o#uni v#unicp
 						[s   ]
 					)
 			)

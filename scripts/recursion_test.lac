@@ -6,26 +6,26 @@
 	- maximum
 ]
 R(
-	§maxmul
+	#maxmul
 
-	$§factor k
-	$§start k
-	$§max k
+	$#factor k
+	$#start k
+	$#max k
 
 	?
-		>v§start v§max
+		>v#start v#max
 		U[sStart value is greater than maximum value]
 		€
 
-	$§added + v§start v§factor
+	$#added + v#start v#factor
 
 	?
-		!< v§added v§max
-		v§start
+		!< v#added v#max
+		v#start
 		X,(
-			§maxmul
-			v§factor
-			v§added
-			v§max
+			#maxmul
+			v#factor
+			v#added
+			v#max
 		)
 )

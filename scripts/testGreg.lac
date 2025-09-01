@@ -12,108 +12,108 @@ w(
 )
 
 R
-	§daysInMonth
+	#daysInMonth
 	;;
-		$§leap k
-		$§m k
-		?=v§m 2 
-			?v§leap 29 28
-			?<v§m 8
-				?=%v§m 2 1
+		$#leap k
+		$#m k
+		?=v#m 2 
+			?v#leap 29 28
+			?<v#m 8
+				?=%v#m 2 1
 					31
 					30
-				?=%v§m 2 1
+				?=%v#m 2 1
 					30
 					31
 
-Z§quiet 1
-o,§fmt 0 §. §
-$§y 1582
-$§prev 0
-$§endYear 2026
-Z§loops + o,§greg v§endYear 12 31
+Z#quiet 1
+o,#fmt 0 #. #
+$#y 1582
+$#prev 0
+$#endYear 2026
+Z#loops + o,#greg v#endYear 12 31
 
 W
 	<
-		v§y
-		v§endYear
+		v#y
+		v#endYear
 	;(
 		$
-			§m
+			#m
 			?
-				= v§y 1582
+				= v#y 1582
 				10
 				1
 
 		W
 			<
-				v§m
+				v#m
 				13
 			;(
-				$§d
+				$#d
 					?
-						& = v§y 1582 = v§m 10
+						& = v#y 1582 = v#m 10
 						15
 						1
 				$
-					§days
+					#days
 					X(
-						§daysInMonth
-						v§m
-						o§leap v§y
+						#daysInMonth
+						v#m
+						o#leap v#y
 					)
 
 				W
 					!>
-						v§d
-						v§days
+						v#d
+						v#days
 					;(
-						$§seq o,§greg v§y v§m v§d
-						+:§prev 1
+						$#seq o,#greg v#y v#m v#d
+						+:#prev 1
 
 						[c
 							w+(
 								[sseq: ]
-								v§seq
+								v#seq
 								[s prev: ]
-								v§prev
+								v#prev
 							)
 						]
 
 						?
 							!=
-								v§seq
-								v§prev
+								v#seq
+								v#prev
 							;(
 								w+(
 									[sWrong sequence number for (YMD): ]
-									v§y
+									v#y
 									[s ]
-									v§m
+									v#m
 									[s ]
-									v§d
+									v#d
 								)
 
-								$§y v§endYear
-								$§m 13
-								$§d 32
+								$#y v#endYear
+								$#m 13
+								$#d 32
 							)
 							0
-						+:§d 1
+						+:#d 1
 					)
-				+:§m 1
+				+:#m 1
 			)
-		+:§y 1
+		+:#y 1
 	)
 
 w+(
 	¶ [sFinal output:] ¶
-	§
-	v§y
+	#
+	v#y
 	[s ]
-	v§m
+	v#m
 	[s ]
-	v§d
-	o§uni 10
+	v#d
+	o#uni 10
 )
 

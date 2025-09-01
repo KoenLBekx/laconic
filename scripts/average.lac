@@ -5,21 +5,21 @@
    Non-numeric values will be ignored.
 ]
 R(
-	§average
-	$§count k,
-	$§total 0
+	#average
+	$#count k,
+	$#total 0
 	W
 		k,
 		;
-			$§next k
+			$#next k
 			?
-				=1 tv§next
-				+:§total v§next 
-				-:§count 1
+				=1 tv#next
+				+:#total v#next 
+				-:#count 1
 	?
-		=0 v§count
+		=0 v#count
 		0
-		/v§total v§count
+		/v#total v#count
 )
 
 [c ---------- Unit tests]
@@ -31,88 +31,88 @@ R(
 	 3. actual value.
 ]
 R(
-	§assert_eq
-	$§actual k
-	$§expected k
-	$§testName k
+	#assert_eq
+	$#actual k
+	$#expected k
+	$#testName k
 
 	?
-		=v§expected v§actual
+		=v#expected v#actual
 		;
-			w+([sSuccess: ] v§testName ¶)
+			w+([sSuccess: ] v#testName ¶)
 			1
 		;
-			w+([sFailed: ] v§testName [s: Expected: ] v§expected [s - Actual: ] v§actual ¶)
+			w+([sFailed: ] v#testName [s: Expected: ] v#expected [s - Actual: ] v#actual ¶)
 			0
 )
 
 R(
-	§average_utest_only_numbers
+	#average_utest_only_numbers
 	Wk,k
 	K(1 2 3 4)
-	X(§assert_eq c§rtn 2.5 X§average)
+	X(#assert_eq c#rtn 2.5 X#average)
 )
 
 R(
-	§average_utest_only_zeroes
+	#average_utest_only_zeroes
 	Wk,k
 	K(0 0 0 0 0)
-	X(§assert_eq c§rtn 0 X§average)
+	X(#assert_eq c#rtn 0 X#average)
 )
 
 R(
-	§average_utest_mixed
+	#average_utest_mixed
 	Wk,k
-	K(1 2 §A 4)
-	X(§assert_eq c§rtn /7 3 X§average)
+	K(1 2 #A 4)
+	X(#assert_eq c#rtn /7 3 X#average)
 )
 
 R(
-	§average_utest_no_numbers
+	#average_utest_no_numbers
 	Wk,k
-	K(§A §B)
-	X(§assert_eq c§rtn 0 X§average)
+	K(#A #B)
+	X(#assert_eq c#rtn 0 X#average)
 )
 
 R(
-	§average_utest_empty_stack
+	#average_utest_empty_stack
 	Wk,k
-	X(§assert_eq c§rtn 0 X§average)
+	X(#assert_eq c#rtn 0 X#average)
 )
 
 R(
-	§average_utest_empty_value
+	#average_utest_empty_value
 	Wk,k
-	Z§ign 1
+	Z#ign 1
 	K(19 5 3 € ~3)
-	Z§ign 0
-	X(§assert_eq c§rtn 6 X§average)
+	Z#ign 0
+	X(#assert_eq c#rtn 6 X#average)
 )
 
 R(
-	§average_utest_error_value
+	#average_utest_error_value
 	Wk,k
-	Z§ign 1
+	Z#ign 1
 	K(19 5 3 U[sError on purpose] ~3)
-	Z§ign 0
-	X(§assert_eq c§rtn 6 X§average)
+	Z#ign 0
+	X(#assert_eq c#rtn 6 X#average)
 )
 
 [c Execute all unit tests]
 R(
-	§average_unit_tests
-	$§nrTests 7
-	$§succeeded 0
-	+:§succeeded X§average_utest_only_numbers
-	+:§succeeded X§average_utest_only_zeroes
-	+:§succeeded X§average_utest_mixed
-	+:§succeeded X§average_utest_no_numbers
-	+:§succeeded X§average_utest_empty_stack
-	+:§succeeded X§average_utest_empty_value
-	+:§succeeded X§average_utest_error_value
+	#average_unit_tests
+	$#nrTests 7
+	$#succeeded 0
+	+:#succeeded X#average_utest_only_numbers
+	+:#succeeded X#average_utest_only_zeroes
+	+:#succeeded X#average_utest_mixed
+	+:#succeeded X#average_utest_no_numbers
+	+:#succeeded X#average_utest_empty_stack
+	+:#succeeded X#average_utest_empty_value
+	+:#succeeded X#average_utest_error_value
 
-	w+,([sSucceeded tests: ] v§succeeded ¶)
-	w+,([sFailed tests: ] -v§nrTests v§succeeded ¶)
-	§
+	w+,([sSucceeded tests: ] v#succeeded ¶)
+	w+,([sFailed tests: ] -v#nrTests v#succeeded ¶)
+	#
 )
 

@@ -1,30 +1,30 @@
-[c Prints primes from 2 up to the number in v§upper, which is asked from user if not predefined.]
+[c Prints primes from 2 up to the number in v#upper, which is asked from user if not predefined.]
 
 W
 	(
-		!=1 tv§upper
+		!=1 tv#upper
 		w+¶[sPrint primes until which number? > ]
-		$§upper r
+		$#upper r
 	)
 
-Z§loops v§upper
+Z#loops v#upper
 
-Er, §primeRoutine.lac
+Er, #primeRoutine.lac
 
-$§ix 0
+$#ix 0
 F
 	(
 		2
-		v§upper
+		v#upper
 		1
-		§cand
+		#cand
 		?
-			=1 X(§isPrime v§cand)
+			=1 X(#isPrime v#cand)
 			;
 				(
-					+:§ix 1
-					w+,(¶ v§ix §--- v§cand)
+					+:#ix 1
+					w+,(¶ v#ix #--- v#cand)
 				)
 			€
 	)
-§
+#

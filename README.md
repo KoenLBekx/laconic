@@ -72,7 +72,7 @@ Many operators, however, simply ignore excess operands: `~(4 25)` evaluates to -
 
 Laconic handles all numbers as `f64`: 64-bit float values. Mind that this might entail precision limitations. 
 
-These precision limitations can be mitigated by setting an *orb* or precision allowance of comparison operators using a `Z§prec` expression in the script - see the operator's description below.
+These precision limitations can be mitigated by setting an *orb* or precision allowance of comparison operators using a `Z#prec` expression in the script - see the operator's description below.
 
 ## Basic elements of the Laconic language
 
@@ -218,13 +218,13 @@ The operation name, which is the first operand of the `o` and `O` operators, can
 For readability, however, strings are chosen for the implemented operators.
 
 As stated, this string is the first operand and can be written in any valid way a first-operand-string can follow an operator:<br/>
-`o §name`<br/>
-`o§name`<br/>
+`o #name`<br/>
+`o#name`<br/>
 `o [sname]`<br/>
 or even on a new line:<br/>
 <pre>
 o
-  §name
+  #name
 </pre>
 
 See the *Named Operations List* section below for the implemented named operations.
@@ -252,7 +252,7 @@ The type of any element or any operator's return value can be tested using the `
 > `t€` yields 0: empty<br/>
 > `t/9 3` yields 1: number<br/>
 > `t[sI am a string]` yields 2: string<br/>
-> `Z§ign 1 t/33 0` yields 90: error (because of division by 0; without the `Z§ign 1` operation execution would have stopped immediately after the division-by-zero and the `t` operation would never have been executed completely.)
+> `Z#ign 1 t/33 0` yields 90: error (because of division by 0; without the `Z#ign 1` operation execution would have stopped immediately after the division-by-zero and the `t` operation would never have been executed completely.)
 
 ## Error handling
 
@@ -266,21 +266,21 @@ Halting is the default way of error handling.
 
 In scripts:
 
-> The error handling mode can be set (and changed again) in scripts using the `Z§ign` or `?,` operators:
+> The error handling mode can be set (and changed again) in scripts using the `Z#ign` or `?,` operators:
 
->> `Z§ign 1` has Laconic ignore any errors until a `Z§ign 0` operation is met:
+>> `Z#ign 1` has Laconic ignore any errors until a `Z#ign 0` operation is met:
 
 >>> `ta€` *type of absolute value of empty* should return value 90, because *absolute value of empty* returns an error. However, the `t` operator is never executed fully, as the `a` absolute value operator halts the script execution on finding an empty operand.
 
->>> `Z§ign 1 ta€` does yield 90: after `Z§ign 1` has Laconic ignore errors, the `a€` operation returns an error and the `t` type operator can evaluate it to find it has type 90: error.
+>>> `Z#ign 1 ta€` does yield 90: after `Z#ign 1` has Laconic ignore errors, the `a€` operation returns an error and the `t` type operator can evaluate it to find it has type 90: error.
 
 >> The `?,` operator takes two operands and tries and evaluates the first one. If this first operand has a non-error value, `?,` returns that one. Otherwise, the value of the second operand is returned.
 
->>> `?,a€ §Oops!` yields the string "Oops!", as the `?,` operator tries to evaluate its first operand (`a€`: *absolute value of empty*), gets an error value, and therefore returns the value of its second operand: the string element `§Oops!`.
+>>> `?,a€ #Oops!` yields the string "Oops!", as the `?,` operator tries to evaluate its first operand (`a€`: *absolute value of empty*), gets an error value, and therefore returns the value of its second operand: the string element `#Oops!`.
 
 >> By the way, if the `?,` operator has a third operand, this operand's value is returned on successful execution of the first one:
 
->>> `?,(a72 §Oops! §Ok)` yields the string "Ok".
+>>> `?,(a72 #Oops! #Ok)` yields the string "Ok".
 
 Using the `laconic` executable, one can add the `-I` parameter to a command to have the Laconic interpreter ignore errors instead of halting immediately. E.g.:
 
@@ -376,27 +376,25 @@ e.g.:<br/>
 Strings are either<br/>
 - enclosed between `[s` and `]` : string bracket contents
 - simple strings: enclosed between any of<br/>
-> `§` and whitespace<br/>
-> `§` and `[`<br/>
-> `§` and `(`<br/>
-> `§` and `)`
+> `#` and whitespace<br/>
+> `#` and `[`<br/>
+> `#` and `(`<br/>
+> `#` and `)`
 
-***Note** that the `§` character doesn't terminate a simple string, so it can be part of one.*
-
-*Please don't confuse the simple string prefix `§` with the `$` assignment operator.*
+***Note** that the `#` character doesn't terminate a simple string, so it can be part of one.*
 
 A blank can be expressed by<br/>
 `[s ]`
 
 An empty string can be expressed by
 - `[s]`
-- `§` on itself: followed by whitespace, `[`, `(`, `)` or at the end of a script.
+- `#` on itself: followed by whitespace, `[`, `(`, `)` or at the end of a script.
 
 Eg.:<br/>
 
 > `[sKunji Namparshespa]` yields the string "Kunji Namparshespa".<br/>
-> `§Petrov` yields the string "Petrov".<br/>
-> `§易經` yields the string "易經", just like `b16 o(§uni 6613 [n7D93])`.
+> `#Petrov` yields the string "Petrov".<br/>
+> `#易經` yields the string "易經", just like `b16 o(#uni 6613 [n7D93])`.
 
 If any of their operands is a string, some numerical operators will perform string-related operations :
 
@@ -409,16 +407,16 @@ Other numerical operators having string operands, or other combinations of numbe
 might throw errors. Please refer to the individual operators' descriptions below.
 
 String brackets support nesting, so<br/>
-> `+ §!!! [s [s...]]`<br/>
+> `+ #!!! [s [s...]]`<br/>
 > yields<br/>
 > "!!! [s...]"
 
 A newline can be expressed by one of both newline constant operators:
 - `¶`
-- `c§n`
+- `c#n`
 
 E.g.:<br/>
-> `Z§quiet 1 $§sum 500 w+,(§Total: c§n v§sum c§n)`<br/>
+> `Z#quiet 1 $#sum 500 w+,(#Total: c#n v#sum c#n)`<br/>
 > will write "Total:" and "500" on two consecutive lines.
 
 ## Date and time.
@@ -427,22 +425,22 @@ E.g.:<br/>
 
 Laconic offers several date-related named operations, the names of which begin with `greg`, as Laconic only handles dates in the Gregorian Calendar that started at Friday, October 15, 1582.
 
-The `o,§greg year month day` named operation calculates a sequence number for any given date in the Gregorian era:<br/>
-> `o,§greg 1582 10 15` yields 1<br/>
-> `o,§greg 1582 10 18` yields 4<br/>
-> `o,§greg 1970 1 1` yields 141418
+The `o,#greg year month day` named operation calculates a sequence number for any given date in the Gregorian era:<br/>
+> `o,#greg 1582 10 15` yields 1<br/>
+> `o,#greg 1582 10 18` yields 4<br/>
+> `o,#greg 1970 1 1` yields 141418
 
-The `o,§dow year month day` named operation yields a number from 0 to 6 for Saturday to Friday:<br/>
-> `o,§dow 1582 10 15` yields 6: Friday<br/>
-> `o,§dow 1582 10 18` yields 2: Monday
+The `o,#dow year month day` named operation yields a number from 0 to 6 for Saturday to Friday:<br/>
+> `o,#dow 1582 10 15` yields 6: Friday<br/>
+> `o,#dow 1582 10 18` yields 2: Monday
 
 *(This numbering is consistent with Greek tradition: Monday is δευτέρα, the "second", Tuesday is τρίτη, the "third", etc.)*
 
-The `o§dow sequenceNumber` named operation also yields a weekday number from 0 to 6:<br/>
-> `o§dow 1` yields 6: Friday<br/>
-> `o§dow 4` yields 2: Monday
+The `o#dow sequenceNumber` named operation also yields a weekday number from 0 to 6:<br/>
+> `o#dow 1` yields 6: Friday<br/>
+> `o#dow 4` yields 2: Monday
 
-For other date-related operations, see the `o§greg...` operations in the *Named operations list* section.
+For other date-related operations, see the `o#greg...` operations in the *Named operations list* section.
 
 ### Time
 
@@ -450,9 +448,9 @@ Laconic handles time as a number of seconds since the start of the Unix Epoch at
 
 Laconic doesn't know about time zones: all hour, minute or second values derived from this number of seconds express Universal Time.
 
-The `c§utc` operation returns the number of seconds elapsed since the start of the Unix Epoch, as reported by your system.
+The `c#utc` operation returns the number of seconds elapsed since the start of the Unix Epoch, as reported by your system.
 
-Several other operations convert that number of seconds to a date, or hour, minute and seconds-in-minute values - see the `o§time...` operations in the *Named operations list* section.
+Several other operations convert that number of seconds to a date, or hour, minute and seconds-in-minute values - see the `o#time...` operations in the *Named operations list* section.
 
 ## Comments
 
@@ -474,12 +472,12 @@ Variable identifiers can be strings as well as numbers.
 
 A variable can be assigned using the `$` operator:
 
-> `$§tau *2p` assigns the value of twice Pi to variable having identifier "tau".
+> `$#tau *2p` assigns the value of twice Pi to variable having identifier "tau".
 
 > `$0 *2p` assigns the value of twice Pi to variable having identifier 0 - a number.
 
 Identifier 0 is not the same as identifier "0":<br/>
-> `$§0 *2p` assigns the value of twice Pi to variable having identifier "0" - a string.
+> `$#0 *2p` assigns the value of twice Pi to variable having identifier "0" - a string.
 
 One can even have spaces in variable identifiers:
 
@@ -489,15 +487,15 @@ The value of a variable can be read by the `v` operator:
 
 <pre>
 $
-    §diapason
+    #diapason
     440
 $
-    §halftone
+    #halftone
     ^2 /1 12
 *
-    v§diapason
+    v#diapason
     ^
-        v§halftone
+        v#halftone
         2
 </pre>
 > yields the frequency of tone B<sub>4</sub> according to ISO 16.
@@ -515,13 +513,13 @@ When the variable referred to by the first operand is empty or uninitialized, th
 
 Variables can also hold pointers to other variables:
 
-> `$§pointer 5 vv§pointer` returns the value of variable having identifier 5.
+> `$#pointer 5 vv#pointer` returns the value of variable having identifier 5.
 
 Variable identifiers can also be calculated:
 
-> `$§month 1 $+,§daysInMonth v§month 31` assigns the value 31 to variable having identifier "daysInMonth1".
+> `$#month 1 $+,#daysInMonth v#month 31` assigns the value 31 to variable having identifier "daysInMonth1".
 
-> Expressions like these, together with variables holding a pointer like v§month, allow for array-like constructs.
+> Expressions like these, together with variables holding a pointer like v#month, allow for array-like constructs.
 
 Assigning the empty value (`€` or an empty operation outcome) to a variable, removes it from the variables collection.
 
@@ -532,16 +530,16 @@ There is a shorthand way of making an operator assign its return value to a vari
 Say you have a counter variable "counter" that needs to be increased every time something specific occurs.
 
 Your script initializes that counter variable using a<br/>
-`$§counter 0`<br/>
+`$#counter 0`<br/>
 operation. Next, your script executes a loop. In every iteration of that loop, a condition is tested and, if true, your counter needs to be increased by 1.
 
 Your script could perform that increase using the below operation:
 
 <pre>
 $
-    §counter
+    #counter
     +
-        v §counter
+        v #counter
         1
 </pre>
 
@@ -549,7 +547,7 @@ This would work all right, but there's a shorter way:
 
 <pre>
 +
-    : §counter
+    : #counter
     1
 </pre>
 
@@ -559,17 +557,17 @@ The `:` read-and-assign operator has one operand and does two things:
 
 So, if variable "counter" holds value `4`, operation
 
-> `+ :§counter 1`
+> `+ :#counter 1`
 
 where `+` is the parent operator of `:`, would process as follows:
-- `:§counter` returns `4`
+- `:#counter` returns `4`
 - `+ 4 1` returns `5`
 - this value `5` is assigned to variable "counter"
 - and the entire operation returns `5` again, which may or may not be used by encapsulating parent operators.
 
 Note that the two below operations are identical, as the `+` operator is commutative:
-> `+ :§counter 1`<br/>
-> `+ 1 :§counter`
+> `+ :#counter 1`<br/>
+> `+ 1 :#counter`
 
 It's even possible to assign a calculation outcome to more than one variable at once:
 
@@ -586,29 +584,29 @@ There is also a variant `:,` operator, that takes two arguments
 
 <pre>
   $
-    §count
+    #count
     €
   +
     :,
-      §count
+      #count
       0
     1
-  v§count
+  v#count
 </pre>
 > yields 1 - if the non-variant version of the `:` operator would have been used, the `+` operator would have raised an error about an empty operand.
 
 One might wonder if, using this `:` operator, the `$` (assignment) operator becomes redundant.
 
 Functionally, one could indeed replace all<br/>
-`$ §myVar §value`<br/>
+`$ #myVar #value`<br/>
 expressions with<br/>
-`; :§myVar §value`<br/>
+`; :#myVar #value`<br/>
 as the `;` (combination) operator would read, but not use, the value of variable "myVar", and then assign the value of its second operand to it due to the `:` operator used to read variable "myVar".
 
 However, technically, the `$` (assignment) operator entails less processing, as evidenced by the expression trees:
 
 <pre>
-$ laconic -aq '$ §myVar 8'
+$ laconic -aq '$ #myVar 8'
 
 Tree after operate() :
 $
@@ -620,7 +618,7 @@ $
 Use of the `;:` way involves two instead of one operators, so more processing:
 
 <pre>
-$ laconic -aq '; :§myVar 8'
+$ laconic -aq '; :#myVar 8'
 
 Tree after operate() :
 ;
@@ -665,7 +663,7 @@ For easier passing arguments to routines, one can push operands in reverse order
 
 The `k,` operator returns the height of the stack: its number of values:
 
-> `K(§A §B 25) k,` yields 3.
+> `K(#A #B 25) k,` yields 3.
 
 For clearing the stack, one can use the `K,,` operator, which would do the same as:
 
@@ -697,21 +695,21 @@ E.g., the below script declares a routine that calculates an average of the stac
 
 <pre>
 R(
-	§average
-	$§count k,
-	$§total 0
+	#average
+	$#count k,
+	$#total 0
 	W
 		k,
 		;
-			$§next k
+			$#next k
 			?
-				=1 tv§next
-				+:§total v§next 
-				-:§count 1
+				=1 tv#next
+				+:#total v#next 
+				-:#count 1
 	?
-		=0 v§count
+		=0 v#count
 		0
-		/v§total v§count
+		/v#total v#count
 )
 </pre>
 
@@ -719,20 +717,20 @@ A routine can be called using the `X` (eXecute) operator. This operator expects 
 
 Arguments can be passed to the routine by using the `K` operator to push them on the stack. E.g., given the above "average" routine being declared,
 
-> `K(1 2 3 2) X§average` yields 2.
+> `K(1 2 3 2) X#average` yields 2.
 
 Alternatively, if more operands are given to the `X` operator, these are pushed on the stack for the routine to pop them (or not) as arguments. So the "average" routine can also be called as follows:
 
-> `X(§average 1 2 3 2)`
+> `X(#average 1 2 3 2)`
 
 > ***Note: as the stack is a last-in-first-out stack, stack items will be read by a routine in the reverse order they were pushed. One can avoid this using the `K,` or `X,` operators instead.***
 
 As a routine's name is just another expression value, it's possible to use variables and stack items as pointers to routines.
 
-A routine's code has access to its own name or identifier using the `c§rtn` operation. When this operation is used outside of any routine, it returns "main".
+A routine's code has access to its own name or identifier using the `c#rtn` operation. When this operation is used outside of any routine, it returns "main".
 
 Routines can be stored in script files, which are UTF-8 text files containing Laconic code. These routintes can be imported to a main script in two ways:
-- either by preceding calling code in the script by an Evaluate-after-reading operation: `Er,§myRoutines.lac X[sRoutine from file]`
+- either by preceding calling code in the script by an Evaluate-after-reading operation: `Er,#myRoutines.lac X[sRoutine from file]`
 - or else by including the script file by preceding the main code by an `-i` parameter when running the command-line Laconic interpreter: `...$ laconic -i myRoutines.lac 'X[sRoutine from file]'`
 
 ## Unit tests on routines
@@ -756,13 +754,13 @@ An example of their usage can be found in `scripts/dowName.lac`, which contains
 
 In order to use the `dowName` routine, include it using the -i parameter:
 
-`... $ laconic -i /home/user/path_to_laconic_scripts/dowName.lac 'X(§downName 5)'`
+`... $ laconic -i /home/user/path_to_laconic_scripts/dowName.lac 'X(#downName 5)'`
 
 In order to execute the unit tests on routine `dowName`, be sure to `cd` to the directory where `unitTestUtils.lac` resides, and execute:
 
 <pre>
 ... $ cd path_where_unitTestUtils.lac_is_stored
-... $ laconic -i /home/user/path_to_other_laconic_scripts/dowName.lac 'X§downNameUnitTests'
+... $ laconic -i /home/user/path_to_other_laconic_scripts/dowName.lac 'X#downNameUnitTests'
 </pre>
 
 ## Arithmetic operators
@@ -771,7 +769,7 @@ In order to execute the unit tests on routine `dowName`, be sure to `cd` to the 
 |:-:|:-:|:-:|:-:|:-:|
 |~|unary<br/>minus|1|ignored|number|
 |+|addition<br/>if no string<br/>operands|2|added|number|
-|+|concatenation<br/>if at least 1<br/>string<br/>operand|2|added|string;<br/>numbers are<br/>formatted<br/>as per<br/>o,§fmt command|
+|+|concatenation<br/>if at least 1<br/>string<br/>operand|2|added|string;<br/>numbers are<br/>formatted<br/>as per<br/>o,#fmt command|
 |+,|concatenation<br/>if at least 1<br/>string<br/>operand|2|added|string;<br/>numbers are<br/>truncated<br/>to integers|
 |-|subtraction|2|subtracted|number|
 |*|multiplication|2|multiplied|number|
@@ -781,7 +779,7 @@ In order to execute the unit tests on routine `dowName`, be sure to `cd` to the 
 |^|exponen-<br/>tiation|2|new<br/>exponen-<br/>tiation|number|
 |i|integer|1|ignored|number<br/>truncated<br/>towards<br/>zero|
 |i,|ceiling|1|ignored|number<br/>filled<br/>towards<br/>nearest<br/>integer<br/>away from<br/>zero|
-|o§r|rounding|1|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|
+|@|rounding|1|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|
 |a|abs|1|ignored|number<br/>absolute<br/>value|
 |l|logarithm<br/>from 2nd<br/>operand<br/>in base<br/>1st operand|2|ignored|number|
 |s|sign|1|tested also|1 if all<br/>operands are<br/>positive,<br/>-1 if all are<br/>negative,<br/>0 if mixed.|
@@ -804,7 +802,7 @@ In order to execute the unit tests on routine `dowName`, be sure to `cd` to the 
 > excess operands: added also<br/>
 > returns: if all operands are numeric, the sum of these operands.<br/>
 >> If at least one operand is a string, the concatenation of all operands, converted to strings.<br/>
->> Numbers will be formatted according to the formatting settings requested using the o,§fmt operator or default settings.
+>> Numbers will be formatted according to the formatting settings requested using the o,#fmt operator or default settings.
 
 > e.g:<br/>
 >> `+5 6` yields 11<br/>
@@ -856,7 +854,7 @@ In order to execute the unit tests on routine `dowName`, be sure to `cd` to the 
 > e.g:<br/>
 >> `/,100 7` yields 14<br/>
 >> `/(100 7 2)` yields 14 also<br/>
->> `$§quotient /,100 7 k` yields 2 : the division's remainder, and assigns 14 to variable "quotient".<br/>
+>> `$#quotient /,100 7 k` yields 2 : the division's remainder, and assigns 14 to variable "quotient".<br/>
 >>> (The `k` operator pops an item from the stack.)
 
 `%` Modulo (remainder)
@@ -911,19 +909,19 @@ In order to execute the unit tests on routine `dowName`, be sure to `cd` to the 
 >> `i,15` yields 15<br/>
 >> `i,~27` yields -27
 
-`o§r` Round
-> required operands: 1 (technically, 2: `§r` is the first operand of the `o` operator)<br/>
+`@` Round
+> required operands: 1<br/>
 > excess operands: ignored<br/>
 > returns: the first operand truncated or filled towards nearest integer<br/>
 > If a number is halfway two integers, rounds away from 0.
 
 > e.g:<br/>
->> `o§r 13.2` yields 13<br/>
->> `o§r 13.7` yields 14<br/>
->> `o§r 13.5` yields 14<br/>
->> `o§r ~13.2` yields -13<br/>
->> `o§r ~13.6` yields -14<br/>
->> `o§r ~13.5` yields -14
+>> `@ 13.2` yields 13<br/>
+>> `@ 13.7` yields 14<br/>
+>> `@ 13.5` yields 14<br/>
+>> `@ ~13.2` yields -13<br/>
+>> `@ ~13.6` yields -14<br/>
+>> `@ ~13.5` yields -14
 
 `a` Absolute value
 > required operands: 1<br/>
@@ -990,7 +988,7 @@ In order to execute the unit tests on routine `dowName`, be sure to `cd` to the 
 > If the first operand is a string, the n operator converts it to a a number, if possible.<br/>
 > If the first operand is empty, 0 will be returned.<br/>
 > If the first operand is already a number, it will be returned as is.<br/>
-> If the first operand is an error value, that error will be returned or thrown depending on Z§ign.
+> If the first operand is an error value, that error will be returned or thrown depending on Z#ign.
 
 > The `n` operator takes the current input number base into account.
 
@@ -998,11 +996,11 @@ In order to execute the unit tests on routine `dowName`, be sure to `cd` to the 
 
 > e.g:<br/>
 >> `n[s28]` yields 28.<br/>
->> `n§28` yields 28.<br/>
+>> `n#28` yields 28.<br/>
 >> `n28` yields 28 (easy, the first operand is already a number)<br/>
->> `n§-28` yields -28.<br/>
->> `n§~28` yields -28.<br/>
->> `b16 n§2E` yields 46(base10).<br/>
+>> `n#-28` yields -28.<br/>
+>> `n#~28` yields -28.<br/>
+>> `b16 n#2E` yields 46(base10).<br/>
 >> `b60 n[s2 1 0]` yields 7260(base10).<br/>
 >> `b60 n[s210]` yields an error: NumberParsingFailure("Digit value too high for base of input number").<br/>
 >> `n€` yields 0
@@ -1047,9 +1045,9 @@ All other values are truthy:
 
 |Operator|Description|Expected<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|!|not|1|are<br/>checked<br/>also|1 if all<br/>operands<br/>are falsy;<br/>else 0|`!0`<br/>`!5`<br/>`!(0 € -4 4 §)`<br/>`!(5 0 1)`|1<br/>0<br/>1<br/>0|
-|&|and|2|are<br/>checked<br/>also|1 if all<br/>operands<br/>are truthy;<br/>else 0|`&29 §Hello`<br/>`&(45 1 ~7)`<br/>`&86 0`|1<br/>1<br/>0|
-|\||or|2|are<br/>checked<br/>also|1 if 1 or more<br/>operands<br/>are truthy;<br/>else 0|`\|1 0`<br/>`\|0 0`<br/>`\|(0 §Ghent €)`|1<br/>0<br/>1|
+|!|not|1|are<br/>checked<br/>also|1 if all<br/>operands<br/>are falsy;<br/>else 0|`!0`<br/>`!5`<br/>`!(0 € -4 4 #)`<br/>`!(5 0 1)`|1<br/>0<br/>1<br/>0|
+|&|and|2|are<br/>checked<br/>also|1 if all<br/>operands<br/>are truthy;<br/>else 0|`&29 #Hello`<br/>`&(45 1 ~7)`<br/>`&86 0`|1<br/>1<br/>0|
+|\||or|2|are<br/>checked<br/>also|1 if 1 or more<br/>operands<br/>are truthy;<br/>else 0|`\|1 0`<br/>`\|0 0`<br/>`\|(0 #Ghent €)`|1<br/>0<br/>1|
 |x|xor|2|are<br/>checked<br/>also|1 if only 1<br/>operand<br/>is truthy;<br/>else 0|`x(0 1 0)`<br/>`x0 €`<br/>`x74 ~12`|1<br/>0<br/>1|
 
 ## Comparison operators
@@ -1063,46 +1061,46 @@ so as to obtain greater-or-equal or less-or-equal expressions with 2 operands.
 
 The `=` (equals) operator takes a precision margin into account in order to mitigate the underlying f64 number type's precision limitations.
 
-This precision margin is 0.000_000_01 by default, but can be set and changed again using the `Z§prec` operation. E.g.:
+This precision margin is 0.000_000_01 by default, but can be set and changed again using the `Z#prec` operation. E.g.:
 
-> `Z§prec .1 = .11 .12` yields 1: true.
+> `Z#prec .1 = .11 .12` yields 1: true.
 
 *Note: `=` is always a comparison operator ("equals"), and never assigns. For assignments, see the `$` and `:` operators.*
 
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|=|equals|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are equal;<br/>else 0|`=27 ^3 3`<br/>`=§Καλημέρα [sΚαλημέρα]`<br/>`=(256 ^2 8 ^16 2)`<br/>`=€ 0`<br/>`$0T°,45 =1v0`|1<br/>1<br/>1<br/>0<br/>1|
-|<|is less|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are an<br/>increasing<br/>series;<br/>else 0|`Z§ign 1 <(€ ~33 0 [sA] [sa] /5 0`)<br/>`<0 €`|1<br/>0|
-|>|is greater|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are a<br/>decreasing<br/>series;<br/>else 0|`>(§Woof! 38 2)`<br/>`> +12.1 .3 13`<br/>`>§a §A`<br/>`>[sZorro y Perro] §Zorro`|1<br/>0<br/>1<br/>1|
-|m|minimum|2|used|value of<br/>the smallest<br/>operand|`m Sp Cp`<br/>`m(38 77 3)`<br/>`m(§z §York 8)`|-1<br/>3<br/>8|
-|M|maximum|2|used|value of<br/>the greatest<br/>operand|`M Sp Cp`<br/>`M(45 ~3 1_252)`<br/>`M§§ §§§`|0<br/>1252<br/>"§§"|
+|=|equals|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are equal;<br/>else 0|`=27 ^3 3`<br/>`=#Καλημέρα [sΚαλημέρα]`<br/>`=(256 ^2 8 ^16 2)`<br/>`=€ 0`<br/>`$0T°,45 =1v0`|1<br/>1<br/>1<br/>0<br/>1|
+|<|is less|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are an<br/>increasing<br/>series;<br/>else 0|`Z#ign 1 <(€ ~33 0 [sA] [sa] /5 0`)<br/>`<0 €`|1<br/>0|
+|>|is greater|2|are<br/>compared<br/>also|1 if all<br/>operands<br/>are a<br/>decreasing<br/>series;<br/>else 0|`>(#Woof! 38 2)`<br/>`> +12.1 .3 13`<br/>`>#a #A`<br/>`>[sZorro y Perro] #Zorro`|1<br/>0<br/>1<br/>1|
+|m|minimum|2|used|value of<br/>the smallest<br/>operand|`m Sp Cp`<br/>`m(38 77 3)`<br/>`m(#z #York 8)`|-1<br/>3<br/>8|
+|M|maximum|2|used|value of<br/>the greatest<br/>operand|`M Sp Cp`<br/>`M(45 ~3 1_252)`<br/>`M## ###`|0<br/>1252<br/>"##"|
 
-*Note: `§§§` yields "§§" as the first `§` is the simple string prefix.*
+*Note: `###` yields "##" as the first `#` is the simple string prefix.*
 
 ## Constant operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-|:-:|
 |p|pi|0|ignored|3.141592 etc.|Sp|-1 (=sine(π))|
 |e|Euler's<br/>number|0|ignored|2.718281 etc.|||
-|¶|newline<br/>character<br/>=<br/>c§n|0|ignored|"\n", U+000A|`+,(72 ¶ 99)`|"72<br/>99"|
-|€|empty<br/>value<br/>=<br/>c§empty|0|ignored|empty value|`?=v§crit 0 B1 €`|If<br/>variable<br/>"crit" is 0,<br/>break<br/>the loop,<br/>else<br/>do nothing.|
+|¶|newline<br/>character<br/>=<br/>c#n|0|ignored|"\n", U+000A|`+,(72 ¶ 99)`|"72<br/>99"|
+|€|empty<br/>value<br/>=<br/>c#empty|0|ignored|empty value|`?=v#crit 0 B1 €`|If<br/>variable<br/>"crit" is 0,<br/>break<br/>the loop,<br/>else<br/>do nothing.|
 |c|named<br/>constant:|1|ignored|several,<br/>see below|||
-|c§gold|golden<br/>ratio,<br/>calculated as<br/>(1 + sqrt(5))/2|0|ignored|1.618033 etc.|`$§height *v§width c§gold`|variable<br/>"height"<br/>has var. "width"<br/>x golden<br/>ratio|
-|c§cogold|conjugate<br/>of golden<br/>ratio,<br/>calculated as<br/>(1 - sqrt(5))/2|0|ignored|-0.618033 etc.|||
-|c§n|newline<br/>character<br/>=<br/>¶|0|ignored|"\n", U+000A|+(`$Decem- c§n §ber`)|"Decem-<br/>ber"|
-|c§empty|empty<br/>value<br/>=<br/>€|0|ignored|empty value|||
-|c§rtn|the running<br/>routine's<br/>name|0|ignored|"main" if not<br/>in routine;<br/>else the running<br/>routine's<br/>name|`R(`<br/>` §percent`<br/>` $0k`<br/>` $1k`<br/>` ?`<br/>`  !v1`<br/>`  U`<br/>`   +`<br/>`    c§rtn`<br/>`    [s: zero div.]`<br/>`  /*v0 100 v1`<br/>`)`|The "percent"<br/>routine<br/>includes<br/>its own name<br/>in an error<br/>message.|
-|c§utc|UTC<br/>system<br/>time|0|ignored|Number<br/>of seconds<br/>elapsed<br/>since<br/>1970-1-1<br/>00:00:00|`c§utc`|1755978527<br/>   .526352|
+|c#gold|golden<br/>ratio,<br/>calculated as<br/>(1 + sqrt(5))/2|0|ignored|1.618033 etc.|`$#height *v#width c#gold`|variable<br/>"height"<br/>has var. "width"<br/>x golden<br/>ratio|
+|c#cogold|conjugate<br/>of golden<br/>ratio,<br/>calculated as<br/>(1 - sqrt(5))/2|0|ignored|-0.618033 etc.|||
+|c#n|newline<br/>character<br/>=<br/>¶|0|ignored|"\n", U+000A|+(`$Decem- c#n #ber`)|"Decem-<br/>ber"|
+|c#empty|empty<br/>value<br/>=<br/>€|0|ignored|empty value|||
+|c#rtn|the running<br/>routine's<br/>name|0|ignored|"main" if not<br/>in routine;<br/>else the running<br/>routine's<br/>name|`R(`<br/>` #percent`<br/>` $0k`<br/>` $1k`<br/>` ?`<br/>`  !v1`<br/>`  U`<br/>`   +`<br/>`    c#rtn`<br/>`    [s: zero div.]`<br/>`  /*v0 100 v1`<br/>`)`|The "percent"<br/>routine<br/>includes<br/>its own name<br/>in an error<br/>message.|
+|c#utc|UTC<br/>system<br/>time|0|ignored|Number<br/>of seconds<br/>elapsed<br/>since<br/>1970-1-1<br/>00:00:00|`c#utc`|1755978527<br/>   .526352|
 
 ## Variable-related operators
 
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-|:-:|
-|$|assignment<br/>of 2nd<br/>operand<br/>to variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|2|assigned to<br/>subsequent<br/>variables|assigned<br/>value|`$4 8 v4`<br/>`$§count 0 v§count`<br/><br/>`$(§tariff 3 10 25)`<br/>`  +,(v§tariff0 §; v§tariff2)`|8<br/>0<br/><br/><br/>3;25|
+|$|assignment<br/>of 2nd<br/>operand<br/>to variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|2|assigned to<br/>subsequent<br/>variables|assigned<br/>value|`$4 8 v4`<br/>`$#count 0 v#count`<br/><br/>`$(#tariff 3 10 25)`<br/>`  +,(v#tariff0 #; v#tariff2)`|8<br/>0<br/><br/><br/>3;25|
 |v|value of<br/>variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text)|1|ignored|any type of<br/>expression<br/>value<br/>(including<br/>empty and<br/>error)|See above||
 |v,|value of<br/>variable<br/>having 1st<br/>operand<br/>as name<br/>(number or text);<br/>if empty,<br/>assigns and<br/>second operand|2|ignored|any type of<br/>expression<br/>value<br/>(including<br/>empty and<br/>error)|See above||
-|:|like v<br/>but has result<br/>of parent operator<br/>assigned to that<br/>variable|1|ignored|like v|`$§count 0`<br/>`  +:§count 1`<br/>`  v§count`|<br/><br/>1|
-|:,|like :<br/>but assigns<br/>and returns<br/>the second<br/>operand if the<br/>variable<br/>is empty|2|ignored|like :|`$§count €`<br/>`  +:,§count 100 1`<br/>`  v§count`|<br/><br/>101|
+|:|like v<br/>but has result<br/>of parent operator<br/>assigned to that<br/>variable|1|ignored|like v|`$#count 0`<br/>`  +:#count 1`<br/>`  v#count`|<br/><br/>1|
+|:,|like :<br/>but assigns<br/>and returns<br/>the second<br/>operand if the<br/>variable<br/>is empty|2|ignored|like :|`$#count €`<br/>`  +:,#count 100 1`<br/>`  v#count`|<br/><br/>101|
 
 ## Stack-related operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
@@ -1110,16 +1108,16 @@ This precision margin is 0.000_000_01 by default, but can be set and changed aga
 |K|push to<br/>LIFO<br/>stack|1|pushed<br/>also|value of<br/>last<br/>operand|`K155 K30 k`<br/>`K(155 30) k`|30<br/>30|
 |K,|pushes its<br/>operands<br/>to LIFO<br/>stack<br/>in reverse<br/>order|1|pushed<br/>also|value of<br/>last<br/>operand|`K,(155 30) k`<br/>`K,155 K,30 k`|155<br/>30|
 |K,,|clears<br/>the<br/>stack|0|ignored|number<br/>of stack<br/>items<br/>cleared|`K,, k`|€<br/>(empty<br/>value)|
-|k|pop from<br/>LIFO<br/>stack|0|ignored|value of<br/>top stack<br/>item;<br/>empty<br/>if none|`K(§A 33) k k`|"A"|
+|k|pop from<br/>LIFO<br/>stack|0|ignored|value of<br/>top stack<br/>item;<br/>empty<br/>if none|`K(#A 33) k k`|"A"|
 |k,|stack<br/>height|0|ignored|number<br/>of stack<br/>items|`K,, K(10 20 30) k,`|3|
 
 ## Settings-related operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-|:-:|
 |Z|setting:<br/>assign value<br/>of 2nd<br/>operand<br/>to setting<br/>designated<br/>by 1st<br/>operand|2|ignored|setting<br/>value<br/>(2nd operand)|||
-|Z§prec|comparison<br/>precision<br/>setting<br/>(Default=<br/>.000_000_01)|1|ignored|setting<br/>value<br/>(2nd operand)|`Z`<br/>`  §prec`<br/>`  .01`<br/>`=`<br/>`  .001`<br/>`  .002`|<br/><br/><br/><br/><br/>1|
-|Z§loops|maximum<br/>number<br/>of loop<br/>iterations<br/>(Default=<br/>10,000)|1|ignored|setting<br/>value<br/>(2nd operand)|`Z§loops 1_000_000`||
-|Z§ign|if not 0 ignore<br/>errors,<br/>else stop<br/>script<br/>execution<br/>on errors|1|ignored|setting<br/>value<br/>(2nd operand)|`Z§ign 1`||
+|Z#prec|comparison<br/>precision<br/>setting<br/>(Default=<br/>.000_000_01)|1|ignored|setting<br/>value<br/>(2nd operand)|`Z`<br/>`  #prec`<br/>`  .01`<br/>`=`<br/>`  .001`<br/>`  .002`|<br/><br/><br/><br/><br/>1|
+|Z#loops|maximum<br/>number<br/>of loop<br/>iterations<br/>(Default=<br/>10,000)|1|ignored|setting<br/>value<br/>(2nd operand)|`Z#loops 1_000_000`||
+|Z#ign|if not 0 ignore<br/>errors,<br/>else stop<br/>script<br/>execution<br/>on errors|1|ignored|setting<br/>value<br/>(2nd operand)|`Z#ign 1`||
 
 ## Named operations list
 
@@ -1127,39 +1125,39 @@ The below named operations have been implemented:
 
 |Operator|Description|Required<br/>operands,<br/>including<br/>operation<br/>name|Excess<br/>operands|Returns|Examples|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-|:-:|
-|o§r|rounding|2|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|`o§r 2.1`<br/>`o§r 2.5`<br/>`~2.5`|2<br/>3<br/>-3|
-|o§version|version|1|A 2nd<br/>operand<br/>chooses the<br/>version part<br/>(1-3).<br/>0 chooses<br/>entire version<br/>again.|The<br/>Laconic<br/>interpreter's<br/>version|`o§version 0`<br/>`o§version 1`<br/>`o§version 2`<br/>`o§version 3`|"1.0.2"<br/>1<br/>0<br/>2|
-|o§fib|Fibonacci<br/>number|2|ignored|Fibonacci<br/>number<br/>chosen<br/>by index (2nd<br/>operand)|`o§fib 0`<br/>`o§fib 1`<br/>`o§fib 2`<br/>`o§fib 3`<br/>`o§fib 4`<br/>`o§fib 5`|0<br/>1<br/>1<br/>2<br/>3<br/>5|
-|o§uni|Unicode<br/>character|2|converted<br/>also|string<br/>having<br/>Unicode<br/>characters|`o§uni 65`<br/>`o(§uni 65 66 67)`<br/>`o§uni 936`<br/>`b16 o§uni [n3A8]`<br/>`b16 o(§uni [n3A8]`<br/>`  [n3C5][n3C7]`<br/>`  [n3AE])`|"A"<br/>"ABC"<br/>"Ψ"<br/>"Ψ"<br/><br/><br/>"Ψυχή"|
-|o§ucv|Unicode<br/>value|2|3rd operand<br/>is used as<br/>character<br/>position.<br/>If absent,<br/>0 is used.|Unicode<br/>code point of<br/>character|`o§ucv §Dinant`<br/>`O§ucv §Dinant 1`|68<br/>105|
-|o§len|length in<br/>characters<br/>(not in<br/>bytes)|2|length is<br/>added|total length<br/>of operands|`o§len §Dinant`<br/>`O§len §Dinant §Mons`<br/>`o§len §易經`|6<br/>10<br/>2|
-|o§lower|lower<br/>case|2|ignored|lower case<br/>of 2nd<br/>operand|`o§lower [sThe Hague]`|"the hague"|
-|o§upper|upper<br/>case|2|ignored|upper case<br/>of 2nd<br/>operand|`o§upper [sThe Hague]`|"THE HAGUE"|
-|o§proper|proper<br/>case|2|ignored|proper case<br/>of 2nd<br/>operand|`o§proper [sADDIS ABEBA]`|"Addis Abeba"|
-|o,§find|find 3rd operand<br/>as part of<br/>2nd operand<br/>starting from<br/>position passed<br/>as 4th operand|3|4th operand<br/>is start position.<br/>If missing,<br/>0 is used.|If found,<br/>start position<br/>of found<br/>substring.<br/>Else, empty.|see below||
-|o,§sub|substring|3;<br/>see<br/>below|4th operand<br/>will be used<br/>as length|the substring|see below||
-|O,,§repl|string<br/>replacement|4 or 7;<br/>see<br/>below|ignored|resulting<br/>string|see below||
-|o,§split|split string|4;<br/>see<br/>below|ignored|number of<br/>segments|see below||
-|o,§fmt|set number<br/>format|2 or 4;<br/>see<br/>below|ignored|empty|see below||
-|o§leap|leap<br/>year|2|ignored|1 if number<br/>in 2st operand<br/>is a leap year,<br/>else 0|`o§leap 2004`<br/>`o§leap 2000`<br/>`o§leap 1900`<br/>`o§leap 2025`|1<br/>1<br/>0<br/>0|
-|o,§dow|day of<br/>week|4 or 2:<br/>§dow,<br/>year,<br/>month<br/>and day<br/>--or--<br/>§dow,<br/>sequence<br/>number.|ignored|0 for<br/>saturday,<br/>1-6 for<br/>following<br/>days|`o,§dow 2025 1 1`<br/>`o(§dow 2025 1 4)`<br/>`o§dow 161517`|4 (wed.)<br/>0 (sat.)<br/>4 (wed.)|
-|o,§greg|Gregorian<br/>day's<br/>sequence<br/>number|4:<br/>§greg,<br/>year,<br/>month<br/>and day.|ignored|1 for<br/>October<br/>15, 1582,<br/>etc.|`o,§greg 2025 7 1`|161698|
-|o§gregy|year from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregy<br/>and seq.nr.|ignored|year|`o§gregy 161698`|2025|
-|o§gregm|month from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregm<br/>and seq.nr.|ignored|month (1-12)|`o§gregm 161698`|7|
-|o§gregd|day from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregd<br/>and seq.nr.|ignored|day (1-31)|`o§gregd 161698`|1|
-|o§gregt|date text<br/>from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>§gregt<br/>and seq.nr.|A 3rd.<br/>operand<br/>is used as<br/>separator|A YYYYsMMsDD<br/>string where<br/>s is a<br/>separator,<br/>if any|`o§gregt 161698`<br/>`O§gregt 161698 §-`<br/>&nbsp;|20250701TUE<br/>2025-07-01-TUE|
-|o§timed|time<br/>to<br/>Gregorian<br/>day<br/>sequence<br/>number|2:<br/>§timed<br/>and UTC<br/>seconds|ignored|date<br/>sequence<br/>number<br/>like the<br/>ones<br/>returned<br/>by `o,greg`|`o§timed c§utc`|161751|
-|o§timeh|time<br/>to<br/>hours in<br/>day|2:<br/>§timeh<br/>and UTC<br/>seconds|ignored|The hour<br/>(0-23)<br/>in<br/>Universal<br/>Time|`o§timeh c§utc`|20|
-|o§timem|time<br/>to<br/>minutes in<br/>hour|2:<br/>§timem<br/>and UTC<br/>seconds|ignored|The minutes<br/>(0-59)<br/>in<br/>Universal<br/>Time|`o§timem c§utc`|9|
-|o§times|time<br/>to<br/>seconds in<br/>minute|2:<br/>§times<br/>and UTC<br/>seconds|ignored|The seconds<br/>(0-59)<br/>in<br/>Universal<br/>Time|`o§times c§utc`|26|
-|o§timef|time<br/>to<br/>seconds<br/>fraction in<br/>second|2:<br/>§timef<br/>and UTC<br/>seconds|ignored|The fraction<br/>of the second<br/>(0.nnn...)<br/>in<br/>Universal<br/>Time|`o§timef c§utc`|0.682822|
-|o§timet|time<br/>to<br/>text|2:<br/>§timet<br/>and UTC<br/>seconds|A third<br/>operand<br/>is used<br/>as a<br/>separator|A "time-<br/>stamp"<br/>text<br/>in<br/>Universal<br/>Time|`o§timet c§utc`<br/>`O§timet c§utc §:`<br/><br/>`o§fmt 2`<br/>`  O§timet`<br/>`  c§utc [s ]`|201927.139002UTC<br/>20:20:15.635714:UTC<br/><br/><br/><br/>20 22 59.23 UTC|
+|o#r|rounding<br/>(Same as @)|2|ignored|number<br/>truncated<br/>or filled<br/>towards<br/>nearest<br/>integer|`o#r 2.1`<br/>`o#r 2.5`<br/>`~2.5`|2<br/>3<br/>-3|
+|o#version|version|1|A 2nd<br/>operand<br/>chooses the<br/>version part<br/>(1-3).<br/>0 chooses<br/>entire version<br/>again.|The<br/>Laconic<br/>interpreter's<br/>version|`o#version 0`<br/>`o#version 1`<br/>`o#version 2`<br/>`o#version 3`|"1.0.2"<br/>1<br/>0<br/>2|
+|o#fib|Fibonacci<br/>number|2|ignored|Fibonacci<br/>number<br/>chosen<br/>by index (2nd<br/>operand)|`o#fib 0`<br/>`o#fib 1`<br/>`o#fib 2`<br/>`o#fib 3`<br/>`o#fib 4`<br/>`o#fib 5`|0<br/>1<br/>1<br/>2<br/>3<br/>5|
+|o#uni|Unicode<br/>character|2|converted<br/>also|string<br/>having<br/>Unicode<br/>characters|`o#uni 65`<br/>`o(#uni 65 66 67)`<br/>`o#uni 936`<br/>`b16 o#uni [n3A8]`<br/>`b16 o(#uni [n3A8]`<br/>`  [n3C5][n3C7]`<br/>`  [n3AE])`|"A"<br/>"ABC"<br/>"Ψ"<br/>"Ψ"<br/><br/><br/>"Ψυχή"|
+|o#ucv|Unicode<br/>value|2|3rd operand<br/>is used as<br/>character<br/>position.<br/>If absent,<br/>0 is used.|Unicode<br/>code point of<br/>character|`o#ucv #Dinant`<br/>`O#ucv #Dinant 1`|68<br/>105|
+|o#len|length in<br/>characters<br/>(not in<br/>bytes)|2|length is<br/>added|total length<br/>of operands|`o#len #Dinant`<br/>`O#len #Dinant #Mons`<br/>`o#len #易經`|6<br/>10<br/>2|
+|o#lower|lower<br/>case|2|ignored|lower case<br/>of 2nd<br/>operand|`o#lower [sThe Hague]`|"the hague"|
+|o#upper|upper<br/>case|2|ignored|upper case<br/>of 2nd<br/>operand|`o#upper [sThe Hague]`|"THE HAGUE"|
+|o#proper|proper<br/>case|2|ignored|proper case<br/>of 2nd<br/>operand|`o#proper [sADDIS ABEBA]`|"Addis Abeba"|
+|o,#find|find 3rd operand<br/>as part of<br/>2nd operand<br/>starting from<br/>position passed<br/>as 4th operand|3|4th operand<br/>is start position.<br/>If missing,<br/>0 is used.|If found,<br/>start position<br/>of found<br/>substring.<br/>Else, empty.|see below||
+|o,#sub|substring|3;<br/>see<br/>below|4th operand<br/>will be used<br/>as length|the substring|see below||
+|O,,#repl|string<br/>replacement|4 or 7;<br/>see<br/>below|ignored|resulting<br/>string|see below||
+|o,#split|split string|4;<br/>see<br/>below|ignored|number of<br/>segments|see below||
+|o,#fmt|set number<br/>format|2 or 4;<br/>see<br/>below|ignored|empty|see below||
+|o#leap|leap<br/>year|2|ignored|1 if number<br/>in 2st operand<br/>is a leap year,<br/>else 0|`o#leap 2004`<br/>`o#leap 2000`<br/>`o#leap 1900`<br/>`o#leap 2025`|1<br/>1<br/>0<br/>0|
+|o,#dow|day of<br/>week|4 or 2:<br/>#dow,<br/>year,<br/>month<br/>and day<br/>--or--<br/>#dow,<br/>sequence<br/>number.|ignored|0 for<br/>saturday,<br/>1-6 for<br/>following<br/>days|`o,#dow 2025 1 1`<br/>`o(#dow 2025 1 4)`<br/>`o#dow 161517`|4 (wed.)<br/>0 (sat.)<br/>4 (wed.)|
+|o,#greg|Gregorian<br/>day's<br/>sequence<br/>number|4:<br/>#greg,<br/>year,<br/>month<br/>and day.|ignored|1 for<br/>October<br/>15, 1582,<br/>etc.|`o,#greg 2025 7 1`|161698|
+|o#gregy|year from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>#gregy<br/>and seq.nr.|ignored|year|`o#gregy 161698`|2025|
+|o#gregm|month from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>#gregm<br/>and seq.nr.|ignored|month (1-12)|`o#gregm 161698`|7|
+|o#gregd|day from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>#gregd<br/>and seq.nr.|ignored|day (1-31)|`o#gregd 161698`|1|
+|o#gregt|date text<br/>from<br/>Gregorian<br/>day's<br/>sequence<br/>number|2:<br/>#gregt<br/>and seq.nr.|A 3rd.<br/>operand<br/>is used as<br/>separator|A YYYYsMMsDD<br/>string where<br/>s is a<br/>separator,<br/>if any|`o#gregt 161698`<br/>`O#gregt 161698 #-`<br/>&nbsp;|20250701TUE<br/>2025-07-01-TUE|
+|o#timed|time<br/>to<br/>Gregorian<br/>day<br/>sequence<br/>number|2:<br/>#timed<br/>and UTC<br/>seconds|ignored|date<br/>sequence<br/>number<br/>like the<br/>ones<br/>returned<br/>by `o,greg`|`o#timed c#utc`|161751|
+|o#timeh|time<br/>to<br/>hours in<br/>day|2:<br/>#timeh<br/>and UTC<br/>seconds|ignored|The hour<br/>(0-23)<br/>in<br/>Universal<br/>Time|`o#timeh c#utc`|20|
+|o#timem|time<br/>to<br/>minutes in<br/>hour|2:<br/>#timem<br/>and UTC<br/>seconds|ignored|The minutes<br/>(0-59)<br/>in<br/>Universal<br/>Time|`o#timem c#utc`|9|
+|o#times|time<br/>to<br/>seconds in<br/>minute|2:<br/>#times<br/>and UTC<br/>seconds|ignored|The seconds<br/>(0-59)<br/>in<br/>Universal<br/>Time|`o#times c#utc`|26|
+|o#timef|time<br/>to<br/>seconds<br/>fraction in<br/>second|2:<br/>#timef<br/>and UTC<br/>seconds|ignored|The fraction<br/>of the second<br/>(0.nnn...)<br/>in<br/>Universal<br/>Time|`o#timef c#utc`|0.682822|
+|o#timet|time<br/>to<br/>text|2:<br/>#timet<br/>and UTC<br/>seconds|A third<br/>operand<br/>is used<br/>as a<br/>separator|A "time-<br/>stamp"<br/>text<br/>in<br/>Universal<br/>Time|`o#timet c#utc`<br/>`O#timet c#utc #:`<br/><br/>`o#fmt 2`<br/>`  O#timet`<br/>`  c#utc [s ]`|201927.139002UTC<br/>20:20:15.635714:UTC<br/><br/><br/><br/>20 22 59.23 UTC|
 
 &nbsp;
 
-`o§find` Find substring in a string
+`o#find` Find substring in a string
 > required operands: 3
->> - operation name: `§find`<br/>
+>> - operation name: `#find`<br/>
 >> - source string<br/>
 >> - substring to find in source string
 
@@ -1167,17 +1165,17 @@ The below named operations have been implemented:
 > returns: if found, the 0-based start position of the substring, otherwise the empty value (`€`)
 
 > e.g:<br/>
->> `O§find §Samovar §a` yields 1<br/>
->> `o,§find §Samovar §a 3` yields 5<br/>
->> `o(§find §Samovar §a 3)` yields 5<br/>
->> `O§find [sNo hay remedio] §mejor` yields €<br/>
->> `tO§find [sNo hay remedio] §mejor` yields 0 (= the type id of `€`)<br/>
->> `tO§find [sNo hay remedio] §hay` yields 1<br/>
->> `$§pos O§find §Brussels §s ?tv§pos [sHas s] [sHas no s]` yields "Has s"
+>> `O#find #Samovar #a` yields 1<br/>
+>> `o,#find #Samovar #a 3` yields 5<br/>
+>> `o(#find #Samovar #a 3)` yields 5<br/>
+>> `O#find [sNo hay remedio] #mejor` yields €<br/>
+>> `tO#find [sNo hay remedio] #mejor` yields 0 (= the type id of `€`)<br/>
+>> `tO#find [sNo hay remedio] #hay` yields 1<br/>
+>> `$#pos O#find #Brussels #s ?tv#pos [sHas s] [sHas no s]` yields "Has s"
 
-`o,§sub` Substring
+`o,#sub` Substring
 > required operands: 3<br/>
->> - §sub: the operator's name;<br/>
+>> - #sub: the operator's name;<br/>
 >> - the source string;<br/>
 >> - the start position of the substring;<br/>
 >> - (optional 4th) the length of the substring. If ommitted, the substring will be taken from the start position until the end of the source string.<br/>
@@ -1186,14 +1184,14 @@ The below named operations have been implemented:
 > returns: the substring
 
 > E.g.:<br/>
->> `O§sub [sLa Roche-en-Ardenne] 12` yields "Ardenne"<br/>
->> `o,§sub [sLa Roche-en-Ardenne] 3 5` yields "Roche"
+>> `O#sub [sLa Roche-en-Ardenne] 12` yields "Ardenne"<br/>
+>> `o,#sub [sLa Roche-en-Ardenne] 3 5` yields "Roche"
 
-> If the source string argument is not a string, but a number, then that number is first converted to a string according to the current `o§fmt` settings.
+> If the source string argument is not a string, but a number, then that number is first converted to a string according to the current `o#fmt` settings.
 
-`o,§repl` and `O,,§repl`
+`o,#repl` and `O,,#repl`
 > required operands: 4<br/>
->> - §repl : the operator's name;<br/>
+>> - #repl : the operator's name;<br/>
 >> - the source string;<br/>
 >> - the substring to be replaced;<br/>
 >> - the string to replace it with
@@ -1206,7 +1204,7 @@ The below named operations have been implemented:
 > returns: the source string with the requested replacements applied.
 
 > In other words,<br/>
-> `O,,§repl sourceString substring replacement varPos varSeq conditionRoutineName`
+> `O,,#repl sourceString substring replacement varPos varSeq conditionRoutineName`
 
 > replaces an occurrence of substring in sourceString with replacement if the condition evaluates to a value that is truthy (not 0 (zero), empty string or € (the Empty value)).
 
@@ -1229,41 +1227,41 @@ The below named operations have been implemented:
 > The operator returns a string in which the requested replacements have been performed.
 
 > E.g.<br/>
->> `$§replaced o,§repl §philadelphia §ph §f<`br/>
->> puts "filadelfia" in variable §replaced.
+>> `$#replaced o,#repl #philadelphia #ph #f<`br/>
+>> puts "filadelfia" in variable #replaced.
 
-> `R,§replCond =v§seq 0`<br/>
->> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
->> puts "filadelphia" in variable §replaced.
+> `R,#replCond =v#seq 0`<br/>
+>> `$#replaced O,,#repl #philadelphia #ph #f #pos #seq #replCond`<br/>
+>> puts "filadelphia" in variable #replaced.
 
->> `R,§replCond >v§seq 0`<br/>
->> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
->> puts "philadelfia" in variable §replaced.
+>> `R,#replCond >v#seq 0`<br/>
+>> `$#replaced O,,#repl #philadelphia #ph #f #pos #seq #replCond`<br/>
+>> puts "philadelfia" in variable #replaced.
 
->> `R,§replCond >v§seq 5`<br/>
->> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
->> puts "philadelphia" in variable §replaced.
+>> `R,#replCond >v#seq 5`<br/>
+>> `$#replaced O,,#repl #philadelphia #ph #f #pos #seq #replCond`<br/>
+>> puts "philadelphia" in variable #replaced.
 
->> `R,§replCond =v§pos 0`<br/>
->> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
->> puts "filadelphia" in variable §replaced.
+>> `R,#replCond =v#pos 0`<br/>
+>> `$#replaced O,,#repl #philadelphia #ph #f #pos #seq #replCond`<br/>
+>> puts "filadelphia" in variable #replaced.
 
->> `R,§replCond >v§pos 4`<br/>
->> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
->> puts "philadelfia" in variable §replaced.
+>> `R,#replCond >v#pos 4`<br/>
+>> `$#replaced O,,#repl #philadelphia #ph #f #pos #seq #replCond`<br/>
+>> puts "philadelfia" in variable #replaced.
 
->> `R,§replCond 1`<br/>
->> `$§replaced O,,§repl §philadelphia §ph §f §pos $seq §replCond`<br/>
->> puts "filadelfia" in variable §replaced.
+>> `R,#replCond 1`<br/>
+>> `$#replaced O,,#repl #philadelphia #ph #f #pos $seq #replCond`<br/>
+>> puts "filadelfia" in variable #replaced.
 
->> `R,§replCond 0`<br/>
->> `$§replaced O,,§repl §philadelphia §ph §f §pos §seq §replCond`<br/>
->> puts "philadelphia" in variable §replaced.
+>> `R,#replCond 0`<br/>
+>> `$#replaced O,,#repl #philadelphia #ph #f #pos #seq #replCond`<br/>
+>> puts "philadelphia" in variable #replaced.
 
->> `R,§replCond =v§pos 0`<br/>
->> `$§myCity §philadelphia`<br/>
->> `O,,§repl :§myCity §p §P §pos §seq §replCond`<br/>
->> puts "Philadelphia" in variable §myCity (due to the : operator).
+>> `R,#replCond =v#pos 0`<br/>
+>> `$#myCity #philadelphia`<br/>
+>> `O,,#repl :#myCity #p #P #pos #seq #replCond`<br/>
+>> puts "Philadelphia" in variable #myCity (due to the : operator).
 
 > (Note that all string operations are case-sensitive.)
 
@@ -1271,67 +1269,67 @@ The below named operations have been implemented:
 
 <pre>
     $
-        §replaced
+        #replaced
         O,,
-            §repl
-            §philadelphia
-            §ph
-            §f
-            §pos
-            §seq
+            #repl
+            #philadelphia
+            #ph
+            #f
+            #pos
+            #seq
             R,
-                §replCond
-                =v§pos 0
+                #replCond
+                =v#pos 0
 </pre>
 
 
-`o,§split` Split a string
+`o,#split` Split a string
 > required operands: 4<br/>
 > excess operands: ignored<br/>
 > returns: the number of segments found
 
-> The `o,§split` operator takes 4 arguments:<br/>
-> - §split : the operation's name;<br/>
+> The `o,#split` operator takes 4 arguments:<br/>
+> - #split : the operation's name;<br/>
 > - the source string;<br/>
-> - the segment separator, like §;<br/>
+> - the segment separator, like #;<br/>
 > - the prefix of the names of the variables the split fragments will be assigned to.
 
 > E.g.:
 <pre>
     $
-        §nrCities
+        #nrCities
         o,
-            §split
+            #split
             [sBrugge,Arlon,Liège]
-            §,
-            §city
+            #,
+            #city
     F
         0
         v
-            §nrCities
+            #nrCities
         1
         -
-            §count
+            #count
             1
         w
             +
                 v
                     +,
-                        §city
-                        v§count
+                        #city
+                        v#count
                 ¶
 </pre>
 >> will first store the three city names in variables city0, city1 and city2 and next write the three city names in the original string on separate lines to standard output.
 
-> If the separator is an empty string (§ or \[s\]), every character of the source string will be copied to a variable.
+> If the separator is an empty string (# or \[s\]), every character of the source string will be copied to a variable.
 
 > Note that the numbers after the varNamePrefix will have no leading zeroes, fractal part or interpunction.
 
 > In combination with the r, operator, this allows for awk-like file processing as well as reading of CSV files.
 
-`o,§fmt` Set number format for output
+`o,#fmt` Set number format for output
 > required operands: 2<br/>
-> - §fmt : the operation's name;<br/>
+> - #fmt : the operation's name;<br/>
 > - the number of fractal digits required
 
 > excess operands: 2 more operands can be given:<br/>
@@ -1345,19 +1343,19 @@ The below named operations have been implemented:
 > - the output by the w operator<br/>
 > - or the `+` (concatenation) operator.
 
-> The `+,` (concatenation) operator variant does not use the settings established by an o,§fmt operation or its defaults!
+> The `+,` (concatenation) operator variant does not use the settings established by an o,#fmt operation or its defaults!
 
-> Default is `o,§fmt 6 §. §`
+> Default is `o,#fmt 6 #. #`
 
 > E.g.:<br/>
->> `o,§fmt 2 §, §.` requests numbers to be output in European continental style and two fractal digits after the comma.<br/>
->> `o(§fmt 2 §, §.)` does the same<br/>
->> `o§fmt 3` requests output of numbers with 3 fractal digits, but no change of fractals or thousands separators.
+>> `o,#fmt 2 #, #.` requests numbers to be output in European continental style and two fractal digits after the comma.<br/>
+>> `o(#fmt 2 #, #.)` does the same<br/>
+>> `o#fmt 3` requests output of numbers with 3 fractal digits, but no change of fractals or thousands separators.
 
 ## Flow-related operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-|:-:|
-|;|combines<br/>expressions|2|used|value of<br/>last one|`;158 28`<br/>`;;+52 8 °2.41 r52.1`<br/>`;(§A §B §C)`|28<br/>52<br/>"C"|
+|;|combines<br/>expressions|2|used|value of<br/>last one|`;158 28`<br/>`;;+52 8 °2.41 r52.1`<br/>`;(#A #B #C)`|28<br/>52<br/>"C"|
 |?|if|2:<br/>1. condition<br/>2. operator<br/>executed<br/>if true<br/>3. operator<br/>executed<br/>if false|ignored|value of<br/>executed<br/>operator|see below||
 |?,|try<br/>operand 1;<br/>if error<br/>return<br/>operand 2|2|if a 3rd<br/>operand<br/>is given,<br/>it's returned<br/>when no error.|see prev.<br/>columns|see below||
 |V|value of<br/>1st operand<br/>of last ?,<br/>operator|0|ignored|Error value<br/>if operand1<br/>failed, else<br/>any value|see `?,`<br/>below||
@@ -1374,8 +1372,8 @@ The below named operations have been implemented:
 
 > e.g:<br/>
 >> `;$0 ~18 v0` groups 2 operations as 1 and yields -18<br/>
->> `;;K7 K35 X§myRoutine` groups 3 operations as 1<br/>
->> `;(+:§count 1 +:§sum v§count ?=v§count 20 B1 €)` groups 3 operations as 1
+>> `;;K7 K35 X#myRoutine` groups 3 operations as 1<br/>
+>> `;(+:#count 1 +:#sum v#count ?=v#count 20 B1 €)` groups 3 operations as 1
 
 `?` if
 > required operands: 3<br/>
@@ -1386,14 +1384,14 @@ The below named operations have been implemented:
 
 > e.g:<br/>
 <pre>
-    $§crit 10
+    $#crit 10
     ?
-        >v§crit 5
+        >v#crit 5
         ;
-            /:§crit 2
-            +§divs 1
+            /:#crit 2
+            +#divs 1
         €
-    v§crit
+    v#crit
 </pre>
 >> assigns (`$`) 10 to variable "crit"; if (`?`) variable "crit" exceeds (`>`) 5, it's divided by 2 and (`;`) variable "divs" is increased, otherwise, nothing (€) happens. Afterwards, the value of variable "crit" is returned.
 
@@ -1401,20 +1399,20 @@ The below named operations have been implemented:
 
 <pre>
     R(
-        §thanksWord
+        #thanksWord
 
-        $§language k
+        $#language k
 
-        ?=v§language §en      [c Test ? and first operand: the condition]
+        ?=v#language #en      [c Test ? and first operand: the condition]
         [sthank you]          [c Second operand: return value if condition is true]
-        ?=v§language §fr      [c Third operand: a subsequent test]
-        §merci
-        ?=v§language §de
+        ?=v#language #fr      [c Third operand: a subsequent test]
+        #merci
+        ?=v#language #de
         [sdanke schön]
-        ?=v§language §nl
+        ?=v#language #nl
         [sdank u]
-        ?=v§language §el
-        §ευχαριστώ
+        ?=v#language #el
+        #ευχαριστώ
         [sthank you]          [c Default value]
     )
 </pre>
@@ -1480,7 +1478,7 @@ The below named operations have been implemented:
 > If more than one statement is needed in operand 2, use the ; combinator operator or enclose the `W` operator's operands in parentheses.
 
 > Besides finding a falsy value when re-evaluation its 1st operand, the `W` operator will also stop repeating iterations if
->> - the maximum number of iterations set by the `Z§loops` operation have been done (default = 10,000) - this is a protection against vicious loops;<br/>
+>> - the maximum number of iterations set by the `Z#loops` operation have been done (default = 10,000) - this is a protection against vicious loops;<br/>
 >> - a `B` operation in the current or a nested loop requests a loop break.
 
 > e.g:<br/>
@@ -1496,35 +1494,35 @@ The below named operations have been implemented:
 </pre>
 >> yields the summation of 10, to wit 55.
 
->>> *Note: a summation can be calculated more easily using `$§source 10 /* v§source + v§source 1 2`*
+>>> *Note: a summation can be calculated more easily using `$#source 10 /* v#source + v#source 1 2`*
 
 <pre>
     R(
-        §factorial
+        #factorial
 
-        $§fact k
-        $§res 1
+        $#fact k
+        $#res 1
         W
-            >v§fact 0
+            >v#fact 0
             ;
-                *:§res v§fact
-                -:§fact 1
-        v§res
+                *:#res v#fact
+                -:#fact 1
+        v#res
     )
 
-    X(§factorial 6)
+    X(#factorial 6)
 </pre>
 >> defines a routine "factorial" that calculates factorials, calls it while passing value 6 on the stack and returns 720.
 
 <pre>
-    Z§loops 500
-    $§count 0
+    Z#loops 500
+    $#count 0
     W
         1
-        +:§count 1
-    v§count
+        +:#count 1
+    v#count
 </pre>
->> yields 500: as the 1st operand (`1`) of the `W` operator is always truthy, the maximal number of iteration set by the `Z§loops 500` operation is looped through, increasing the "count" variable every time by 1 (`+:§count 1`). As a result, that maximal number of iterations is returned (`v§count`).
+>> yields 500: as the 1st operand (`1`) of the `W` operator is always truthy, the maximal number of iteration set by the `Z#loops 500` operation is looped through, increasing the "count" variable every time by 1 (`+:#count 1`). As a result, that maximal number of iterations is returned (`v#count`).
 
 > Breaking from a loop: see the `B` operator.
 
@@ -1575,44 +1573,44 @@ The below named operations have been implemented:
 > The `F` operator can also count down: just have the 1st operand greater than the 2nd. The step operator should remain positive. E.g.:
 <pre>
     R(
-        §revertChars
+        #revertChars
 
-        $§orig k
-        $§nrFrag o,§split v§orig § §fragment
-        $§reverse §
+        $#orig k
+        $#nrFrag o,#split v#orig # #fragment
+        $#reverse #
         F
-            - v§nrFrag 1    [c First index]
+            - v#nrFrag 1    [c First index]
             0               [c Last index]
             1               [c Step value; positive]
-            §index          [c Id of variable that will hold loop index]
+            #index          [c Id of variable that will hold loop index]
             +               [c Concatenate character in var. "fragment"index
                                 with var. "reverse"]
-                :§reverse
+                :#reverse
                 v
                     +,
-                        §fragment
-                        v§index
-        v§reverse
+                        #fragment
+                        v#index
+        v#reverse
     )
 
-    X(§revertChars §ABCDE)  [c Call routine "revertChars")
+    X(#revertChars #ABCDE)  [c Call routine "revertChars")
 </pre>
 >> This script creates a routine "revertChars" that reverses the characters of a string popped from the stack.<br/>
 >> Next, the script calls it and yields the reverted string (as the call is the last operator).
 
 > Breaking from a loop: see the `B` operator.
 
-> Just like the `W` operator, the number of loops an `F` operator can iterate through is limited by the settings of the `Z§loops` operation, or its default: 10,000.
-> If your script doesn't execute as many iterations as you thought it would, you might need to set the allowed number of iterations using this `Z§loops` operation. E.g.:
+> Just like the `W` operator, the number of loops an `F` operator can iterate through is limited by the settings of the `Z#loops` operation, or its default: 10,000.
+> If your script doesn't execute as many iterations as you thought it would, you might need to set the allowed number of iterations using this `Z#loops` operation. E.g.:
 
 <pre>
-    $§iterationsNeeded 1_000_000
-    Z§loops v§iterationsNeeded
+    $#iterationsNeeded 1_000_000
+    Z#loops v#iterationsNeeded
     F
         1
-        v§iterationsNeeded
+        v#iterationsNeeded
         1
-        §count
+        #count
         [c Do something a million times.]
 </pre>
 
@@ -1626,58 +1624,58 @@ The below named operations have been implemented:
 > The `B` operator has been designed to both break a current loop as well as a parent loop of nested loops. Therefore, it takes 1 operand: the level of parent loops (if any) to break, where 1 is the current loop, 2 is the immediate parent loop, etc. E.g.:
 
 <pre>
-    Z§loops 10
-    $§iters 0
+    Z#loops 10
+    $#iters 0
     W
         1
         W
             1
-            +:§iters 1
-    v§iters
+            +:#iters 1
+    v#iters
 </pre>
 >> Has no break operations, and as the maximal number of iterations is set to 10, the script will execute 10 times 10 iterations of a nested loop, so variable "iters" will hold 100 at the end.
 
 <pre>
-    Z§loops 10
-    $§iters 0
+    Z#loops 10
+    $#iters 0
     W
         1
         W
             1
             ;
-                +:§iters 1
+                +:#iters 1
                 B1
-    v§iters
+    v#iters
 </pre>
 >> Has a break operation in its nested loop, so these nested loops will only execute once. Therefore, this script will execute 10 times 1 iteration of a nested loop, so variable "iters" will hold 10 at the end.
 
 <pre>
-    Z§loops 10
-    $§iters 0
+    Z#loops 10
+    $#iters 0
     W
         1
         W
             1
             ;
-                +:§iters 1
+                +:#iters 1
                 B2
-    v§iters
+    v#iters
 </pre>
 >> Has a break operation in its nested loop that breaks the parent loop, so both the nested and parent loops will only execute once. Therefore, this script will execute 1 time 1 iteration of a nested loop, so variable "iters" will hold 1 at the end.
 
 <pre>
-    Z§loops 10
-    $§iters 0
+    Z#loops 10
+    $#iters 0
     W
         1
         W
             1
             ;(
-                +:§iters 1
+                +:#iters 1
                 B2
                 B0
             )
-    v§iters
+    v#iters
 </pre>
 >> Has a break operation in its nested loop that breaks the parent loop. However the next operation is `B0`, which desactivates any breaks, so this script repeats both the parent and nested loop 10 times anyway. Therefore, variable "iters" will hold 100 at the end.
 
@@ -1711,7 +1709,7 @@ For examples, see the section about routines above.
 >> `w[sEnter a number: ] r` yields -45 if the user entered "~45".<br/>
 >> `w[sEnter a number: ] r` yields "Ouagadougou" if the user entered "Ouagadougou".<br/>
 >> `w[sEnter degrees: ]°,r` yields the number input understood as degrees and converted to radians (`°,`).<br/>
->> `w[sEnter your name: ] $§name r` stores the name entered by the user to variable "name" - next, input check can be performed by the code.<br/>
+>> `w[sEnter your name: ] $#name r` stores the name entered by the user to variable "name" - next, input check can be performed by the code.<br/>
 >> `w[sEnter a Laconic expression: ] Er` evaluates and executes (`E`) a string entered (`r`) as Laconic code, so if the user entered "+(22 8 12 7)", 49 would be returned.
 
 `r,` read input from a file
@@ -1728,7 +1726,7 @@ For examples, see the section about routines above.
 > e.g:<br/>
 >> `* 2 Er, [s/home/linda/constants/lemniscate.txt]` would yield the double of the Lemniscate constant if file /home/linda/constants/lemniscate.txt would contain ".8346268".<br/>
 
->> `Er, §routines.txt` would import all routines coded in file ./routines.txt using `R` or `R,` operators. These routines would be immediately callable from subsequent code.<br/>
+>> `Er, #routines.txt` would import all routines coded in file ./routines.txt using `R` or `R,` operators. These routines would be immediately callable from subsequent code.<br/>
 
 >> *Note: another way of importing routines from a Laconic code file is by issuing the -i parameter when using the laconic executable.*
 
@@ -1737,25 +1735,25 @@ For examples, see the section about routines above.
 > excess operands: written also<br/>
 > returns: the number of bytes written
 
-> Note that no newline or CR characters are inserted automatically. You can, however, easily add a newline to any text using the + and ¶ or c§n operators - see the example below.
+> Note that no newline or CR characters are inserted automatically. You can, however, easily add a newline to any text using the + and ¶ or c#n operators - see the example below.
 
-> If a script's last operation is a `w`, the entire script's return value will be the number of bytes that write operation did write. To avoid this often useless output, insert a `Z§quiet 1` operation in the script, or else have the script end with an empty string: `[s]` or `§`.
+> If a script's last operation is a `w`, the entire script's return value will be the number of bytes that write operation did write. To avoid this often useless output, insert a `Z#quiet 1` operation in the script, or else have the script end with an empty string: `[s]` or `#`.
 
 > e.g:<br/>
 <pre>
-    Z§quiet 1
+    Z#quiet 1
     w[sEnter radians: ]
-    $§input r 
+    $#input r 
     ?
-        =tv§input 1
-        w([sDegrees: ] °v§input ¶)
+        =tv#input 1
+        w([sDegrees: ] °v#input ¶)
         w([sHey, enter a number!] ¶)
 </pre>
 >> This script<br/>
->> - suppresses the output of the entire script's last operation's value (`Z§quiet 1`),
+>> - suppresses the output of the entire script's last operation's value (`Z#quiet 1`),
 >> - writes a prompt for an input of radians (`w`),
 >> - assigns the user's input (`r`) to variable "input" (`$`),
->> - tests (`?`) if the type (`t`) of that input (`v§input`) is numeric (`1`),
+>> - tests (`?`) if the type (`t`) of that input (`v#input`) is numeric (`1`),
 >> - and if so, outputs (`w`) this input converted to degrees (`°`)
 >> - or else, displays an error message (`w`).
 
@@ -1775,15 +1773,15 @@ For examples, see the section about routines above.
 
 > e.g:<br/>
 <pre>
-    Z§quiet 1
-    $§index 5
-    $§currentData [sJust a file write test]
+    Z#quiet 1
+    $#index 5
+    $#currentData [sJust a file write test]
     ?,(
         w,
             +,
-                §calcData
-                v§index 
-            v§currentData
+                #calcData
+                v#index 
+            v#currentData
         w(V ¶)
         w(q,V [s bytes written] ¶)
     )
@@ -1796,10 +1794,10 @@ For examples, see the section about routines above.
 ## Other operators
 |Operator|Description|Required<br/>operands|Excess<br/>operands|Returns|Example|Example<br/>yields|
 |:-:|:-:|:-:|:-:|:-:|:-|:-:|
-|q|quote:<br/>convert<br/>to string.<br/>Same as<br/>+§ ...|1|ignored|string;<br/>numbers are<br/>formatted<br/>according to<br/>o,§fmt settings|`q21`<br/>`q[sA string]`<br/>`q€`<br/>`q/1 0`|"21.000000"<br/>"A string"<br/>""<br/>"DivideByZero('/')"|
-|q,|quote:<br/>convert<br/>to string.<br/>Same as<br/>+,§ ...|1|ignored|string;<br/>fractal parts<br/>of numbers are<br/>truncated<br/>towards zero|`q,21`<br/>`q,[sA string]`<br/>`q,€`<br/>`q,/1 0`|"21"<br/>"A string"<br/>""<br/>"DivideByZero('/')"|
+|q|quote:<br/>convert<br/>to string.<br/>Same as<br/>+# ...|1|ignored|string;<br/>numbers are<br/>formatted<br/>according to<br/>o,#fmt settings|`q21`<br/>`q[sA string]`<br/>`q€`<br/>`q/1 0`|"21.000000"<br/>"A string"<br/>""<br/>"DivideByZero('/')"|
+|q,|quote:<br/>convert<br/>to string.<br/>Same as<br/>+,# ...|1|ignored|string;<br/>fractal parts<br/>of numbers are<br/>truncated<br/>towards zero|`q,21`<br/>`q,[sA string]`<br/>`q,€`<br/>`q,/1 0`|"21"<br/>"A string"<br/>""<br/>"DivideByZero('/')"|
 |t|type|1|ignored|0 for empty,<br/>1 for number,<br/>2 for text,<br/>90 for error.|`t€`<br/>`t~55`<br/>`t+,[sRoom ] 24`<br/>t/1 0|0<br/>1<br/>2<br/>90|
 |N|number<br/>of operands<br/>of preceding<br/>same-level<br/>operator.<br/>If that was<br/>a loop (W or F),<br/>iterations<br/>executed.|0|ignored|number|`*56.77 21 N`<br/><br/>`$`<br/>`  10`<br/>`  ;`<br/>`    F1 5 1 0 €`<br/>`    N`<br/>`v10`|2<br/><br/><br/><br/><br/><br/><br/>5|
-|E|evaluates<br/>and<br/>executes<br/>the expression<br/>in 1st<br/>operand<br/>(should<br/>be string)|1|ignored|evaluation<br/>result|`E[s -70 8]`<br/><br/>`E[sR§double *2 k]`<br/>`X(§double 11)`|62<br/><br/><br/>22|
+|E|evaluates<br/>and<br/>executes<br/>the expression<br/>in 1st<br/>operand<br/>(should<br/>be string)|1|ignored|evaluation<br/>result|`E[s -70 8]`<br/><br/>`E[sR#double *2 k]`<br/>`X(#double 11)`|62<br/><br/><br/>22|
 |U|user-<br/>coded<br/>error|1:<br/>error<br/>message|ignored|error|`U[sInput`<br/>`  should be`<br/>`  a number!]`|"UserDefinedError(<br/>`"Input should be a number!"`)"|
 

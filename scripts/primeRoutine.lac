@@ -1,6 +1,6 @@
 [c The number passed by stack is prime if the script returns 1, otherwise, the script returns the lowest factor found.]
 R
-	§isPrime
+	#isPrime
 	?
 		=k, 0
 		U[sisPrime: no number on stack]

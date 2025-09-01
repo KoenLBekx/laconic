@@ -1,19 +1,19 @@
 R(
-	§revertChars
+	#revertChars
 
-	$§orig k
-	$§nrFrag o,§split v§orig § §fragment
-	$§reverse §
+	$#orig k
+	$#nrFrag o,#split v#orig # #fragment
+	$#reverse #
 	F
-		- v§nrFrag 1
+		- v#nrFrag 1
 		0
 		1
-		§index
+		#index
 		+
-			:§reverse
+			:#reverse
 			v
 				+,
-					§fragment
-					v§index
-	v§reverse
+					#fragment
+					v#index
+	v#reverse
 )

@@ -1,5 +1,5 @@
 $
-	§input
+	#input
 	[s
 		+(
 			[sLACONIC EXPRESSION INTERPRETER]
@@ -8,16 +8,16 @@ $
 			¶
 		)
 	]
-$ §isTitle 1
+$ #isTitle 1
 W
-	!= v§input §q
+	!= v#input #q
 	;(
 		w?
-			v§isTitle
-			§
+			v#isTitle
+			#
 			[s	]
-		w	Ev§input
-		$ §isTitle 0
+		w	Ev#input
+		$ #isTitle 0
 		w + ¶ [sEnter an expression: ]
-		$ §input r
+		$ #input r
 	)

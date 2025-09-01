@@ -1,16 +1,16 @@
-$§isInputOk 0
+$#isInputOk 0
 W
 	(
-		!=v§isInputOk 1
+		!=v#isInputOk 1
 		w[sEnter a number to convert from base10 to base2: ]
 		$0 r
-		$§isInputOk tv0
+		$#isInputOk tv0
 		?
-			!=v§isInputOk 1
+			!=v#isInputOk 1
 			w[sThat was not a valid number. ]
 			0
 	)
 
-o§fmt 20
+o#fmt 20
 b,2
 v0
