@@ -8,7 +8,7 @@
 
 > *I got carried away, because I had fun.*
 
-> *I needed a concise expression interpreter, but Laconic nearly became a programming language:*
+> *I needed an embeddable concise expression interpreter, but Laconic nearly became a programming language:*
 
 > *besides numeric, boolean, string and date operators, it provides variables, tests, loops, routines, standard input & output, file I/O and error handling.*
 
@@ -72,7 +72,7 @@ Many operators, however, simply ignore excess operands: `~(4 25)` evaluates to -
 
 Laconic handles all numbers as `f64`: 64-bit float values. Mind that this might entail precision limitations. 
 
-These precision limitations can be mitigated by setting an *orb* or precision allowance of comparison operators using a `Z#prec` expression in the script - see the operator's description below.
+These precision limitations can be mitigated by setting an *orb* or precision allowance for comparison operators using a `Z#prec` operation in the script - see that operation's description below.
 
 ## Basic elements of the Laconic language
 
@@ -80,10 +80,10 @@ Laconic expressions or scripts, which are technically the same, consist of basic
 - whitespace
 - operators
 - numbers
-- simple strings
-- string bracket contents
-- number bracket contents
-- comment bracket contents
+- simple strings (`#...`)
+- string bracket contents (`[s...]`)
+- number bracket contents (`[n...]`)
+- comment bracket contents (`[c...]`)
 
 All of these are case-sensitive.
 
@@ -213,22 +213,23 @@ Furthermore, adding the variant operator (`,`) to both the O and o operands incr
 - etc.
 
 Both operators, however, can have their number of operands overridden by parentheses,
-in which case they can be used interchangeably and following variant operators don't affect the number of expected operands (they can still affect the behaviour, though).
+in which case they can be used interchangeably and following variant operators don't affect the number of expected operands.
 
 The operation name, which is the first operand of the `o` and `O` operators, can either be a number or a string.
-For readability, however, strings are chosen for the implemented operators.
+For readability, however, strings have been chosen for the implemented operators.
 
 As stated, this string is the first operand and can be written in any valid way a first-operand-string can follow an operator:<br/>
 `o #name`<br/>
 `o#name`<br/>
 `o [sname]`<br/>
+`o[sname]`<br/>
 or even on a new line:<br/>
 <pre>
 o
   #name
 </pre>
 
-See the *Named Operations List* section below for the implemented named operations.
+See the *Named Operations List* section below for the implemented named operations; see the *Strings* section for the ways strings can be represented in Laconic code.
 
 ## Value types
 
@@ -374,7 +375,7 @@ e.g.:<br/>
 
 ## Strings
 
-Strings are either<br/>
+Strings can be encoded in two ways: either<br/>
 - enclosed between `[s` and `]` : string bracket contents
 - simple strings: enclosed between any of<br/>
 > `#` and whitespace<br/>
@@ -431,7 +432,9 @@ The `o,#greg year month day` named operation calculates a sequence number for an
 > `o,#greg 1582 10 18` yields 4<br/>
 > `o,#greg 1970 1 1` yields 141418
 
-The `o,#dow year month day` named operation yields a number from 0 to 6 for Saturday to Friday:<br/>
+These sequence numbers allow calculation of the number of days between dates.
+
+Day-of-week: the `o,#dow year month day` named operation yields a number from 0 to 6 for Saturday to Friday:<br/>
 > `o,#dow 1582 10 15` yields 6: Friday<br/>
 > `o,#dow 1582 10 18` yields 2: Monday
 
@@ -473,16 +476,16 @@ Variable identifiers can be strings as well as numbers.
 
 A variable can be assigned using the `$` operator:
 
-> `$#tau *2p` assigns the value of twice Pi to variable having identifier "tau".
+> `$#tau *2p` assigns the value of twice Pi to a variable having identifier "tau".
 
-> `$0 *2p` assigns the value of twice Pi to variable having identifier 0 - a number.
+> `$0 *2p` assigns the value of twice Pi to a variable having identifier 0 - a number.
 
 Identifier 0 is not the same as identifier "0":<br/>
-> `$#0 *2p` assigns the value of twice Pi to variable having identifier "0" - a string.
+> `$#0 *2p` assigns the value of twice Pi to a variable having identifier "0" - a string.
 
 One can even have spaces in variable identifiers:
 
-> `$[sMax value] 200` assigns 200 to variable having identifier "Max value".
+> `$[sMax value] 200` assigns 200 to a variable having identifier "Max value".
 
 The value of a variable can be read by the `v` operator:
 
@@ -554,7 +557,7 @@ This would work all right, but there's a shorter way:
 
 The `:` read-and-assign operator has one operand and does two things:
 - it reads the value of the variable designed by its operand;
-- it tells the parent operator to assign its outcome to that operand.
+- it tells the parent operator to assign its outcome to that variable.
 
 So, if variable "counter" holds value `4`, operation
 
@@ -658,7 +661,7 @@ One can pop and read items from the stack using the `k` operator:
 
 > `K40 k` yields 40.
 
-For easier passing arguments to routines, one can push operands in reverse order on the stack using the `K,` operand:
+For easier passing arguments to routines, one can push operands in reverse order on the stack using the `K,` operator:
 
 > `K,(9 7 5 3) >(kkkk)` yields 1 (the larger numbers were on top of the stack and popped first)
 
@@ -682,10 +685,12 @@ These two kinds of routines are declared using two different operator variants:
 - `R` declares routines that will run in an isolated environment;
 - `R,` declares routines that will share the caller's variables.
 
-> *Note: routines will always share the stack and routines known to their caller, and the caller will always have access to stack items pushed by a called routine or other routines declared by a called routine. In other words, the stack and collection of routines are global.*
+> *Note: routines will always share the stack and routines known to their caller, and the caller will always have access to stack items pushed by a called routine or to other routines declared by a called routine.*
+
+> *In other words, the stack and collection of routines are global.*
 
 The `R` and `R,` operators expect two operands:
-- the routine's name or identifier, which can be any value type (empty, number or string);
+- the routine's name or identifier, which can be a number or a string;
 - the operation to be performed.
 
 If more than two arguments are given (using parentheses), all operands after the routine name will be executed when the routine is run.
@@ -731,12 +736,12 @@ As a routine's name is just another expression value, it's possible to use varia
 A routine's code has access to its own name or identifier using the `c#rtn` operation. When this operation is used outside of any routine, it returns "main".
 
 Routines can be stored in script files, which are UTF-8 text files containing Laconic code. These routintes can be imported to a main script in two ways:
-- either by preceding calling code in the script by an Evaluate-after-reading operation: `Er,#myRoutines.lac X[sRoutine from file]`
-- or else by including the script file by preceding the main code by an `-i` parameter when running the command-line Laconic interpreter: `...$ laconic -i myRoutines.lac 'X[sRoutine from file]'`
+- either by preceding calling code in the script by an Evaluate-after-reading operation:<br/>`Er,#myRoutines.lac X[sRoutine from file]`
+- or else by including the script file by preceding the main code by an `-i` parameter when running the command-line Laconic interpreter:<br/>`...$ laconic -i myRoutines.lac 'X[sRoutine from file]'`
 
 ## Unit tests on routines
 
-Routines are mainly written to reuse code. So they tend to contain important code you want to rely on.
+Routines are mainly written in order to reuse code. So they tend to contain important code you want to rely on.
 
 A popular way to ensure you really can rely on your code is submitting it to *unit tests*: little test programs that use a routine and compare its outcome to an expected result.
 
@@ -1432,7 +1437,7 @@ The below named operations have been implemented:
 > then its outcome is returned,<br/>
 > else oprIfError's outcome.
 
-> If a third operator oprIfOkis present, then that operator's outcome is returned if opr1 was successful.
+> If a third operator oprIfOk is present, then that operator's outcome is returned if opr1 was successful.
 
 > Both the operators oprIfOk and oprIfError can make use of a V operator, which will yield the result of the successful operation if called by oprIfOk, or the error value if called by oprIfError.
 
@@ -1476,7 +1481,7 @@ The below named operations have been implemented:
 >> - empty string (`[s]`)<br/>
 >> - error value.)
 
-> If more than one statement is needed in operand 2, use the ; combinator operator or enclose the `W` operator's operands in parentheses.
+> If more than one operation is needed in operand 2, use the ; combinator operator or enclose the `W` operator's operands in parentheses.
 
 > Besides finding a falsy value when re-evaluation its 1st operand, the `W` operator will also stop repeating iterations if
 >> - the maximum number of iterations set by the `Z#loops` operation have been done (default = 10,000) - this is a protection against vicious loops;<br/>
@@ -1532,7 +1537,7 @@ The below named operations have been implemented:
 > excess operands: executed also in iterations<br/>
 > returns: the value of its last executed operand
 
-> `F startValue endValue increment counterVariable statement`
+> `F startValue endValue increment counterVariable iteration_operands`
 
 > The `F` operator takes 5 operands :
 > - the starting value of the loop counter
@@ -1620,7 +1625,7 @@ The below named operations have been implemented:
 > excess operands: ignored<br/>
 > returns: its first operand
 
-> The `B` operator breaks both 'W` (while) and `F` (for) loops.
+> The `B` operator breaks both `W` (while) and `F` (for) loops.
 
 > The `B` operator has been designed to both break a current loop as well as a parent loop of nested loops. Therefore, it takes 1 operand: the level of parent loops (if any) to break, where 1 is the current loop, 2 is the immediate parent loop, etc. E.g.:
 
@@ -1729,7 +1734,7 @@ For examples, see the section about routines above.
 
 >> `Er, #routines.txt` would import all routines coded in file ./routines.txt using `R` or `R,` operators. These routines would be immediately callable from subsequent code.<br/>
 
->> *Note: another way of importing routines from a Laconic code file is by issuing the -i parameter when using the laconic executable.*
+>> *Note: another way of having Laconic code in a file executed is issuing the -i parameter when using the laconic executable.*
 
 `w` write to standard output
 > required operands: 1<br/>

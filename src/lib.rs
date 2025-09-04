@@ -174,6 +174,10 @@ pub enum ScriptError {
     /// negative number.
     InvalidDateSequenceNumber(String),
 
+    /// An empty value or error value was found where a number or string were expected as
+    /// identifier.
+    InvalidIdentifier(char),
+
     /// A number base smaller than 2 or equal to f64::INFINITY was requested.
     InvalidNumberBase(f64),
 
@@ -2537,7 +2541,7 @@ pub(crate) mod opr_funcs {
         let mut index = 0f64;
 
         match operands[0].get_value() {
-            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Empty => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
             ValueType::Number(num) =>  {
                 index = num;
             },
@@ -2545,7 +2549,7 @@ pub(crate) mod opr_funcs {
                 name_base = txt;
                 name_is_string = true;
             }
-            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Error(_) => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
         }
 
         let mut counter = 0f64;
@@ -2577,10 +2581,10 @@ pub(crate) mod opr_funcs {
         check_nr_operands(opr_mark, operands, 1)?;
 
         let index = match operands[0].get_value() {
-            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Empty => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
             ValueType::Number(num) => ValueType::Number(num),
             ValueType::Text(txt) => ValueType::Text(txt),
-            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Error(_) => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
         };
 
         *result_value = shuttle.get_var(&index);
@@ -2622,10 +2626,10 @@ pub(crate) mod opr_funcs {
         check_nr_operands(opr_mark, operands, required_nr_ops)?;
 
         let index = match operands[0].get_value() {
-            ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+            ValueType::Empty => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
             ValueType::Number(num) => ValueType::Number(num),
             ValueType::Text(txt) => ValueType::Text(txt),
-            ValueType::Error(s_err) => return Err(s_err),
+            ValueType::Error(_) => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
         };
 
         let stack_len = shuttle.assignment_indexes_stack.len();
@@ -4009,10 +4013,10 @@ pub(crate) mod opr_funcs {
 
         let pos_var = if use_condition {
             match operands[3].get_value() {
-                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Empty => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
                 ValueType::Text(content) => ValueType::Text(content),
                 ValueType::Number(content) => ValueType::Number(content),
-                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Error(_) => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
             }
         } else {
             ValueType::Empty
@@ -4020,10 +4024,10 @@ pub(crate) mod opr_funcs {
 
         let seq_var = if use_condition {
             match operands[4].get_value() {
-                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Empty => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
                 ValueType::Text(content) => ValueType::Text(content),
                 ValueType::Number(content) => ValueType::Number(content),
-                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Error(_) => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
             }
         } else {
             ValueType::Empty
@@ -4037,10 +4041,10 @@ pub(crate) mod opr_funcs {
 
         let mut found_routine = if use_condition {
             let name = match operands[5].get_value() {
-                ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                ValueType::Empty => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
                 ValueType::Text(content) => ValueType::Text(content),
                 ValueType::Number(content) => ValueType::Number(content),
-                ValueType::Error(s_err) => return Err(s_err),
+                ValueType::Error(_) => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
             };
 
             if let Some(rout) = shuttle.routines.get(&name) {
@@ -4524,6 +4528,7 @@ pub(crate) mod opr_funcs {
             }
 
             match op.get_value() {
+                ValueType::Empty if op_count == 3 => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
                 ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
                 ValueType::Number(num) => match op_count {
                     0 => counter_val = num,
@@ -4534,6 +4539,7 @@ pub(crate) mod opr_funcs {
                 },
                 ValueType::Text(txt) if op_count == 3 => counter_var = ValueType::Text(txt),
                 ValueType::Text(_) => return Err(ScriptError::NonNumericOperand(*opr_mark)),
+                ValueType::Error(_) if op_count == 3 => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
                 ValueType::Error(s_err) => return Err(s_err),
             }
         }
@@ -4731,10 +4737,10 @@ pub(crate) mod opr_funcs {
                 (0, op) => {
                     op.operate(shuttle)?;
                     name = match op.get_value() {
-                        ValueType::Empty => return Err(ScriptError::EmptyOperand(*opr_mark)),
+                        ValueType::Empty => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
                         ValueType::Number(num) => ValueType::Number(num),
                         ValueType::Text(txt) => ValueType::Text(txt),
-                        ValueType::Error(s_err) => return Err(s_err),
+                        ValueType::Error(_) => return Err(ScriptError::InvalidIdentifier(*opr_mark)),
                     };
                 },
                 (_, op) => {

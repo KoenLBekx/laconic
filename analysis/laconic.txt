@@ -1541,19 +1541,13 @@ Operators
 								If only one numeric argument is given, it's not understood as a year, but as the Gregorian day
 								sequence number - see the o,#greg operator.
 
-								e.g. o,#dow 2025 6 5	yields 5: thursday.
+								e.g. o#dow 161763	yields 5: thursday.
 
 			o,#greg year month day
 
-							Sequence number of a day in the Gregorian calendar, assuming
+							Sequence number of a day in the Gregorian calendar, assuming October 15, year 1582 AD was day 1.
 
-								- January 1, year 0001 AD was day 1;
-								- December 31, year 0001 BC was day -1.
-
-								(Laconic's calendar operators calculate within the fiction
-								of the Gregorian calendar having been used since Roman imperial era.)
-
-								No negative years are accepted.
+							No negative years are accepted.
 
 			o#gregy sequence_number
 
