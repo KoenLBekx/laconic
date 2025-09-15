@@ -27,7 +27,7 @@ The Laconic crate provides both
 
  > Execute the `laconic` executable without any parameters to get help.
 
-- a library exposing `struct Interpreter`, which can be used by other applications;
+- a library exposing `struct Interpreter`, which can be used by other applications:
 ```
     use laconic::Interpreter;
     let mut interpreter = Interpreter::new_stdio_filesys();
@@ -326,33 +326,50 @@ The default number base is 10.
 
 However, using the `b` and `b,` operators, one can switch to other bases for input and output, respectively.
 
-Digits for bases greater than 10 consist of 0 to 9 and the appropriate number of upper case letters needed:
+As for literal number presentation, Laconic handles 3 number base ranges in a different way:
 
-- base  2 :  0-1
-- base  3 :  0-2
-- base  8 :  0-7
-- base 10 :  0-9
-- base 11 :  0-9 and A
-- base 12 :  0-9 and A-B
-- base 16 :  0-9 and A-F
-- base 17 :  0-9 and A-G
-- base 36 :  0-9 and A-Z
-- base 37 :  0 - 9 and 10 - 36
-- base 200 : 0 - 9 and 10 - 199
+> Digits in bases from 2 up to 10:
 
-Numbers in bases higher than 10 having digits above 9 should be enclosed in number bracket contents : `[n...]`.
+>> These numbers can be expressed directly, e.g.:<br/>
+>> - base  2 :  0-1<br/>
+>> - base  3 :  0-2<br/>
+>> - base  8 :  0-7<br/>
+>> - base 10 :  0-9<br/>
+>> E.g.: `b2 101.01` yields 5.25
 
-e.g.:<br/>
-> `b16 [n1A]` yields 26.<br/>
-> `b16 1A` will consider the A character to be an operator, and might result in an error.<br/>
-> `b16 11` yields 17.
+> Digits in bases from 11 up to 36:
 
-If a number expressed in a base higher than 36 has digits greater than 35,
-it has to be expressed as number bracket contents: `[n...]` clauses as series of base10 numbers separated by spaces:
+>> Just like hexadecimal numbers, these numbers use (case-insensitive) letters for digits above 10:
+>> - base 11 :  0-9 and A<br/>
+>> - base 12 :  0-9 and A-B<br/>
+>> - base 16 :  0-9 and A-F<br/>
+>> - base 17 :  0-9 and A-G<br/>
+>> - base 36 :  0-9 and A-Z<br/>
 
-> `b50 [n1 20]` yields 70(base10)
+>> If these number contain letters, the should be written as number bracket contents:<br/>
+>> `b16 11.8` yields 17.5(base10)<br/>
+>> `b16 [n1A.C]` yields 26.75(base10)<br/>
+>> `b16   1A.C` has Laconic consider A and C as operators and complain about insufficient operands for the C operator.<br/>
 
-This reduces calculating hours, minutes and seconds to calculating seconds in base 60:
+> Digits in bases from 37 and higher:
+
+>> The "digits" in these bases should be written as decimal numbers. If the number contains more than one digit, they should be separated by whitespace and be put inside number brackets:<br/>
+>> - base 37 :  0 - 9 and 10 - 36<br/>
+>> - base 38 :  0 - 9 and 10 - 37<br/>
+>> - base 200 : 0 - 9 and 10 - 199<br/>
+>> - etc.<br/>
+
+>> If the number contains more than one digit, they should be separated by whitespace and be put inside number brackets:
+
+>> E.g.: base80:<br/>
+>> `b80 4.8` yields 4.1(base10)<br/>
+>> `b80 [n1 4]` yields 84(base10)<br/>
+>> E.g.: base50:<br/>
+>> `b50 [n1 4.25]` yields 54.5(base10)<br/>
+>> `b50 [n1 4.0 16]` yields 54.0064(base10)<br/>
+>> `b50 [n1 4 . 25]` yields 54.5(base10) too - in number brackets, spaces are allowed around the fractal separator<br/>
+
+All of this reduces calculating hours, minutes and seconds to calculating seconds in base 60:
 
 > `b,60 b60 /[n5 20 8] 4` yields [1 20 2(base60)] or 4802(base10):<br/>
 > a fourth of 5 hours, 20 minutes and 8 seconds is 4802 seconds or 1 hour, 20 minutes and 2 seconds.

@@ -1,18 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-// The braces after the first comment slashes make Vim fold these comments also.
-//{ TODOs
-// TODO: resolve TODO's in code.
-// TODO: document all public entities (done)
-// TODO: the characters for the operators should be hard-coded only once: in constants.
-//      (done; not done follows below:)
-//      These constants can figure in a constant array of tuples
-//      holding also other data like number of operands, operator function, e.a.
-//      (even data for documentation).
-//      The function is_known_operator should also use this constant array.
-// TODO: use some other numeric type that supports very large numbers with higher precision instead of f64 - see crates.io (dashu?)
-//}
-
 //{ uses
 use std::collections::HashMap;
 use std::fmt;
@@ -127,6 +114,7 @@ impl fmt::Debug for Atom {
     }
 }
 
+// The braces after the first comment slashes make Vim fold these comments also.
 //{ Documentation
 /// Whenever an `Interpreter` halts a script's execution due to an error condition, an
 /// `Err<ScriptError>` is returned.
@@ -1968,19 +1956,22 @@ pub(crate) mod opr_funcs {
                         return Err("Excess periods found in number input".to_string());
                     }
                 },
-                ch @ '0'..='9' | ch @ 'A'..='Z' => {
+                ch @ '0'..='9' | ch @ 'A'..='Z' if !using_multichar_digits => {
                     char_val = ch as u32;
 
-                    if using_multichar_digits {
-                        has_pending_digit = true;
-                        digit_value = (digit_value * 10) + char_val - diff_0;
+                    digits.push(char_val - if ch <= '9' {
+                        diff_0
                     } else {
-                        digits.push(char_val - if ch <= '9' {
-                            diff_0
-                        } else {
-                            diff_a
-                        });
-                    }
+                        diff_a
+                    });
+                },
+                ch @ '0'..='9' if using_multichar_digits => {
+                    char_val = ch as u32;
+                    has_pending_digit = true;
+                    digit_value = (digit_value * 10) + char_val - diff_0;
+                },
+                _ch @ 'A'..='Z' if using_multichar_digits => {
+                    return Err("Illegal characters in number input".to_string());
                 },
                 // Ignore spaces if single-character digits are used (base <= 36).
                 CH_SEPA_DIGITS => {
@@ -7175,6 +7166,13 @@ mod tests {
         #[test]
         fn x_base36() {
             assert_eq!(71.5f64, Interpreter::new_and_execute_with_mocked_io("b36 [n1Z.I]".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_base37_no_letters_allowed() {
+            assert_eq!(
+                Err(ScriptError::NumberParsingFailure("Illegal characters in number input".to_string())),
+                Interpreter::new_and_execute_with_mocked_io("b37 [nA]".to_string()));
         }
 
         #[test]
