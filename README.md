@@ -1,9 +1,3 @@
-<!--style type="text/css">
-    :not(pre) > code {
-        border: .5px solid #A0A0A0;
-    }
-</style-->
-<style>td:first-child{font-size: 1.5rem;}</style>
 # **Laconic: the language**
 
 > *I got carried away, because I had fun.*
