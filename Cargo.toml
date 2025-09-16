@@ -2,6 +2,12 @@
 name = "laconic"
 version = "1.0.0"
 edition = "2024"
+description = "Interpreter for Laconic expressions and scripts, both as a library component and command-line executable"
+license = "MIT OR Apache-2.0"
+authors = ["Koen Bekx <klbekx@gmail.com>"]
+repository = "https://github.com/KoenLBekx/laconic"
+homepage = "https://github.com/KoenLBekx/laconic"
+documentation = "https://docs.rs/laconic"
 
 [dependencies]
 string_io_and_mock = "1.0.1"
