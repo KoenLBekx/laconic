@@ -1,6 +1,6 @@
 [package]
 name = "laconic"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 description = "Interpreter for Laconic expressions and scripts, both as a library component and command-line executable"
 license = "MIT OR Apache-2.0"

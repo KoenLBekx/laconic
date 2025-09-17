@@ -1,4 +1,4 @@
-#![doc = include_str!("../README.md")]
+#![doc = include_str!("../laconic.md")]
 
 //{ uses
 use std::collections::HashMap;
