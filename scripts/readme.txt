@@ -27,8 +27,8 @@ Moreover, multiple script files can be included:
 
 	target/release/laconic -i script1.lac -i script2.lac -i script3.lac '[c Statements]'
 
-Script files are a great way to import routines to a script:
+Script files are a great way to import routines into a script:
 
-	target/release/laconic -i scripts/primeRoutine.lac 'K 101 X§isPrime'
+	target/release/laconic -i scripts/primeRoutine.lac 'K 101 X#isPrime'
 
 
