@@ -4458,7 +4458,7 @@ pub(crate) mod opr_funcs {
 
         'outer: loop {
 
-            if (shuttle.max_iterations > 0f64) && (iter_count >= shuttle.max_iterations) {
+            if (shuttle.max_iterations > 0f64) && (iter_count > shuttle.max_iterations) {
                 return Err(ScriptError::MaximumIterationsExceeded(*opr_mark));
             }
 
@@ -4545,7 +4545,7 @@ pub(crate) mod opr_funcs {
         let mut op: &mut Expression;
 
         'outer: loop {
-            if (shuttle.max_iterations > 0f64) && (iter_count >= shuttle.max_iterations) {
+            if (shuttle.max_iterations > 0f64) && (iter_count > shuttle.max_iterations) {
                 return Err(ScriptError::MaximumIterationsExceeded(*opr_mark));
             }
 
@@ -6590,6 +6590,11 @@ mod tests {
         }
 
         #[test]
+        fn x_while_max_iterations_not_exceeded() {
+            assert_eq!(2f64, Interpreter::new_and_execute_with_mocked_io("Z#loops 2 $0 1 $1 0 W!>v0 2 ;+:1 1 +:0 1 v1".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
         fn x_while_max_iterations() {
             assert_eq!(
                 Err(ScriptError::MaximumIterationsExceeded('W')),
@@ -6631,6 +6636,11 @@ mod tests {
         #[test]
         fn x_for_6_op() {
             assert_eq!(10395f64, Interpreter::new_and_execute_with_mocked_io("$0 1 F(11 3 2 1 *:0 v1 $5 v1) v0".to_string()).unwrap().numeric_value());
+        }
+
+        #[test]
+        fn x_for_max_iterations_not_exceeded() {
+            assert_eq!(4_f64, Interpreter::new_and_execute_with_mocked_io("Z#loops 4 F1 4 1 0 c#empty v0".to_string()).unwrap().numeric_value());
         }
 
         #[test]
