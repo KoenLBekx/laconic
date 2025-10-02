@@ -175,6 +175,10 @@ pub enum ScriptError {
     /// A logarithm of zero or smaller has been requested.
     LogarithmOfZeroOrNegativeNumberIsNotSupported,
 
+    /// A loop operator tried to run more iterations than allowed.
+    /// This maximum number can be set by a `Z#loops number` operation.
+    MaximumIterationsExceeded(char),
+
     /// A non-integer power of a negative number has been requested.
     NonIntegerPowerOfNegativeNumberIsNotSupported,
 
@@ -4455,7 +4459,7 @@ pub(crate) mod opr_funcs {
         'outer: loop {
 
             if (shuttle.max_iterations > 0f64) && (iter_count >= shuttle.max_iterations) {
-                break;
+                return Err(ScriptError::MaximumIterationsExceeded(*opr_mark));
             }
 
             op_count = 0;
@@ -4542,7 +4546,7 @@ pub(crate) mod opr_funcs {
 
         'outer: loop {
             if (shuttle.max_iterations > 0f64) && (iter_count >= shuttle.max_iterations) {
-                break;
+                return Err(ScriptError::MaximumIterationsExceeded(*opr_mark));
             }
 
             if  (ascending && (counter_val > end_val)) ||
@@ -6587,7 +6591,9 @@ mod tests {
 
         #[test]
         fn x_while_max_iterations() {
-            assert_eq!(2f64, Interpreter::new_and_execute_with_mocked_io("$#sum 1 $#countDown 10 Z#loops 2 W>v#countDown 0 ;+:#sum v#countDown -:#countDown 1 N".to_string()).unwrap().numeric_value());
+            assert_eq!(
+                Err(ScriptError::MaximumIterationsExceeded('W')),
+                Interpreter::new_and_execute_with_mocked_io("$#sum 1 $#countDown 10 Z#loops 2 W>v#countDown 0 ;+:#sum v#countDown -:#countDown 1 N".to_string()));
         }
 
         #[test]
@@ -6629,7 +6635,9 @@ mod tests {
 
         #[test]
         fn x_for_5_op_exceeds_limit() {
-            assert_eq!(15f64, Interpreter::new_and_execute_with_mocked_io("Z#loops 2 $0 1 F3 11 2 1 *:0 v1 v0".to_string()).unwrap().numeric_value());
+            assert_eq!(
+                Err(ScriptError::MaximumIterationsExceeded('F')),
+                Interpreter::new_and_execute_with_mocked_io("Z#loops 2 $0 1 F3 11 2 1 *:0 v1 v0".to_string()));
         }
 
         #[test]

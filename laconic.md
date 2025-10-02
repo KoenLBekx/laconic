@@ -1494,10 +1494,9 @@ The below named operations have been implemented:
 
 > If more than one operation is needed in operand 2, use the ; combinator operator or enclose the `W` operator's operands in parentheses.
 
-> Besides finding a falsy value when re-evaluation its 1st operand, the `W` operator will also stop repeating iterations if
->> - the maximum number of iterations set by the `Z#loops` operation have been done (default = 10,000) - this is a protection against vicious loops;<br/>
->> - a `B` operation in the current or a nested loop requests a loop break.
+> Besides finding a falsy value when re-evaluation its 1st operand, the `W` operator will also stop repeating iterations if a `B` operation in the current or a nested loop requests a loop break.
 
+> If the maximum number of iterations set by the `Z#loops` operation have been run (default = 10,000), the `W` operator will raise an error - this is a protection against vicious loops.<br/>
 > e.g:<br/>
 <pre>
     $0 10
@@ -1539,7 +1538,9 @@ The below named operations have been implemented:
         +:#count 1
     v#count
 </pre>
->> yields 500: as the 1st operand (`1`) of the `W` operator is always truthy, the maximal number of iteration set by the `Z#loops 500` operation is looped through, increasing the "count" variable every time by 1 (`+:#count 1`). As a result, that maximal number of iterations is returned (`v#count`).
+>> raises an error: as the 1st operand (`1`) of the `W` operator is always truthy, the maximal number of iteration set by the `Z#loops 500` operation is looped through, and an extra iteration will be attempted. As a result, an error will be raised.
+
+> If you want your script to simply stop looping without raising an error when exceeding the maximum number of iterations, have it preceeded by a `Z#ign 1` operation.
 
 > Breaking from a loop: see the `B` operator.
 
@@ -1618,7 +1619,7 @@ The below named operations have been implemented:
 > Breaking from a loop: see the `B` operator.
 
 > Just like the `W` operator, the number of loops an `F` operator can iterate through is limited by the settings of the `Z#loops` operation, or its default: 10,000.
-> If your script doesn't execute as many iterations as you thought it would, you might need to set the allowed number of iterations using this `Z#loops` operation. E.g.:
+> If your script raises an error about the maximum number of iterations being exceeded, you might need to set the allowed number of iterations using this `Z#loops` operation. E.g.:
 
 <pre>
     $#iterationsNeeded 1_000_000
@@ -1642,6 +1643,7 @@ The below named operations have been implemented:
 
 <pre>
     Z#loops 10
+    Z#ign 1
     $#iters 0
     W
         1
@@ -1650,10 +1652,12 @@ The below named operations have been implemented:
             +:#iters 1
     v#iters
 </pre>
->> Has no break operations, and as the maximal number of iterations is set to 10, the script will execute 10 times 10 iterations of a nested loop, so variable "iters" will hold 100 at the end.
+>> Has no break operations, and as the maximal number of iterations is set to 10, the script will execute 10 times 10 iterations of a nested loop, so variable "iters" will hold 100 at the end.<br/>
+>> *(Note that the script doesn't raise any errors about the maximal number of iterations being exceeded due to the `Z#ign 1` operation.)*
 
 <pre>
     Z#loops 10
+    Z#ign 1
     $#iters 0
     W
         1
@@ -1668,6 +1672,7 @@ The below named operations have been implemented:
 
 <pre>
     Z#loops 10
+    Z#ign 1
     $#iters 0
     W
         1
@@ -1682,6 +1687,7 @@ The below named operations have been implemented:
 
 <pre>
     Z#loops 10
+    Z#ign 1
     $#iters 0
     W
         1
